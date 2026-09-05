@@ -1,0 +1,14 @@
+id: dnd-exhaustion
+kind: field
+guidance: Exhaustion (SRD) — −2 per level on d20 checks (level 1–6).
+defaults:
+  level: L1
+  effects:
+    check_mod:
+      "*": { bonus: 0 }
+fields:
+  level:
+    type: integer
+    min: 1
+    max: 6
+    default: 1

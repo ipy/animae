@@ -1,0 +1,30 @@
+{
+  "name": "@animae/preset-base",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Animae base preset",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./preset.yaml": "./preset.yaml"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./preset.yaml": "./preset.yaml"
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "gen": "bun scripts/gen-bundle.ts"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*",
+    "yaml": "^2.9.1"
+  }
+}

@@ -1,0 +1,6 @@
+- to: player
+  kind: acquaintance
+  tracks:
+    affinity: 52
+  share: "tracks.trust >= 40"
+  note: Met at the cottage.

@@ -1,0 +1,6 @@
+- id: storyteller-grace
+  charges: 1
+  period: day
+  mayBypass:
+    - track_cap
+    - field_cap

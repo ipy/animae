@@ -1,0 +1,31 @@
+{
+  "name": "@animae/preset-dnd",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Animae D&D SRD 5.2.1 social/exploration preset",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./preset.yaml": "./preset.yaml"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./preset.yaml": "./preset.yaml"
+    }
+  },
+  "files": ["dist", "src", "README.md", "NOTICE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "gen": "bun scripts/gen-bundle.ts"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*",
+    "@animae/preset-base": "workspace:*",
+    "yaml": "^2.9.1"
+  }
+}

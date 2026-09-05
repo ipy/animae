@@ -1,0 +1,21 @@
+{
+  "empty": { "readyMs": 300, "delayMs": 1200, "keys": [] },
+  "scene-start": { "readyMs": 1800, "delayMs": 2200, "keys": [".", "\r", "\u001b", ":quit\r"] },
+  "typewriter-mid": { "readyMs": 500, "delayMs": 900, "keys": ["slow\r"] },
+  "typewriter-done": { "readyMs": 500, "delayMs": 1200, "keys": ["slow\r", " ", "\u001b", ":quit\r"] },
+  "typewriter": { "readyMs": 1800, "delayMs": 1200, "keys": ["你好", "\r", " ", "\u001b", ":quit\r"] },
+  "cjk": { "readyMs": 1800, "delayMs": 3200, "keys": ["你好", "\r", "\u001b", ":quit\r"] },
+  "choices": { "readyMs": 1800, "delayMs": 2200, "keys": ["你好", "\r", "2", "\r", "\u001b", ":quit\r"] },
+  "sidepanel": { "readyMs": 1800, "delayMs": 2000, "keys": ["你好", "\r", "\t", "\u001b", ":quit\r"] },
+  "help": { "readyMs": 300, "delayMs": 400, "keys": ["\u001bOP", "\u001b", ":quit\r"] },
+  "event-log": { "readyMs": 1800, "delayMs": 1800, "keys": ["你好", "\r", "\u001bOQ", "\u001b", ":quit\r"] },
+  "timeline": { "readyMs": 300, "delayMs": 400, "keys": ["\u001bOR", "\u001b", ":quit\r"] },
+  "explain": { "readyMs": 1800, "delayMs": 2200, "keys": ["你好", "\r", "\u001bOS", "\u001b", ":quit\r"] },
+  "inspector": { "readyMs": 300, "delayMs": 400, "keys": ["\u001b[15~", "\u001b", ":quit\r"] },
+  "long-scroll": { "readyMs": 300, "delayMs": 1200, "keys": [":flood", "\r", "\t", "\u001b[6~", "\u001b[5~", "\u001b", ":quit", "\r"] },
+  "narrow": { "readyMs": 300, "delayMs": 800, "keys": [":quit\r"] },
+  "model-error": { "readyMs": 1800, "delayMs": 4000, "keys": ["trigger-error", "\r", "\u001b", ":quit", "\r"] },
+  "rewind": { "readyMs": 1800, "delayMs": 2200, "keys": ["你好", "\r", "chat", "\r", "\u001a", "\u001b", ":quit\r"] },
+  "rapid-input": { "readyMs": 500, "delayMs": 120, "keys": ["slow\r", "xxx", " ", "\u001b", ":quit\r"] },
+  "resize-mid": { "readyMs": 1800, "delayMs": 3500, "keys": ["你好", "\r", "\u001b", ":quit\r"] }
+}

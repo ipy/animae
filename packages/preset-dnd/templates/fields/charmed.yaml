@@ -1,0 +1,13 @@
+id: dnd-charmed
+kind: field
+guidance: Charmed (SRD) — L1 social advantage for the charmer plus L2 forbid hostile intents.
+defaults:
+  level: L2
+  effects:
+    check_mod:
+      persuasion: { advantage: advantage }
+      deception: { advantage: advantage }
+      intimidation: { advantage: advantage }
+      performance: { advantage: advantage }
+    intent_forbid: [hostile]
+fields: {}

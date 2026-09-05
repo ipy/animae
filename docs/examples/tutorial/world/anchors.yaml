@@ -1,0 +1,25 @@
+- id: meet-guide
+  title: First meeting
+  target:
+    kind: character_state
+    spec:
+      character: guide
+      when: "tracks.affinity >= 55"
+  deadline:
+    day: 1
+    minute: 1200
+  strategies: [soft, hard]
+  soft:
+    id: anchor-soft-nudge
+    holder: { kind: character, ref: guide }
+    source: anchor
+    level: L0
+    scope: { when: "true" }
+    effects:
+      salience:
+        - { tags: [quest], boost: 0.2 }
+  hard:
+    - kind: world.var_set
+      path: quest_started
+      value: true
+  refs: [guide]

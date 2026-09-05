@@ -1,0 +1,7 @@
+self:
+  mood: 55
+toward:
+  player:
+    affinity: 52
+    trust: 48
+overrides: {}

@@ -1,0 +1,15 @@
+id: welcome-boost
+holder:
+  kind: character
+  ref: guide
+source: author
+level: L1
+priority: 0
+stacking: add
+scope:
+  location: home
+  turns: 3
+  when: "scene.first"
+effects:
+  track_offset:
+    affinity: 1

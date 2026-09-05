@@ -1,0 +1,7 @@
+id: home
+name: Home
+summary: A small cottage.
+tags: [safe]
+connects:
+  - { to: market, minutes: 10, label: path }
+vars: {}

@@ -1,0 +1,7 @@
+- id: noon-bell
+  every: "day 12:00"
+  when: "true"
+  emit:
+    kind: world.var_set
+    path: last_bell
+    value: noon

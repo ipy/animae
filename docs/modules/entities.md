@@ -1,0 +1,26 @@
+# Module: `entities`
+
+## Purpose
+
+Runtime entity generation, LOD promotion, and SillyTavern card import/export (spec §6.3–§6.4).
+
+## Public API
+
+- `createEntityService(kernel): EntityService`
+  - `generate({ kind, template, hints? })` — S1/S2 (`template.lod === principal` → S2), prompt includes world language (§8), validates template zod schema, adjudicates id/uniqueness/defaults/LOD, persists under `timelines/<branch>/entities/`, emits `entity.created`.
+  - `promote(id, to)` — one LOD step up only; model fill via target LOD template; emits `character.promoted` with optional `data` payload.
+  - `checkPromotions(ids)` — policy `characters.lod.promote` + template `promote` CEL rules (`anchor_ref` extra via director).
+  - `importCard(file)` — ST V2/V3 JSON, PNG (`chara`/`ccv3`), or `.acard.jsonl`.
+  - `exportCard(id)` — `exports/<id>.acard.jsonl` manifest + file lines.
+- `descriptorToZod`, `templateFieldsSchema`, `importAcard`, `exportAcard`, PNG helpers (tests/tools).
+
+## Decisions
+
+- Duplicate entity ids at generate time are rejected (`ENTITY_DUPLICATE`); import uses `-2`, `-3`, … suffixes when the slug exists.
+- ST `character_book` keys → CEL `when` combining tag match and `event.text.lowerAscii().contains(...)`.
+- Card import stores unmapped ST fields under `x_import` in `card.md` frontmatter.
+
+## Edge cases
+
+- PNG: prefers `ccv3` over `chara` when both chunks exist.
+- Promotion template pick: match `template.lod`, else `x_import.template`, else first character template.

@@ -1,0 +1,8 @@
+seed: 7
+preset: "@animae/preset-base"
+policies:
+  - policies/tutorial.yaml
+# Uncomment for live LLM play:
+# models:
+#   s1: { provider: anthropic, model: claude-haiku-4-5 }
+#   s2: { provider: anthropic, model: claude-sonnet-4-5 }

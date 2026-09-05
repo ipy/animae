@@ -1,0 +1,30 @@
+╭────────────────────────────────────────────────────────────────────────────────────────╮
+│ — · — · — · main                                                                       │
+╰────────────────────────────────────────────────────────────────────────────────────────╯
+ No active scene — use :help or :commands to explore.                                     
+scroll line 189                                                                           
+scroll line 190                                                                           
+scroll line 191                                                                           
+scroll line 192                                                                           
+scroll line 193                                                                           
+scroll line 194                                                                           
+scroll line 195                                                                           
+scroll line 196                                                                           
+scroll line 197                                                                           
+scroll line 198                                                                           
+scroll line 199                                                                           
+No active scene — use :commands or start a scene.                                         
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+>                                                                                         
+╭────────────────────────────────────────────────────────────────────────────────────────╮
+│ F1 help · F2 log · F3 timeline · Tab focus · Enter send                             —  │
+╰────────────────────────────────────────────────────────────────────────────────────────╯

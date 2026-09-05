@@ -1,0 +1,17 @@
+{
+  "name": "animae-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test",
+    "build": "bun run packages/cli/scripts/build.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

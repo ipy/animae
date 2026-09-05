@@ -1,0 +1,6 @@
+id: demo-pavilion
+name: Demo Pavilion Location
+version: 1.0.0
+description: Data-only example mod — adds a world location.
+tags: [example, location]
+notice: Example content mod for documentation and tests.

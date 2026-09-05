@@ -1,0 +1,6 @@
+- id: morning
+  title: Morning
+  enter: "time.hour >= 6 && time.hour < 12"
+  exit: "time.hour >= 12"
+  fields: [welcome-boost]
+  note: "Morning light; vendors are setting up."

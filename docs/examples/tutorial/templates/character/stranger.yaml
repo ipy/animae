@@ -1,0 +1,10 @@
+id: stranger
+kind: character
+guidance: Generate a brief passer-by with one quirk.
+fields:
+  name: { type: string, description: Display name }
+  quirk: { type: string, description: One memorable habit }
+defaults:
+  lod: supporting
+promote:
+  - { to: principal, when: "event.intensity > 0.7" }

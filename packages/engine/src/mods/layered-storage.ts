@@ -1,0 +1,184 @@
+import type { StoragePort } from "../ports.ts";
+import { parseFrontmatter, stringifyYaml, parseYaml } from "../store/util.ts";
+import { applyPatchMerge } from "./patch-merge.ts";
+import type { ModProvenanceEntry } from "../mod.ts";
+
+export interface ModStorageLayer {
+  modId: string;
+  /** prefix under data root, e.g. `mods/my-mod` */
+  prefix: string;
+}
+
+export interface LayeredStorageOptions {
+  base: StoragePort;
+  modLayers: ModStorageLayer[];
+  /** filled on read: logical path -> winning layer */
+  provenance?: Map<string, ModProvenanceEntry>;
+}
+
+function patchPathFor(logicalPath: string): string {
+  if (logicalPath.endsWith(".yaml")) return logicalPath.replace(/\.yaml$/, ".patch.yaml");
+  if (logicalPath.endsWith(".md")) return logicalPath.replace(/\.md$/, ".patch.yaml");
+  return `${logicalPath}.patch.yaml`;
+}
+
+function appendPathFor(logicalPath: string): string | undefined {
+  if (logicalPath.endsWith("card.md")) return logicalPath.replace(/card\.md$/, "card.append.md");
+  return undefined;
+}
+
+function modOverlayPath(prefix: string, logicalPath: string): string {
+  return `${prefix}/${logicalPath}`;
+}
+
+function isOverlayMetaPath(logicalPath: string): boolean {
+  return logicalPath.endsWith(".patch.yaml") || logicalPath.endsWith(".append.md") || logicalPath.endsWith("/mod.yaml") || logicalPath === "mod.yaml";
+}
+
+async function readModFile(base: StoragePort, prefix: string, logicalPath: string): Promise<string | undefined> {
+  return base.readText(modOverlayPath(prefix, logicalPath));
+}
+
+function mergeMarkdownWithPatch(content: string, patchYaml: string): string {
+  const { data, body } = parseFrontmatter(content);
+  const patchDoc = parseYaml(patchYaml);
+  const merged = applyPatchMerge(data, patchDoc) as Record<string, unknown>;
+  const fm = stringifyYaml(merged).trimEnd();
+  return `---\n${fm}\n---\n${body}`;
+}
+
+/**
+ * Read-only view: base authored tree with mod overlays applied in order (full file replace, then patch, then card append).
+ */
+export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
+  const { base, modLayers, provenance } = opts;
+
+  function setProv(path: string, entry: ModProvenanceEntry): void {
+    provenance?.set(path, entry);
+  }
+
+  async function allLogicalPaths(): Promise<string[]> {
+    const set = new Set<string>();
+    for (const path of await base.listFiles("")) {
+      if (path.startsWith("mods/")) continue;
+      if (!isOverlayMetaPath(path)) set.add(path);
+    }
+    for (const mod of modLayers) {
+      for (const path of await base.listFiles(mod.prefix)) {
+        if (!path.startsWith(`${mod.prefix}/`)) continue;
+        const logical = path.slice(mod.prefix.length + 1);
+        if (!isOverlayMetaPath(logical)) set.add(logical);
+      }
+    }
+    return [...set].sort();
+  }
+
+  async function resolveLogicalText(logicalPath: string): Promise<string | undefined> {
+    if (isOverlayMetaPath(logicalPath)) return undefined;
+
+    let content = await base.readText(logicalPath);
+    let layer: ModProvenanceEntry = { layer: "base" };
+    const appends: string[] = [];
+
+    for (const mod of modLayers) {
+      const full = await readModFile(base, mod.prefix, logicalPath);
+      if (full !== undefined) {
+        content = full;
+        layer = { layer: "mod", id: mod.modId };
+        appends.length = 0;
+      }
+      const patchRel = patchPathFor(logicalPath);
+      const patchText = await readModFile(base, mod.prefix, patchRel);
+      if (patchText !== undefined && content !== undefined) {
+        if (logicalPath.endsWith(".md")) {
+          content = mergeMarkdownWithPatch(content, patchText);
+        } else if (logicalPath.endsWith(".yaml")) {
+          const baseDoc = parseYaml(content);
+          content = stringifyYaml(applyPatchMerge(baseDoc, parseYaml(patchText)));
+        }
+        layer = { layer: "mod", id: mod.modId };
+      }
+      const appendRel = appendPathFor(logicalPath);
+      if (appendRel) {
+        const appendText = await readModFile(base, mod.prefix, appendRel);
+        if (appendText !== undefined) {
+          appends.push(appendText);
+          layer = { layer: "mod", id: mod.modId };
+        }
+      }
+    }
+
+    if (content === undefined) return undefined;
+    if (appends.length) {
+      const { data, body } = parseFrontmatter(content);
+      const mergedBody = body + appends.map((a) => (a.startsWith("\n") ? a : `\n${a}`)).join("");
+      const fm = stringifyYaml(data).trimEnd();
+      content = `---\n${fm}\n---\n${mergedBody}`;
+    }
+    setProv(logicalPath, layer);
+    return content;
+  }
+
+  return {
+    root: base.root,
+    readText(path) {
+      return resolveLogicalText(path);
+    },
+    readBytes(path) {
+      return resolveLogicalText(path).then((t) => (t === undefined ? undefined : new TextEncoder().encode(t)));
+    },
+    writeAtomic() {
+      return Promise.reject(new Error("LayeredStorage is read-only"));
+    },
+    append() {
+      return Promise.reject(new Error("LayeredStorage is read-only"));
+    },
+    exists(path) {
+      return resolveLogicalText(path).then((t) => t !== undefined);
+    },
+    async list(dir) {
+      const d = dir ?? "";
+      const prefix = d ? `${d}/` : "";
+      const names = new Set<string>();
+      for (const path of await allLogicalPaths()) {
+        if (d && !path.startsWith(prefix)) continue;
+        const rest = d ? path.slice(prefix.length) : path;
+        if (!rest) continue;
+        const slash = rest.indexOf("/");
+        if (slash >= 0) names.add(`${rest.slice(0, slash + 1)}`);
+      }
+      for (const n of await base.list(dir)) {
+        if (n.startsWith("mods")) continue;
+        names.add(n);
+      }
+      return [...names].sort();
+    },
+    async listFiles(dir) {
+      const d = dir ?? "";
+      const prefix = d ? `${d}/` : "";
+      return (await allLogicalPaths()).filter((p) => d === "" || p.startsWith(prefix));
+    },
+    mkdir() {
+      return Promise.reject(new Error("LayeredStorage is read-only"));
+    },
+    remove() {
+      return Promise.reject(new Error("LayeredStorage is read-only"));
+    },
+    async stat(path) {
+      const text = await resolveLogicalText(path);
+      if (text === undefined) return undefined;
+      let mtimeMs = 0;
+      const b = await base.stat(path);
+      if (b) mtimeMs = Math.max(mtimeMs, b.mtimeMs);
+      for (const mod of modLayers) {
+        for (const rel of [path, patchPathFor(path), appendPathFor(path)].filter(Boolean) as string[]) {
+          const st = await base.stat(modOverlayPath(mod.prefix, rel));
+          if (st) mtimeMs = Math.max(mtimeMs, st.mtimeMs);
+        }
+      }
+      return { size: text.length, mtimeMs: mtimeMs || Date.now(), isDir: false };
+    },
+    acquireLock: () => base.acquireLock(),
+    releaseLock: () => base.releaseLock(),
+  };
+}

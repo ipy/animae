@@ -1,0 +1,4 @@
+id: "@animae/preset-dnd"
+extends: ["@animae/preset-base"]
+policies:
+  - policies/dnd.yaml

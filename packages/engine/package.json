@@ -1,0 +1,39 @@
+{
+  "name": "@animae/engine",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Animae: a gameplay-agnostic character & world runtime for interactive narrative",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "smoke:node": "node scripts/node-smoke.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.92",
+    "@ai-sdk/deepseek": "^3.0.76",
+    "@ai-sdk/google": "^4.0.108",
+    "@ai-sdk/openai": "^4.0.105",
+    "@ai-sdk/openai-compatible": "^3.0.81",
+    "@marcbachmann/cel-js": "^8.0.0",
+    "ai": "^7.0.157",
+    "ollama-ai-provider-v2": "^4.1.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "4.0.34"
+  }
+}

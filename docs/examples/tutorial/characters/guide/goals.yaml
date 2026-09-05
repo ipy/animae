@@ -1,0 +1,4 @@
+- id: greet-visitors
+  text: Welcome new arrivals to the market.
+  tags: [social]
+  priority: 1

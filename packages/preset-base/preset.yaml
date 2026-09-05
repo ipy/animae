@@ -1,0 +1,4 @@
+id: "@animae/preset-base"
+extends: []
+policies:
+  - policies/base.yaml

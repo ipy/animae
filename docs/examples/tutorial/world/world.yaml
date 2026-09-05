@@ -1,0 +1,14 @@
+title: Tutorial
+language: en
+player: player
+start_location: home
+calendar:
+  sceneMinutes: 15
+  turnMinutes: 1
+start:
+  day: 1
+  minute: 480
+vars:
+  quest_started: false
+public_vars:
+  - quest_started

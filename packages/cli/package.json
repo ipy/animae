@@ -1,0 +1,33 @@
+{
+  "name": "animae",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Animae CLI / TUI / JSON-RPC sidecar",
+  "license": "MIT",
+  "bin": {
+    "animae": "./dist/bin.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*",
+    "@animae/preset-base": "workspace:*",
+    "@animae/preset-dnd": "workspace:*",
+    "@animae/tui": "workspace:*",
+    "react-devtools-core": "^8.0.0"
+  }
+}

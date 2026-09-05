@@ -1,0 +1,32 @@
+{
+  "name": "@animae/tui",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Animae terminal UI (Ink)",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "demo": "bun run scripts/demo.ts"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*",
+    "ink": "^8.0.0",
+    "react": "^19.3.1",
+    "string-width": "^8.3.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  }
+}

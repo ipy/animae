@@ -1,0 +1,8 @@
+id: town-map
+name: Town map
+summary: Crude ink sketch of the square.
+tags: [item, paper]
+holder:
+  kind: character
+  ref: player
+vars: {}

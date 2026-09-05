@@ -1,0 +1,9 @@
+node_modules
+dist
+*.log
+.DS_Store
+/out
+**/.animae.lock
+**/timelines
+**/derived
+*.cache.generated

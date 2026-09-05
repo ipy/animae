@@ -1,0 +1,7 @@
+id: market
+name: Market Square
+summary: Busy stalls.
+tags: [public]
+connects:
+  - { to: home, minutes: 10 }
+vars: {}

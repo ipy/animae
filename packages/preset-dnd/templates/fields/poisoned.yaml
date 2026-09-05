@@ -1,0 +1,9 @@
+id: dnd-poisoned
+kind: field
+guidance: Poisoned (SRD) — disadvantage on ability checks.
+defaults:
+  level: L1
+  effects:
+    check_mod:
+      "*": { advantage: disadvantage }
+fields: {}

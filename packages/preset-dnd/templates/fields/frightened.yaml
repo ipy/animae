@@ -1,0 +1,9 @@
+id: dnd-frightened
+kind: field
+guidance: Frightened (SRD) — disadvantage on ability checks while the source is considered visible (simplified L1).
+defaults:
+  level: L1
+  effects:
+    check_mod:
+      "*": { advantage: disadvantage }
+fields: {}
