@@ -6,11 +6,17 @@ import { adjudicateProposal, LOD_RANK, nextLod } from "./adjudicate.ts";
 import { templateFieldsSchema } from "./descriptor.ts";
 import { exportAcard } from "./acard.ts";
 import { importSillyTavernCard } from "./import-card.ts";
+import { generateFromBrief, resolveEntity, retireEntity, setEntityAlias, spawnEntity } from "./lifecycle.ts";
 
 export function createEntityService(k: Kernel): EntityService {
   return {
     generate: (r, why) => generateEntity(k, r, why),
     promote: (id, to, why) => promoteCharacter(k, id, to, why),
+    setAlias: (input) => setEntityAlias(k, input),
+    resolve: (ref, opts) => resolveEntity(k, ref, opts),
+    spawn: (spec, opts) => spawnEntity(k, spec, opts),
+    retire: (ref, opts) => retireEntity(k, ref, opts),
+    generateFromBrief: (brief, opts) => generateFromBrief(k, brief, opts),
     checkPromotions: (ids) => checkPromotions(k, ids),
     importCard: (file) =>
       importSillyTavernCard(k.storage, file, async (path) => {

@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test",
-    "smoke:node": "node scripts/node-smoke.mjs"
+    "smoke:node": "node scripts/node-smoke.mjs",
+    "smoke:ollama": "bun run scripts/smoke-ollama.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.92",

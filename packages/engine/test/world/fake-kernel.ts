@@ -52,6 +52,7 @@ export function minimalAuthored(overrides?: {
     beats: [],
     exceptions: {},
     schedule: overrides?.schedule ?? [],
+    decks: [],
     knowledge: [],
     characters: overrides?.characters ?? { npc: minimalCharacter("npc") },
     templates: { character: {}, location: {}, item: {} },

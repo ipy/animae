@@ -1,4 +1,5 @@
 import type { Catalog } from "../contracts.ts";
+import { entityDisplayName } from "../entities/names.ts";
 import type { Appraisal } from "../events.ts";
 import type { Authored, FieldEffects } from "../schema/authored.ts";
 import type { ResolvedPolicy } from "../schema/policy.ts";
@@ -24,7 +25,13 @@ export interface BuildCelContextParams {
   extra?: CelContext;
 }
 
-function charView(c: CharacterState | undefined, catalog: Catalog, id: string | undefined) {
+function charView(
+  c: CharacterState | undefined,
+  catalog: Catalog,
+  id: string | undefined,
+  state: Readonly<EngineState>,
+  opts?: { viewer?: CharacterId; speaker?: CharacterId },
+) {
   if (!c || !id) return null;
   const def = catalog.character(id);
   const traits = (def?.traits ?? {}) as Record<string, unknown>;
@@ -36,7 +43,8 @@ function charView(c: CharacterState | undefined, catalog: Catalog, id: string | 
   }
   return {
     id: c.id,
-    name: c.name,
+    name: entityDisplayName(state, catalog, id, { viewer: opts?.viewer, speaker: opts?.speaker }),
+    canonical_name: c.name,
     lod: c.lod,
     tags: c.tags,
     traits,
@@ -114,9 +122,12 @@ export function buildCelContext(deps: BuildCelContextDeps, params: BuildCelConte
   const activeFields = Object.keys(state.fields);
 
   const ctx: CelContext = {
-    self: charView(selfChar, catalog, selfId),
-    other: charView(otherChar, catalog, otherId),
-    actor: charView(actorId ? state.characters[actorId] : undefined, catalog, actorId),
+    self: charView(selfChar, catalog, selfId, state, { viewer: otherId, speaker: selfId }),
+    other: charView(otherChar, catalog, otherId, state, { viewer: selfId, speaker: otherId }),
+    actor: charView(actorId ? state.characters[actorId] : undefined, catalog, actorId, state, {
+      viewer: otherId ?? selfId,
+      speaker: actorId,
+    }),
     event: {
       type: eventType,
       intensity: ev.intensity ?? 0,

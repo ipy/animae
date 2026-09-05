@@ -59,6 +59,7 @@ export function minimalAuthored(overrides?: Partial<Authored>): Authored {
     beats: [],
     exceptions: {},
     schedule: [],
+    decks: [],
     knowledge: [],
     characters: {
       npc: {

@@ -11,8 +11,8 @@ scroll line 186                                                                 
 scroll line 187                                                                                                                                                 
 scroll line 188                                                                                                  Beat / anchors                                 
 scroll line 189                                                                                                                                                 
-scroll line 190                                                                                                  基地                                             
-scroll line 191                                                                                                  百合园 · 基地                                       
+scroll line 190                                                                                                  Demo                                             
+scroll line 191                                                                                                  百合园 · Demo                                       
 scroll line 192                                                                                                  第 1 天 07:00 · —                                
 scroll line 193                                                                                                                                                 
 scroll line 194                                                                                                  资源                                             

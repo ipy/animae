@@ -2,7 +2,11 @@ import type {
   AppraisalEvent,
   CharacterPromoted,
   CharacterVarSet,
+  EntityAliasSet,
   EntityCreated,
+  EntitySpawned,
+  EntityRetired,
+  DeckDrawn,
   FieldCostDue,
   FieldAge,
   FieldCostSettled,
@@ -28,7 +32,10 @@ import type {
 } from "../events.ts";
 import type { Goal } from "../schema/authored.ts";
 import type { ResolvedPolicy } from "../schema/policy.ts";
-import type { ActiveField, EngineState } from "../state.ts";
+import type { ActiveField, EngineState, EntityAliasState } from "../state.ts";
+import { characterStateFromDef } from "./initial-state.ts";
+import { emptyAliasState, normalizeAliasKey } from "../entities/names.ts";
+import { reduceDeckDrawn, resetDeckDailyCounters } from "../world/decks.ts";
 import type { CharacterDef } from "../schema/authored.ts";
 import type { EngineEvent, EventId, JsonValue, WorldTime } from "../types.ts";
 import { tierFor } from "../rules/primitives.ts";
@@ -51,6 +58,7 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
   switch (e.kind) {
     case "time.advanced": {
       const p = pl<TimeAdvanced & EngineEvent>(e);
+      s.decks = resetDeckDailyCounters(s.decks ?? {}, p.to.day);
       s.time = { ...p.to };
       break;
     }
@@ -257,6 +265,25 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
     case "entity.created":
       applyEntityCreated(s, pl<EntityCreated & EngineEvent>(e), policy);
       break;
+    case "entity.spawned":
+      applyEntitySpawned(s, pl<EntitySpawned & EngineEvent>(e), policy);
+      break;
+    case "entity.retired": {
+      const p = pl<EntityRetired & EngineEvent>(e);
+      if (p.entity.kind === "character") {
+        s.retired = s.retired ?? {};
+        s.retired[p.entity.id] = true;
+      }
+      break;
+    }
+    case "entity.alias_set":
+      applyEntityAliasSet(s, pl<EntityAliasSet & EngineEvent>(e));
+      break;
+    case "deck.drawn": {
+      const p = pl<DeckDrawn & EngineEvent>(e);
+      s.decks = reduceDeckDrawn(s.decks ?? {}, p.deckId, p.entryId, p.at, p.entryOnce);
+      break;
+    }
     case "character.promoted": {
       const p = pl<CharacterPromoted & EngineEvent>(e);
       const c = s.characters[p.id];
@@ -465,4 +492,71 @@ function applyEntityCreated(s: EngineState, e: EngineEvent<EntityCreated>, polic
   } else {
     s.generated.items[entity.id] = data as never;
   }
+}
+
+function applyEntitySpawned(s: EngineState, e: EngineEvent<EntitySpawned>, policy: ResolvedPolicy): void {
+  const { entity, data } = e;
+  if (typeof e.entitySeq === "number") s.entitySeq = Math.max(s.entitySeq ?? 0, e.entitySeq);
+  if (entity.kind === "character") {
+    const def = data as unknown as CharacterDef;
+    s.generated.characters[entity.id] = def;
+    const player = (policy as { x?: { player?: string } }).x?.player ?? "player";
+    if (!s.characters[entity.id]) {
+      s.characters[entity.id] = characterStateFromDef(def, policy, player, s.time);
+      s.characters[entity.id]!.origin = "generated";
+    } else {
+      s.characters[entity.id]!.name = def.card.identity.name;
+      s.characters[entity.id]!.lod = def.card.lod ?? "extra";
+      s.characters[entity.id]!.tags = def.card.tags ?? [];
+      s.characters[entity.id]!.goals = def.goals.map((g) => ({ ...g }));
+    }
+  } else if (entity.kind === "location") {
+    s.generated.locations[entity.id] = data as never;
+    if (!s.locations[entity.id]) {
+      const loc = data as { id: string; name: string; vars?: Record<string, JsonValue> };
+      s.locations[entity.id] = {
+        id: entity.id,
+        name: String(loc.name ?? entity.id),
+        vars: { ...(loc.vars ?? {}) },
+        lastSimulated: { ...s.time },
+      };
+    }
+  } else {
+    s.generated.items[entity.id] = data as never;
+    if (!s.items[entity.id]) {
+      const it = data as { id: string; name: string; holder?: { kind: string; ref?: string } | null; vars?: Record<string, JsonValue> };
+      s.items[entity.id] = {
+        id: entity.id,
+        name: String(it.name ?? entity.id),
+        holder: it.holder ? { kind: it.holder.kind, ref: it.holder.ref } : null,
+        vars: { ...(it.vars ?? {}) },
+      };
+    }
+  }
+}
+
+function applyEntityAliasSet(s: EngineState, e: EngineEvent<EntityAliasSet>): void {
+  const id = e.entity;
+  s.aliases = s.aliases ?? {};
+  const cur: EntityAliasState = s.aliases[id] ?? emptyAliasState();
+  if (e.nickname !== undefined) {
+    if (e.nickname === null) delete cur.nickname;
+    else cur.nickname = { label: e.nickname.label, by: e.nickname.by };
+  }
+  if (e.alias) {
+    if ("remove" in e.alias && e.alias.remove) {
+      delete cur.aliases[e.alias.key];
+    } else if ("label" in e.alias) {
+      cur.aliases[normalizeAliasKey(e.alias.label)] = { label: e.alias.label, by: e.alias.by };
+    }
+  }
+  if (e.addressAs) {
+    if ("remove" in e.addressAs && e.addressAs.remove) {
+      if (cur.addressAs[id]) delete cur.addressAs[id]![e.addressAs.target];
+    } else if ("label" in e.addressAs) {
+      cur.addressAs[id] = cur.addressAs[id] ?? {};
+      cur.addressAs[id]![e.addressAs.target] = { label: e.addressAs.label, by: e.addressAs.by };
+    }
+  }
+  s.aliases[id] = cur;
 }

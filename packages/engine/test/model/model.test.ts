@@ -10,6 +10,8 @@ import {
   createScriptedModel,
   recordingKey,
   resolveApiKey,
+  resolveOllamaProviderOptions,
+  DEFAULT_OLLAMA_NUM_CTX,
   segmentsToMessages,
   streamFromObject,
   withRecording,
@@ -53,6 +55,15 @@ describe("segments & cache", () => {
     expect(anthropicCacheBreakpoints(msgs)).toBe(2);
     const openaiMsgs = segmentsToMessages(baseReq().segments, { provider: "openai" });
     expect(anthropicCacheBreakpoints(openaiMsgs)).toBe(0);
+  });
+});
+
+describe("resolveOllamaProviderOptions", () => {
+  test("defaults num_ctx when omitted", () => {
+    const opts = resolveOllamaProviderOptions({ provider: "ollama", model: "x" });
+    expect(opts.num_ctx).toBe(DEFAULT_OLLAMA_NUM_CTX);
+    const custom = resolveOllamaProviderOptions({ provider: "ollama", model: "x", options: { num_ctx: 16384 } });
+    expect(custom.num_ctx).toBe(16384);
   });
 });
 

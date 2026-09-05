@@ -137,8 +137,8 @@ call("scene.turn", {
 
 Subscribe before turns if you need streaming on stdout while the request is in flight.
 
-## Lilium
+## example-game
 
-The game uses the same pattern: `openLiliumEngine` → `runTui` / plain / `serve`. See `games/lilium/src/game/bootstrap.ts`.
+The game uses the same pattern: `openexample-gameEngine` → `runTui` / plain / `serve`. See `games/<host>/src/game/bootstrap.ts`.
 
 Further reading: [rpc-reference.md](./rpc-reference.md), [modules/engine.md](./modules/engine.md).

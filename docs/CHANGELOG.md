@@ -2,7 +2,7 @@
 
 ## 1.0.0
 
-First production release of the Animae monorepo and Lilium reference game.
+First production release of the Animae monorepo and example host game.
 
 ### `@animae/engine`
 
@@ -20,9 +20,9 @@ First production release of the Animae monorepo and Lilium reference game.
 - `@animae/tui` — Ink 8 default layout, theme, keymap, colon commands hook.
 - `animae` CLI — `init`, `validate`, `run`, `inspect`, `timeline`, `serve --stdio`, compiled `dist/animae` binary.
 
-### Lilium (`games/lilium`)
+### example-game (`games/<host>`)
 
-- Shipped TUI game on preset-dnd + `policies/lilium.yaml`, embedded data, `dist/lilium` binary.
+- Shipped TUI game on preset-dnd + `policies/example-game.yaml`, embedded data, `dist/example-game` binary.
 
 ### Docs
 

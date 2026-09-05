@@ -13,6 +13,7 @@ import {
   TemplateSchema,
   WorldDefSchema,
 } from "../schema/authored.ts";
+import { DeckFileSchema } from "../schema/decks.ts";
 import { parseYaml, sha256Hex } from "../store/util.ts";
 import { loadCharacterFromFiles } from "./characters.ts";
 import { type ConfigIssue, throwConfigInvalid, zodIssues } from "./errors.ts";
@@ -128,6 +129,23 @@ export async function loadAuthored(
   }
   const schedule = await loadOptionalArrayFile("world/schedule.yaml", ScheduleFileSchema);
 
+  const decks: Authored["decks"] = [];
+  for (const path of (await storage.listFiles("world/decks")).filter((p) => p.endsWith(".yaml"))) {
+    const text = await readTracked(path);
+    if (text === undefined) continue;
+    const r = DeckFileSchema.safeParse(parseYaml(text));
+    if (!r.success) {
+      issues.push(...zodIssues(path, r.error));
+      continue;
+    }
+    if (decks.some((d) => d.id === r.data.id)) {
+      issues.push({ file: path, path: "id", message: `duplicate deck id "${r.data.id}"` });
+      continue;
+    }
+    decks.push(r.data);
+  }
+  decks.sort((a, b) => a.id.localeCompare(b.id));
+
   const knowledge: Authored["knowledge"] = [];
   for (const path of (await storage.listFiles("world/knowledge")).filter((p) => p.endsWith(".md"))) {
     const text = await readTracked(path);
@@ -204,6 +222,7 @@ export async function loadAuthored(
     beats,
     exceptions,
     schedule,
+    decks,
     knowledge,
     characters,
     templates,

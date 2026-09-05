@@ -1,4 +1,5 @@
 import type { Kernel } from "../contracts.ts";
+import { entityDisplayName } from "../entities/names.ts";
 import type { PromptSegments } from "../ports.ts";
 import type { KnowledgeDoc } from "../schema/authored.ts";
 import type { CharacterId } from "../types.ts";
@@ -12,11 +13,17 @@ function lines(...parts: (string | undefined | false)[]): string {
   return parts.filter(Boolean).join("\n\n");
 }
 
-function policyPromptBlock(k: Kernel, key: string): string {
+function expandPromptTemplateVars(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_, key: string) => vars[key] ?? "");
+}
+
+function policyPromptBlock(k: Kernel, key: string, vars?: Record<string, string>): string {
   const prompt = k.policy.x?.prompt;
   if (!prompt || typeof prompt !== "object") return "";
   const v = (prompt as Record<string, unknown>)[key];
-  return typeof v === "string" && v.trim() ? v.trim() : "";
+  if (typeof v !== "string" || !v.trim()) return "";
+  const raw = v.trim();
+  return vars ? expandPromptTemplateVars(raw, vars) : raw;
 }
 
 /** Optional character template `guidance` blocks (sorted ids) from `policy.x.prompt.template_partials`. */
@@ -218,19 +225,28 @@ function staticSegment(k: Kernel, i: PromptInput): string {
         : "";
 
   const partials = templatePartialGuidance(k);
+  const displayName = entityDisplayName(k.timeline.state(), k.catalog, i.speaker, {
+    viewer: i.addressee,
+    speaker: i.speaker,
+  });
+  const promptVars = { name: displayName, nickname: displayName, canonical_name: identity?.name ?? def?.id ?? i.speaker };
   const renderExtra =
     i.purpose === "render"
-      ? lines(renderTextConvention(), intentRealizedRule(), partials && `Narrator partials:\n${partials}`, policyPromptBlock(k, "render"))
+      ? lines(
+          renderTextConvention(),
+          intentRealizedRule(),
+          partials && `Narrator partials:\n${partials}`,
+          policyPromptBlock(k, "render", promptVars),
+        )
       : "";
   const appraiseExtra =
     i.purpose === "appraise"
-      ? lines(partials && `Narrator partials:\n${partials}`, policyPromptBlock(k, "appraise_static"))
+      ? lines(partials && `Narrator partials:\n${partials}`, policyPromptBlock(k, "appraise_static", promptVars))
       : "";
-
   const characterBlock =
     def &&
     lines(
-      `You are ${identity?.name ?? def.id}.`,
+      `You are ${displayName}${displayName !== identity?.name ? ` (${identity?.name})` : ""}.`,
       identity?.summary,
       personaBlock,
       def.card.style && `Style: ${def.card.style}`,

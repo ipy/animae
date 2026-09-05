@@ -46,7 +46,7 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 |------|-----------|
 | Header | Compact `Day N HH:MM · location · chapter · branch` |
 | Speakers | `characters/*/identity.color` when query allows; else theme `npc` / `player` |
-| SidePanel tracks | `ParticipantTracks`: player-visible **tier labels** (zh-CN map when chapter title is Chinese); raw track values hidden per Lilium visibility |
+| SidePanel tracks | `ParticipantTracks`: player-visible **tier labels** (zh-CN map when chapter title is Chinese); raw track values hidden per example-game visibility |
 | Transcript | CJK wrap via display width; typewriter wraps live; scroll window scales with terminal height; store capped at 400 entries |
 | InputLine | Grapheme cursor with inverse cell; horizontal scroll for long CJK/ASCII lines |
 | Errors | Turn failures show warning banner; transcript system line; UI stays usable |
@@ -56,7 +56,7 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/dev-session.ts` | Real Lilium `data/` copy, `openLiliumEngine`, `ScriptedModel`, `BasePanel` panel, `registerLiliumRules` via bootstrap |
+| `scripts/dev-session.ts` | Real example-game `data/` copy, `openexample-gameEngine`, `ScriptedModel`, `BasePanel` panel, `registerexample-gameRules` via bootstrap |
 | `scripts/qa-scenario-keys.json` | Shared keystroke schedules (kept in sync with batch scenarios) |
 | `scripts/pty-render.py` | Python `pty` driver; waits for `TUI_READY` on stderr, injects keys on the PTY master; sizes 120×40, 100×30, 90×30, 79×23, 160×50; writes grids to `animae/docs/tui-snapshots/` |
 | `scripts/demo.ts` | Fake engine interactive demo |
@@ -78,7 +78,7 @@ TUI_SNAPSHOT_SCENARIOS=empty,cjk python3 scripts/pty-render.py
 
 - **F-keys / PTY**: `useParsedInput` + vendored `parseKeypress` and Ink’s `input-parser` (split bulk stdin like PTY `:help` + Enter); maps `enter` and `return`; `TuiApp` mirrors input draft in refs so batched keys commit correctly. No `createRequire` / `ink/build/…` at runtime. Quit calls `app.exit()` before `engine.close()` so unreachable LLM calls cannot block exit. Typewriter skips do not block the input line when focus is `input`.
 - **Inspector**: read-only tree for common paths; arbitrary paths via `:query`.
-- **Policy track metadata**: tier **names** come from engine query; zh labels use Lilium tier map until `policy/tracks` is exposed on `query`.
+- **Policy track metadata**: tier **names** come from engine query; zh labels use example-game tier map until `policy/tracks` is exposed on `query`.
 - **Budget footer**: tries `query(viewer,"budget")` then `director/beat/budget`.
 
 ## Integrator notes

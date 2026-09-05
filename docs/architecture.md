@@ -16,7 +16,7 @@
       preset-dnd/    @animae/preset-dnd
       tui/           @animae/tui          Ink 8 components + default layout
       cli/           animae               CLI, `serve --stdio` JSON-RPC, `bun build --compile` script
-  games/lilium/                ← the game (depends on animae only through its public packages)
+  games/<host>/                ← the game (depends on animae only through its public packages)
   docs/                        ← product-level docs (spec original, progress log)
 ```
 
@@ -27,7 +27,7 @@
 * **Dev resolution**: package `exports` point at `src/index.ts` (so no build step in dev); `publishConfig.exports` point to `dist/`.
 * **Runtime portability**: engine code must run on Node ≥ 24 *and* Bun. Use `node:` APIs only (fs, crypto, zlib, path…). Never `Bun.*` in `@animae/engine`.
   (`@animae/tui` and `animae` CLI may be Bun-first but must work on Node via the built `dist`.)
-* **Tests**: `bun test` with `import { test, expect } from "bun:test"`, files `packages/<pkg>/test/**/*.test.ts` (game: `games/lilium/test`).
+* **Tests**: `bun test` with `import { test, expect } from "bun:test"`, files `packages/<pkg>/test/**/*.test.ts` (game: `games/<host>/test`).
   Test doubles (`MemoryStorage`, `ScriptedModel`) may be used in tests only. **Production code must never contain mock/placeholder data.**
 * **Typecheck**: `node_modules/.bin/tsc -p tsconfig.json --noEmit` from the repo root must stay green for your files.
 * **Dependencies**: add only what is needed (`bun add` inside the package dir). Prefer Node built-ins; no gray-matter/lodash etc. (we parse frontmatter with `yaml`).
@@ -135,8 +135,8 @@ See `contracts.ts` "Query path catalogue". Base visibility (preset-base §19.4) 
 **Status: complete (v1.0.0).**
 
 1. **Contracts** — types, schemas, ports, module interfaces.
-2. **Parallel module build** — all engine modules, CLI, TUI, presets, Lilium content.
-3. **Integration** — e2e tests, record/replay determinism (I6), `animae` and `lilium` compiled binaries.
+2. **Parallel module build** — all engine modules, CLI, TUI, presets, example-game content.
+3. **Integration** — e2e tests, record/replay determinism (I6), `animae` and `example-game` compiled binaries.
 4. **Hardening** — conformance audits ([conformance-a.md](./conformance-a.md), [b](./conformance-b.md), [c](./conformance-c.md)), user-facing docs, packaging.
 
 ## 6. Module notes
@@ -163,3 +163,6 @@ Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/R
 * `policy.render.maxSegmentChars` — optional `{ static?, semiStatic?, dynamic? }` character caps for prompt segments (truncate with marker; default unlimited).
 * `ModelSpecSchema.provider` — additive values `deepseek`, `ollama` (native Ollama `/api/chat`, `/api/embed`; default base `http://127.0.0.1:11434`). `resolveApiKey` returns `undefined` when unset (one-time warning via `ModelWarningSink` / `AI_SDK_LOG_WARNINGS` handler); hosted providers still construct and fail at request time on 401.
 * **Mods (content packs):** `AnimaeConfigSchema.mods`, `mod.ts` (`ModBundle`, `ModSetupCtx`), layered read-only storage (`mods/`), patch merge operators, `CreateEngineOptions.mods` / `modBundles`, `Engine.mods()`, `config.reloaded.mods`, `EngineState.config.mods`, `config.warning` code `mod_drift`. See [mods.md](./mods.md). Filesystem mods are data-only; `ModBundle.setup()` only from host-registered bundles.
+* **Entity aliases:** `entity.alias_set` → `EngineState.aliases`; `Engine.entities.setAlias` / `Engine.setAlias`, `Engine.resolveEntity`; prompt `{{ name }}` / nickname-aware `entityDisplayName`.
+* **Dynamic entities:** `entity.spawned` (full validated spec + `data`), `entity.retired`; `Engine.spawnEntity`, `Engine.entities.generateFromBrief` (S2 + seeded procedural fallback); `EngineState.entitySeq` for `dyn-####` ids; hot reload preserves `generated` from timeline.
+* **Event decks:** authored `world/decks/*.yaml`; daily draw emits `deck.drawn` (+ optional `emit` drafts); state in `EngineState.decks`; deterministic weighted draw via `timeline.rng`.

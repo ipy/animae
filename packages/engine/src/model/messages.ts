@@ -38,6 +38,13 @@ export function segmentsToMessages(segments: PromptSegments, spec: Pick<ModelSpe
   return messages;
 }
 
+/** Character count across all prompt segments (for Ollama num_ctx preflight). */
+export function promptSegmentCharCount(segments: PromptSegments): number {
+  let n = segments.static.length + segments.semiStatic.length + segments.dynamic.length + segments.user.length;
+  for (const turn of segments.history ?? []) n += turn.content.length;
+  return n;
+}
+
 /** Exposed for tests: cache markers on system messages (Anthropic only). */
 export function anthropicCacheBreakpoints(messages: ModelMessage[]): number {
   let n = 0;

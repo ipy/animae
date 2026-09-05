@@ -1,6 +1,6 @@
 # Animae
 
-Gameplay-agnostic character and world runtime for interactive narrative (TypeScript). Games such as [Lilium](../games/lilium) ship as separate workspace packages that depend only on the public `@animae/*` packages.
+Gameplay-agnostic character and world runtime for interactive narrative (TypeScript). Games such as [example-game](../games/<host>) ship as separate workspace packages that depend only on the public `@animae/*` packages.
 
 ## Packages
 
@@ -22,7 +22,7 @@ Gameplay-agnostic character and world runtime for interactive narrative (TypeScr
 From the repo root (see [root README](../README.md)):
 
 ```bash
-bun install   # once, at lilium-monorepo root
+bun install   # once, at example-game-monorepo root
 ```
 
 Work inside `animae/` for engine-only changes:

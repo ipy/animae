@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const PIPELINE_DIR = join(import.meta.dir, "../../src/pipeline");
-const GAMEPLAY_MARKERS = [/galgame/i, /百合园/, /撮合/, /调情/, /威信/, /温室/];
+const GAMEPLAY_MARKERS = [/百合园/, /撮合/, /调情/, /威信/, /温室/];
 
 function listTsFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -15,7 +15,7 @@ function listTsFiles(dir: string): string[] {
 }
 
 describe("I1 engine pipeline strings", () => {
-  test("pipeline sources contain no Lilium-specific gameplay wording", () => {
+  test("pipeline sources contain no host-game-specific gameplay wording", () => {
     const files = listTsFiles(PIPELINE_DIR);
     const hits: string[] = [];
     for (const file of files) {

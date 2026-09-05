@@ -6,6 +6,7 @@ import { buildCelContext } from "../rules/cel-context.ts";
 import { formatSceneId, formatTurnId } from "../engine/ids.ts";
 import { HookRegistry } from "../pipeline/hooks.ts";
 import { runTurn } from "../pipeline/run-turn.ts";
+import { resolveEntityRef } from "../entities/names.ts";
 
 export interface SceneService {
   start(s: { location: string; participants: string[]; fields?: string[] }): Promise<SceneId>;
@@ -114,10 +115,19 @@ export function createSceneService(
       }
       turnInFlight = true;
       try {
+        const resolvedAddressee = (() => {
+          if (!t.addressee) return undefined;
+          if (scene.participants.includes(t.addressee)) return t.addressee;
+          try {
+            return resolveEntityRef(k.timeline.state(), k.catalog, t.addressee, { scope: scene.participants }).id;
+          } catch {
+            return t.addressee;
+          }
+        })();
         const addressee =
-          t.addressee && scene.participants.includes(t.addressee)
-            ? t.addressee
-            : pickSpeaker(t.actor, t.addressee, scene.participants);
+          resolvedAddressee && scene.participants.includes(resolvedAddressee)
+            ? resolvedAddressee
+            : pickSpeaker(t.actor, resolvedAddressee, scene.participants);
         const speaker = pickSpeaker(t.actor, addressee, scene.participants);
         const turnId = formatTurnId(k.timeline.state().turnCount + 1);
 

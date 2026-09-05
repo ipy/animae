@@ -53,11 +53,15 @@ export function initialState(authored: Authored, policy: ResolvedPolicy): Engine
       mods: authored.mods?.map((m) => ({ id: m.id, version: m.version, contentHash: m.contentHash })),
     },
     generated: { characters: {}, locations: {}, items: {} },
+    aliases: {},
+    entitySeq: 0,
+    retired: {},
+    decks: {},
     purged: [],
   };
 }
 
-function characterStateFromDef(c: CharacterDef, policy: ResolvedPolicy, player: string, time: WorldTime): CharacterState {
+export function characterStateFromDef(c: CharacterDef, policy: ResolvedPolicy, player: string, time: WorldTime): CharacterState {
   const tracks = buildInitialTracks(c, policy, player);
   const tiers = buildInitialTiers(tracks, policy);
   return {

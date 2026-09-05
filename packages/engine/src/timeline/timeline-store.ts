@@ -175,7 +175,7 @@ export function createTimeline(deps: TimelineDeps): TimelineStore {
       eventsMem.push(env);
       persisted.push(env);
       notify(env);
-      if (env.kind === "entity.created") {
+      if (env.kind === "entity.created" || env.kind === "entity.spawned") {
         const p = env as unknown as EngineEvent<{ entity: { kind: string; id: string }; data: unknown }>;
         await deps.storage.writeAtomic(
           entitiesPath(branch, p.entity.kind, p.entity.id),

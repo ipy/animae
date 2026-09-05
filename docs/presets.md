@@ -7,7 +7,7 @@ A **preset** is a `PresetBundle`: `{ id, extends?, policies[], knowledge?, templ
 | `@animae/preset-base` | Default narrative policy (spec §19.4) |
 | `@animae/preset-dnd` | Extends base; SRD checks & trait schema (§19.5) |
 
-CLI and Lilium register both via `createEngine({ presets: [...] })`. Set `animae.yaml`:
+CLI and example-game register both via `createEngine({ presets: [...] })`. Set `animae.yaml`:
 
 ```yaml
 preset: "@animae/preset-dnd"
@@ -63,7 +63,7 @@ Preset-dnd’s `rules()` hook registers `dndIntimidationExtra` automatically whe
 
 ## DnD / SRD attribution
 
-`@animae/preset-dnd` exports `notice` (CC BY 4.0). Surface in credits UI — Lilium `:credits` command prints it.
+`@animae/preset-dnd` exports `notice` (CC BY 4.0). Surface in credits UI — example-game `:credits` command prints it.
 
 ## Further detail
 

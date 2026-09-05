@@ -61,7 +61,7 @@ models:
 # anthropic baseURL optional; else env ANTHROPIC_BASE_URL
 ```
 
-Use `openai-compatible` with `baseURL` + `name` for OpenRouter, vLLM, LM Studio, etc. API keys are optional at config time; missing keys log once to `ModelWarningSink` (Lilium: `~/.local/share/lilium/root/model-warnings.log`).
+Use `openai-compatible` with `baseURL` + `name` for OpenRouter, vLLM, LM Studio, etc. API keys are optional at config time; missing keys log once to `ModelWarningSink` (example-game: `~/.local/share/example-game/root/model-warnings.log`).
 
 ## 4. Validate
 

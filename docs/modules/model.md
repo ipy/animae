@@ -55,12 +55,13 @@ Transient HTTP/network/429/5xx: bounded exponential backoff (default 3). Client 
 - Uses `generateText` / `streamText` + `Output.object` (not deprecated `generateObject`) so tools and `stopWhen: isStepCount(maxSteps)` work together; default `maxSteps` 3 when tools are present.
 - SDK `maxRetries` set to 0; transient retries implemented in the adapter with injectable `sleep`.
 - Model id: `` `${provider}/${model}` `` from `ModelSpec`.
-- **Ollama**: `ollama-ai-provider-v2` with `compatibility: "strict"` (native `/api/chat`, `/api/embed`).
+- **Ollama**: `ollama-ai-provider-v2` with `compatibility: "strict"` (native `/api/chat`, `/api/embed`). When `options.num_ctx` is omitted, the engine defaults **`num_ctx: 8192`** (Ollama’s own default is often 2048–4096 and truncates long system prompts silently). Set `options.think: false` on models that emit separate thinking streams; string fields still pass through `sanitizeStructuredOutput`. If estimated input tokens exceed ~85% of `num_ctx`, a **`OLLAMA_CTX_BUDGET`** warning is sent to the warning sink (not stdout).
 - **DeepSeek**: `@ai-sdk/deepseek`; pass `options.thinking` / reasoning via `spec.options`.
 - Structured outputs strip `thinking` / `reasoning_content` artifacts from string fields.
 
 ## Edge cases
 
 - Empty segment strings are omitted (no empty system messages).
-- `spec.options` forwarded as `providerOptions[provider]`.
+- `spec.options` forwarded as `providerOptions[provider]` (Ollama merges default `num_ctx` as above).
+- Opt-in live check: `bun run smoke:ollama` in `@animae/engine` (requires local Ollama; not part of `bun test`). Exercises text, stream, Zod object + repair, `think` on/off, warning sink, and missing-key tolerance with tiny `num_predict`. On slow 8B models, expect tens of seconds per check; keep `options.think: false` unless you need separated reasoning.
 - Repair pass adds a short system hint; one retry only for schema failures.

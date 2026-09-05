@@ -1,6 +1,6 @@
 # TUI guide (`@animae/tui`)
 
-Ink **8** + React 19 terminal UI used by `animae run` and Lilium.
+Ink **8** + React 19 terminal UI used by `animae run` and example-game.
 
 ## Entry
 

@@ -59,4 +59,4 @@ No separate stage; `input.classified` draft comes from appraise (`CLASSIFY_IN_AP
 - **Choices**: CEL filter; ids `c1..cn`; drafts `choice.offered` / `choice.filtered`.
 - **L4 field effects** in dynamic only: `hide_entities`, `disguise`, `inject_belief` (NPC view).
 
-See also `animae/docs/modules/router.md`, `games/lilium/docs/prompts.md`.
+See also `animae/docs/modules/router.md`, `games/<host>/docs/prompts.md`.

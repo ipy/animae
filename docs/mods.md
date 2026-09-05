@@ -1,6 +1,6 @@
 # Content mods
 
-Mods are **optional content packs** (and optionally **code plugins** via embedded `ModBundle`) that overlay the data root without forking the base game. They are gameplay-agnostic: `rating` and `tags` are free metadata for host apps (e.g. Lilium setup UI).
+Mods are **optional content packs** (and optionally **code plugins** via embedded `ModBundle`) that overlay the data root without forking the base game. They are gameplay-agnostic: `rating` and `tags` are free metadata for host apps (e.g. example-game setup UI).
 
 ## Why mods vs presets vs authored vs plugins
 
@@ -51,7 +51,7 @@ Generate TS from a directory: `bun scripts/gen-mod-bundle.ts` (see `packages/eng
 | `requires` | no | other mod ids or preset ids (`@animae/preset-base` skips mod resolution) |
 | `conflicts` | no | incompatible mod ids |
 | `loadAfter` | no | topological hint (load after these mods) |
-| `rating` | no | free string (e.g. `adult`) |
+| `rating` | no | free string (e.g. `optional`) |
 | `tags` | no | string[] |
 | `notice` | no | text host should show before enable |
 | `provides` | no | string[] capability labels |
@@ -116,7 +116,7 @@ Filesystem mods are **data-only**. Only registered `ModBundle.setup()` runs code
 
 Indexing a missing key as `world.vars['some.key']` throws at runtime. For optional flags (pairs, milestones), test membership first: `'some.key' in world.vars && world.vars['some.key'] == true`.
 
-**Host bundles with empty `files`:** When a registered `ModBundle` has no embedded overlay files, the engine still loads overlay content from `mods/<id>/` on disk (manifest comes from the bundle). Use this for code-only plugins (e.g. Lilium adult rule hooks).
+**Host bundles with empty `files`:** When a registered `ModBundle` has no embedded overlay files, the engine still loads overlay content from `mods/<id>/` on disk (manifest comes from the bundle). Use this for code-only plugins (e.g. host-registered optional mod rule hooks).
 
 ## Security (v1)
 

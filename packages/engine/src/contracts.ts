@@ -96,6 +96,21 @@ export interface EntityService {
   checkPromotions(ids: CharacterId[]): Promise<void>;
   importCard(file: string): Promise<string>;
   exportCard(id: string): Promise<string>;
+  setAlias(input: {
+    entity: string;
+    nickname?: string | null;
+    alias?: string;
+    by: string | "player";
+    target?: string;
+    addressLabel?: string;
+  }): Promise<void>;
+  resolve(ref: string, opts?: { viewer?: CharacterId; speaker?: CharacterId; scope?: CharacterId[] }): { kind: "character"; id: CharacterId };
+  spawn(spec: import("./entities/spawn.ts").SpawnEntitySpec, opts?: { reason?: string; id?: string }): Promise<EntityRef>;
+  retire(ref: string, opts?: { reason?: string }): Promise<void>;
+  generateFromBrief(
+    brief: import("./entities/generate-brief.ts").GenerationBrief,
+    opts?: { pools?: import("./entities/generate-brief.ts").GenerationPools; reason?: string },
+  ): Promise<EntityRef>;
 }
 
 // ───────────────────────── rules ─────────────────────────

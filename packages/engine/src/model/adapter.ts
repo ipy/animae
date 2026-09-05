@@ -13,7 +13,9 @@ import type { ZodType } from "zod";
 import { AnimaeError } from "../types.ts";
 import type { ModelRequestBase, StreamPart, ToolDef } from "../ports.ts";
 import type { ModelSpec } from "../schema/authored.ts";
-import { segmentsToMessages } from "./messages.ts";
+import { promptSegmentCharCount, segmentsToMessages } from "./messages.ts";
+import { resolveOllamaProviderOptions } from "./provider.ts";
+import { estimatePromptTokensFromChars, warnOllamaContextBudget } from "./warnings.ts";
 import { isOutputValidationError, isTransientError, withTransientRetries } from "./retry.ts";
 import type { ModelPortOptions } from "./types.ts";
 import { sanitizeStructuredOutput } from "./reasoning.ts";
@@ -37,19 +39,35 @@ function buildTools(defs: ToolDef[] | undefined): ToolSet | undefined {
   return out;
 }
 
-function providerOptionsFromSpec(spec: ModelSpec): Record<string, unknown> | undefined {
+function providerOptionsFromSpec(
+  spec: ModelSpec,
+  ctx?: { segments?: import("../ports.ts").PromptSegments; warningSink?: import("./warnings.ts").ModelWarningSink },
+): Record<string, unknown> | undefined {
+  if (spec.provider === "ollama") {
+    const ollama = resolveOllamaProviderOptions(spec);
+    if (ctx?.segments) {
+      const est = estimatePromptTokensFromChars(promptSegmentCharCount(ctx.segments));
+      const numCtx = typeof ollama.num_ctx === "number" ? ollama.num_ctx : 8192;
+      warnOllamaContextBudget(spec, numCtx, est, ctx.warningSink);
+    }
+    return { ollama };
+  }
   if (!spec.options || !Object.keys(spec.options).length) return undefined;
   return { [spec.provider]: spec.options };
 }
 
-function callSettings(req: ModelRequestBase, spec: ModelSpec) {
+function callSettings(
+  req: ModelRequestBase,
+  spec: ModelSpec,
+  ctx?: { warningSink?: import("./warnings.ts").ModelWarningSink },
+) {
   const maxSteps = req.maxSteps ?? (req.tools?.length ? 3 : 1);
   return {
     maxOutputTokens: req.maxOutputTokens,
     temperature: req.temperature,
     seed: req.seed,
     stopWhen: isStepCount(maxSteps),
-    providerOptions: providerOptionsFromSpec(spec),
+    providerOptions: providerOptionsFromSpec(spec, { segments: req.segments, warningSink: ctx?.warningSink }),
     allowSystemInMessages: true,
   };
 }
@@ -77,7 +95,7 @@ export async function runObjectWithRepair<T>(
 ): Promise<T> {
   const baseMessages = segmentsToMessages(req.segments, spec);
   const tools = buildTools(req.tools);
-  const settings = callSettings(req, spec);
+  const settings = callSettings(req, spec, { warningSink: opts.warningSink });
   const output = Output.object({ schema: req.schema });
 
   const call = (extra: ModelMessage[]) =>
@@ -116,7 +134,7 @@ async function* streamOnce(
 ): AsyncGenerator<StreamPart> {
   const messages = [...segmentsToMessages(req.segments, spec), ...extraMessages];
   const tools = buildTools(req.tools);
-  const settings = callSettings(req, spec);
+  const settings = callSettings(req, spec, { warningSink: opts.warningSink });
   const output = Output.object({ schema: req.schema });
 
   const queue: StreamPart[] = [];

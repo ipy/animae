@@ -56,6 +56,16 @@ export function normalizeOllamaBaseURL(baseURL?: string): string {
   return `${origin}/api`;
 }
 
+/** Default Ollama context window when `options.num_ctx` is omitted (Ollama often defaults to 2048–4096 and truncates silently). */
+export const DEFAULT_OLLAMA_NUM_CTX = 8192;
+
+/** Merge authored `spec.options` with engine defaults for Ollama `/api/chat` `options`. */
+export function resolveOllamaProviderOptions(spec: ModelSpec): Record<string, unknown> {
+  const opts = { ...(spec.options ?? {}) };
+  if (opts.num_ctx == null) opts.num_ctx = DEFAULT_OLLAMA_NUM_CTX;
+  return opts;
+}
+
 function mergeHeaders(spec: ModelSpec, apiKey?: string): Record<string, string> | undefined {
   const headers = { ...spec.headers };
   if (apiKey && !headers.Authorization && !headers.authorization) {

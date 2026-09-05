@@ -3,7 +3,7 @@ export { withRecording } from "./recording.ts";
 export { createModelsFromConfig, resolveEngineModels } from "./config.ts";
 export { createScriptedModel, streamFromObject, ScriptedModel, type ScriptedHandler } from "./scripted.ts";
 export { createEmbeddingPort } from "./embedding.ts";
-export { segmentsToMessages, anthropicCacheBreakpoints } from "./messages.ts";
+export { segmentsToMessages, anthropicCacheBreakpoints, promptSegmentCharCount } from "./messages.ts";
 export { recordingKey } from "./recording-key.ts";
 export {
   resolveApiKey,
@@ -13,6 +13,8 @@ export {
   ollamaOrigin,
   resolveAnthropicBaseURL,
   createLanguageModel,
+  resolveOllamaProviderOptions,
+  DEFAULT_OLLAMA_NUM_CTX,
 } from "./provider.ts";
 export {
   installAiSdkWarningHandler,
@@ -21,6 +23,8 @@ export {
   createMemoryModelWarningSink,
   fileModelWarningSink,
   resetModelWarningState,
+  estimatePromptTokensFromChars,
+  warnOllamaContextBudget,
   type ModelWarningSink,
   type ModelWarningEntry,
 } from "./warnings.ts";

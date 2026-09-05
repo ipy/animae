@@ -224,7 +224,7 @@ Each item needs `at` **or** `every`, and `emit` **or** `rule`.
     - { id: whisper, minutes: 720 }
   emit: [...]
   onInterrupt: myRuleFn
-  rule: lilium.dailyTick    # alternatively: registered rule name
+  rule: example-game.dailyTick    # alternatively: registered rule name
 ```
 
 ---

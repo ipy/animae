@@ -70,6 +70,25 @@ export interface SceneState {
 
 export interface ScheduleState { lastFired?: WorldTime; nextDue?: WorldTime; done?: boolean; phaseIndex?: number; startedAt?: WorldTime; interrupted?: boolean }
 
+export interface EntityAliasEntry {
+  label: string;
+  by: CharacterId | "player";
+}
+
+export interface EntityAliasState {
+  nickname?: EntityAliasEntry;
+  aliases: Record<string, EntityAliasEntry>;
+  addressAs: Record<CharacterId, Record<CharacterId, EntityAliasEntry>>;
+}
+
+export interface DeckRuntimeState {
+  lastDrawDay?: number;
+  drawsToday: number;
+  onceUsed: string[];
+  lastEntryId?: string;
+  lastDrawAt?: WorldTime;
+}
+
 export interface EngineState {
   time: WorldTime;
   /** last assigned event counter in this chain */
@@ -104,8 +123,16 @@ export interface EngineState {
   /** memory index: owner → entry count/ids by kind (entries themselves live in artifacts) */
   memoryIndex: Record<CharacterId, { count: number; lastId?: string }>;
   config: { hash: string; mods?: { id: string; version: string; contentHash: string }[] };
-  /** entities generated at runtime (from `entity.created` events); mirrored to timelines/<branch>/entities/ */
+  /** entities generated at runtime (from `entity.created` / `entity.spawned` events); mirrored to timelines/<branch>/entities/ */
   generated: { characters: Record<string, CharacterDef>; locations: Record<string, LocationDef>; items: Record<string, ItemDef> };
+  /** runtime nicknames / aliases (from `entity.alias_set`) */
+  aliases?: Record<CharacterId, EntityAliasState>;
+  /** spawned entity id sequence for `dyn-####` allocation */
+  entitySeq?: number;
+  /** retired dynamic entities (`entity.retired`); stay in log for replay */
+  retired?: Record<CharacterId, true>;
+  /** random event deck draw state */
+  decks?: Record<string, DeckRuntimeState>;
   /** event ids of redacted (purged) events handled by reducer no-op */
   purged: string[];
 }

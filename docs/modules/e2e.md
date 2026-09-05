@@ -19,7 +19,7 @@ Integration tests for `createEngine` on real `FsStorage` temp dirs with `Scripte
 
 Run: `cd animae/packages/engine && bun test test/e2e`.
 
-## Lilium real data (`games/lilium/test/e2e/real-data.test.ts`)
+## example-game real data (`games/<host>/test/e2e/real-data.test.ts`)
 
 - Decay + schedule/daily on `:endday` advances; anchors (`anvil-ultimatum`, `hansheng-rescue`) fire on `world.advance` before the next scene.
 - **I6**: long scripted session in `record` mode, filesystem copy of the data root, `replay` mode asserts identical event logs (ids/payloads/order), `rebuildState` equality, and `timeline.replay` chunks vs live `TurnChunk`s.

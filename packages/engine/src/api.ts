@@ -41,7 +41,35 @@ export interface Engine {
   entities: {
     generate(r: { kind: "character" | "location" | "item"; template: string; hints?: Record<string, unknown> }): Promise<EntityRef>;
     promote(id: string, to: Lod): Promise<void>;
+    setAlias(input: {
+      entity: string;
+      nickname?: string | null;
+      alias?: string;
+      by: string | "player";
+      target?: string;
+      addressLabel?: string;
+    }): Promise<void>;
+    resolve(ref: string, opts?: { viewer?: string; speaker?: string; scope?: string[] }): EntityRef;
+    spawn(spec: import("./entities/spawn.ts").SpawnEntitySpec, opts?: { reason?: string; id?: string }): Promise<EntityRef>;
+    retire(ref: string, opts?: { reason?: string }): Promise<void>;
+    generateFromBrief(
+      brief: import("./entities/generate-brief.ts").GenerationBrief,
+      opts?: { pools?: import("./entities/generate-brief.ts").GenerationPools; reason?: string },
+    ): Promise<EntityRef>;
   };
+  /** Alias for `entities.setAlias`. */
+  setAlias(input: {
+    entity: string;
+    nickname?: string | null;
+    alias?: string;
+    by: string | "player";
+    target?: string;
+    addressLabel?: string;
+  }): Promise<void>;
+  /** Alias for `entities.resolve`. */
+  resolveEntity(ref: string, opts?: { viewer?: string; speaker?: string; scope?: string[] }): EntityRef;
+  /** Alias for `entities.spawn`. */
+  spawnEntity(spec: import("./entities/spawn.ts").SpawnEntitySpec, opts?: { reason?: string; id?: string }): Promise<EntityRef>;
   fields: { declare(f: FieldDef): void; grant(f: FieldDef): Promise<LedgerEntry>; revoke(id: string): Promise<void> };
   director: {
     sidenote(npc: string, text: string, o?: { ttlTurns?: number; verbatim?: boolean }): Promise<void>;

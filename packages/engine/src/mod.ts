@@ -14,7 +14,7 @@ export interface ModManifest {
   requires?: string[];
   conflicts?: string[];
   loadAfter?: string[];
-  /** free-form label (e.g. "adult"); engine does not interpret */
+  /** free-form label (e.g. "teen", "optional"); engine does not interpret */
   rating?: string;
   tags?: string[];
   /** host app should show before enabling */

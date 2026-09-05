@@ -33,7 +33,15 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
     entities: {
       generate: async () => ({ kind: "character", id: "gen_1" }),
       promote: async () => {},
+      setAlias: async () => {},
+      resolve: (ref) => ({ kind: "character", id: ref }),
+      spawn: async () => ({ kind: "character", id: "dyn-0001" }),
+      retire: async () => {},
+      generateFromBrief: async () => ({ kind: "character", id: "dyn-0002" }),
     },
+    setAlias: async () => {},
+    resolveEntity: (ref) => ({ kind: "character", id: ref }),
+    spawnEntity: async () => ({ kind: "character", id: "dyn-0001" }),
     fields: {
       declare: () => {},
       grant: async () => ({ eventId: "evt_0001", kind: "field.granted", field: "f1", detail: { holder: "player", level: "L0" } }),

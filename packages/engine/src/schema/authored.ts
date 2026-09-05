@@ -383,6 +383,8 @@ export interface Authored {
   beats: BeatDef[];
   exceptions: Record<string, ExceptionDef>;
   schedule: ScheduleItem[];
+  /** weighted random event decks (`world/decks/*.yaml`) */
+  decks?: import("./decks.ts").DeckDef[];
   /** world knowledge only; character knowledge lives in CharacterDef.knowledge */
   knowledge: KnowledgeDoc[];
   characters: Record<string, CharacterDef>;

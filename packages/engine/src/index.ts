@@ -10,6 +10,7 @@ export * from "./api.ts";
 export * from "./contracts.ts";
 export * from "./schema/common.ts";
 export * from "./schema/authored.ts";
+export * from "./schema/decks.ts";
 export * from "./schema/policy.ts";
 export * from "./store/index.ts";
 export * from "./policy/index.ts";

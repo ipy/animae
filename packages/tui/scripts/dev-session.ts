@@ -1,17 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Dev harness: real Lilium data + ScriptedModel + BasePanel side section.
- * Batch mode (for pty-render.py): `--batch <scenario>`; must run under a PTY.
+ * Dev harness: demo e2e data + ScriptedModel + side panel (engine-neutral).
  */
+import { createEngine } from "@animae/engine";
+import { e2ePreset } from "../../engine/test/e2e/fixture.ts";
 import { runTui } from "../src/run-tui.ts";
 import { defaultLayout } from "../src/layout/default-layout.tsx";
-import { copyLiliumDataRoot } from "./copy-lilium-data.ts";
-import { openLiliumEngine } from "../../../../games/lilium/src/game/bootstrap.ts";
-import {
-  createLiliumScriptedModels,
-  type TurnScript,
-} from "../../../../games/lilium/test/e2e/scripted-model.ts";
-import { BasePanel } from "../../../../games/lilium/src/ui/base-panel.tsx";
+import { copyDemoDataRoot } from "./copy-demo-data.ts";
+import { createDemoScriptedModels, type TurnScript } from "./scripted-models.ts";
+import { DemoSidePanel } from "../src/panels/demo-side-panel.tsx";
 import type { ModelPort, PromptSegments } from "@animae/engine";
 import type { CustomCommand } from "../src/types.ts";
 import type { ThemePatch } from "../src/theme/schema.ts";
@@ -32,8 +29,7 @@ function injectMidStreamErrors(port: ModelPort): ModelPort {
         let parts = 0;
         const actorLine = actorTextFromSegments(req.segments).toLowerCase();
         const blob = JSON.stringify(req.segments ?? {}).toLowerCase();
-        const shouldFail =
-          actorLine.includes("trigger-error") || blob.includes("trigger-error");
+        const shouldFail = actorLine.includes("trigger-error") || blob.includes("trigger-error");
         for await (const part of inner) {
           yield part;
           parts += 1;
@@ -48,34 +44,32 @@ function injectMidStreamErrors(port: ModelPort): ModelPort {
 }
 
 const CJK_RENDER: TurnScript["render"] = {
-  text: "你好，世界！「全角标点」与ASCII mix 123。",
+  text: "Hello — demo CJK 你好，世界！",
   cues: [
-    { type: "expression", args: { name: "微笑" }, at: 0 },
-    { type: "action", args: { text: "她轻轻理了理鬓发" }, at: 4 },
-    { type: "sfx", args: { name: "风铃" }, at: 8 },
+    { type: "expression", args: { name: "smile" }, at: 0 },
+    { type: "action", args: { text: "waves" }, at: 4 },
   ],
   choices: [
-    { text: "继续聊", expected_event_type: "chat", tags: [] },
-    { text: "换个话题", expected_event_type: "chat", tags: [] },
-    { text: "先忙别的", expected_event_type: "other", tags: [] },
+    { text: "Continue", expected_event_type: "chat", tags: [] },
+    { text: "Other topic", expected_event_type: "chat", tags: [] },
   ],
 };
 
 const SLOW_RENDER: TurnScript["render"] = {
-  text: "打字机效果测试：逐字显示这段较长的中文台词，便于在中途截屏。",
-  cues: [{ type: "expression", args: { name: "专注" }, at: 0 }],
+  text: "Typewriter demo: longer line for mid-screenshot capture.",
+  cues: [{ type: "expression", args: { name: "focus" }, at: 0 }],
   choices: [],
 };
 
 const SCRIPTS: TurnScript[] = [
-  { match: "", appraise: { type: "teamwork", intensity: 0.5 }, render: CJK_RENDER },
-  { match: "chat", appraise: { type: "teamwork", intensity: 0.45 } },
+  { match: "", appraise: { type: "chat", intensity: 0.5 }, render: CJK_RENDER },
+  { match: "chat", appraise: { type: "chat", intensity: 0.45 } },
   {
     match: "trigger-error",
-    appraise: { type: "teamwork", intensity: 0.5 },
-    render: { text: "这条台词会在中途失败。", cues: [], choices: [] },
+    appraise: { type: "chat", intensity: 0.5 },
+    render: { text: "This line fails mid-stream.", cues: [], choices: [] },
   },
-  { match: "slow", appraise: { type: "teamwork", intensity: 0.4 }, render: SLOW_RENDER },
+  { match: "slow", appraise: { type: "chat", intensity: 0.4 }, render: SLOW_RENDER },
 ];
 
 type ScenarioKeys = { readyMs: number; delayMs: number; keys: string[] };
@@ -87,39 +81,33 @@ type Scenario = ScenarioKeys & {
 
 const SCENARIO_META: Record<string, Omit<Scenario, keyof ScenarioKeys>> = {
   empty: { scene: false, initialMessage: "QA: empty state (no scene)." },
-  "scene-start": {
-    scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi", "cen-wu"] },
-  },
+  "scene-start": { scene: { location: "tavern", participants: ["player", "npc1", "npc2"] } },
   "typewriter-mid": {
-    scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] },
+    scene: { location: "tavern", participants: ["player", "npc1"] },
     theme: { typewriter: { charsPerSecond: 8, enabled: true } },
   },
   "typewriter-done": {
-    scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] },
+    scene: { location: "tavern", participants: ["player", "npc1"] },
     theme: { typewriter: { charsPerSecond: 40, enabled: true } },
   },
-  typewriter: { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
-  cjk: { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
-  choices: { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
-  sidepanel: {
-    scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi", "cen-wu"] },
-  },
+  typewriter: { scene: { location: "tavern", participants: ["player", "npc1"] } },
+  cjk: { scene: { location: "tavern", participants: ["player", "npc1"] } },
+  choices: { scene: { location: "tavern", participants: ["player", "npc1"] } },
+  sidepanel: { scene: { location: "tavern", participants: ["player", "npc1", "npc2"] } },
   help: { scene: false },
-  "event-log": { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
+  "event-log": { scene: { location: "tavern", participants: ["player", "npc1"] } },
   timeline: { scene: false },
-  explain: { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
+  explain: { scene: { location: "tavern", participants: ["player", "npc1"] } },
   inspector: { scene: false },
   "long-scroll": { scene: false },
   narrow: { scene: false },
-  "model-error": { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
-  rewind: { scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] } },
+  "model-error": { scene: { location: "tavern", participants: ["player", "npc1"] } },
+  rewind: { scene: { location: "tavern", participants: ["player", "npc1"] } },
   "rapid-input": {
-    scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi"] },
+    scene: { location: "tavern", participants: ["player", "npc1"] },
     theme: { typewriter: { charsPerSecond: 6, enabled: true } },
   },
-  "resize-mid": {
-    scene: { location: "greenhouse-hall", participants: ["player", "bai-zhi", "cen-wu"] },
-  },
+  "resize-mid": { scene: { location: "tavern", participants: ["player", "npc1", "npc2"] } },
 };
 
 const SCENARIOS: Record<string, Scenario> = Object.fromEntries(
@@ -180,13 +168,13 @@ async function main() {
     process.exit(1);
   }
 
-  const { root, cleanup } = await copyLiliumDataRoot();
-  const baseModels = createLiliumScriptedModels(SCRIPTS);
+  const { root, cleanup } = await copyDemoDataRoot();
+  const baseModels = createDemoScriptedModels(SCRIPTS);
   const models = {
     s1: injectMidStreamErrors(baseModels.s1),
     s2: injectMidStreamErrors(baseModels.s2),
   };
-  const engine = await openLiliumEngine({ root, models, modelMode: "record", seed: 7 });
+  const engine = await createEngine({ root, presets: [e2ePreset], models, modelMode: "record", seed: 7 });
 
   if (batch) {
     process.env.COLUMNS = String(cols);
@@ -202,10 +190,10 @@ async function main() {
     commands: devCommands,
     panels: [
       {
-        id: "lilium-base",
-        title: "基地",
+        id: "demo-side",
+        title: "Demo",
         order: -10,
-        render: BasePanel,
+        render: DemoSidePanel,
       },
     ],
     scene: scenario?.scene === false ? undefined : scenario?.scene ?? undefined,
@@ -221,6 +209,7 @@ async function main() {
     await runTui(runOpts);
   } finally {
     await cleanup();
+    await engine.close();
   }
 }
 

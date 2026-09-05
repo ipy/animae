@@ -24,9 +24,9 @@ export const EVENT_KINDS = [
   // memory
   "memory.written", "memory.distorted", "memory.propagated", "reflection.proposed", "reflection.accepted", "reflection.rejected",
   // entities
-  "entity.created", "character.promoted",
+  "entity.created", "entity.spawned", "entity.retired", "entity.alias_set", "character.promoted",
   // world
-  "world.var_set", "time.advanced", "schedule.fired", "longevent.phase", "longevent.interrupted", "offscreen.simulated",
+  "world.var_set", "time.advanced", "schedule.fired", "deck.drawn", "longevent.phase", "longevent.interrupted", "offscreen.simulated",
   "world.moved", // extension: player/character location change
   "item.moved", // extension
   "character.var_set", // extension: {id, key, value} — game rules set per-character vars
@@ -87,6 +87,21 @@ export interface Utterance { speaker: CharacterId; text: string; cues: { type: s
 export interface MemoryWritten { owner: CharacterId; memoryId: string; kind: "episodic" | "semantic" | "summary" | "reflection"; importance: number; src?: EventId; path: string }
 
 export interface EntityCreated { entity: EntityRef; template?: string; data: Record<string, JsonValue> }
+export interface EntitySpawned {
+  entity: EntityRef;
+  /** full validated spawn spec (replay-safe) */
+  spec: Record<string, JsonValue>;
+  data: Record<string, JsonValue>;
+  reason?: string;
+  entitySeq?: number;
+}
+export interface EntityRetired { entity: EntityRef; reason?: string }
+export interface EntityAliasSet {
+  entity: CharacterId;
+  nickname?: import("./state.ts").EntityAliasEntry | null;
+  alias?: { key: string; label: string; by: CharacterId | "player" } | { key: string; remove: true };
+  addressAs?: { target: CharacterId; label: string; by: CharacterId | "player" } | { target: CharacterId; remove: true };
+}
 export interface CharacterPromoted { id: CharacterId; from: Lod; to: Lod; /** newly added/updated character fields after promotion */ data?: Record<string, JsonValue> }
 
 export interface WorldVarSet { path: string; value: JsonValue; previous?: JsonValue }
@@ -94,6 +109,15 @@ export interface TimeAdvanced { from: WorldTime; to: WorldTime; minutes: number;
 export interface WorldMoved { who: CharacterId; from?: string; to: string }
 export interface ItemMoved { item: string; to: EntityRef | null }
 export interface ScheduleFired { id: string; at: WorldTime }
+export interface DeckDrawn {
+  deckId: string;
+  entryId: string;
+  weight: number;
+  tags?: string[];
+  candidates?: { id: string; weight: number; excluded?: string }[];
+  at: WorldTime;
+  entryOnce?: boolean;
+}
 export interface LongEventPhase { id: string; phase: string; index: number; startedAt: WorldTime }
 export interface OffscreenSimulated { entity: EntityRef; from: WorldTime; to: WorldTime; fidelity: string }
 

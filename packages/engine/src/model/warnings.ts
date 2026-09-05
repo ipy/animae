@@ -120,6 +120,27 @@ export function createMemoryModelWarningSink(store: ModelWarningEntry[]): ModelW
 
 const missingKeyWarned = new Set<string>();
 
+/** Rough token estimate (~4 chars per token) for preflight context warnings. */
+export function estimatePromptTokensFromChars(charCount: number): number {
+  return Math.ceil(charCount / 4);
+}
+
+export function warnOllamaContextBudget(
+  spec: Pick<import("../schema/authored.ts").ModelSpec, "provider" | "model">,
+  numCtx: number,
+  estimatedPromptTokens: number,
+  sink?: ModelWarningSink,
+): void {
+  if (spec.provider !== "ollama") return;
+  if (estimatedPromptTokens <= numCtx * 0.85) return;
+  const message =
+    `Ollama prompt may exceed num_ctx=${numCtx} (~${estimatedPromptTokens} est. input tokens); ` +
+    "raise models.*.options.num_ctx or shorten static/semiStatic prompts to avoid silent truncation";
+  const entry: ModelWarningEntry = { message, provider: spec.provider, model: spec.model, code: "OLLAMA_CTX_BUDGET" };
+  if (sink) sink(entry);
+  else dispatch(entry);
+}
+
 export function warnMissingApiKey(
   provider: string,
   envName: string,

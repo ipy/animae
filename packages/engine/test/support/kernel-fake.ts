@@ -40,6 +40,7 @@ function minimalAuthored(chars: CharacterDef[], knowledge: KnowledgeDoc[] = []):
     files: {},
     anchors: [],
     schedule: [],
+    decks: [],
     knowledge,
     beats: [],
     templates: { character: {}, location: {}, item: {} },

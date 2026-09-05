@@ -124,7 +124,7 @@ Kinds are listed in `EVENT_KINDS`. Payload interfaces below; envelopes also carr
 | `carry.applied` / `purge.applied` | rewind/carry |
 | `config.reloaded` / `config.warning` / `config.error` | hot reload |
 
-Games may emit **additional kinds** via rule drafts (e.g. Lilium `lilium.pair.formed`); those must be handled by reducers or tolerated as informational.
+Games may emit **additional kinds** via rule drafts (e.g. example-game `example-game.pair.formed`); those must be handled by reducers or tolerated as informational.
 
 ## Subscriptions (RPC)
 

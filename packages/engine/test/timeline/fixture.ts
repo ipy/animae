@@ -77,6 +77,7 @@ export function minimalAuthored(): Authored {
     beats: [],
     exceptions: {},
     schedule: [],
+    decks: [],
     knowledge: [],
     characters: { npc1: npc },
     templates: { character: {}, location: {}, item: {} },

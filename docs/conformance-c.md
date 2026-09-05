@@ -43,7 +43,7 @@ Method: spec line → implementation → test → status. Last run: `bun test` (
 | **19.3** | `modelMode` default `record` | `create-engine.ts` | `engine/create-engine.test.ts` | Pass |
 | **19.4** | Base preset tracks/events/intent/scene/visibility | `preset-base/src/generated.ts` | `preset-base/test/bundle.test.ts`, `preset-base/test/rules.test.ts` | Pass |
 | **19.5** | DnD preset + mandatory SRD notice | `preset-dnd/NOTICE`, `notice.ts`, README | `preset-dnd/test/dnd.test.ts`, `preset-base/test/bundle.test.ts` | Pass |
-| **19.5** | Notice in game credits | `games/lilium/src/game/commands.ts` `:credits` | (manual / game QA) | Pass |
+| **19.5** | Notice in game credits | `games/<host>/src/game/commands.ts` `:credits` | (manual / game QA) | Pass |
 | **20.1** | `Engine` surface (incl. extensions) | `api.ts`, `create-engine.ts` | `e2e/engine.e2e.test.ts`, `rpc/engine-integration.test.ts` | Pass* |
 | **20.2** | `animae serve --stdio`; API-shaped methods; `turn.chunk`; `subscribe`→`event` | `rpc/server.ts`, `rpc/dispatch.ts` | `rpc/server.test.ts`, `cli/test/serve.integration.test.ts` | Pass |
 | **20.3** | CLI commands + `:` commands in run/plain | `cli/src/*`, `tui/commands/builtin.ts` | `cli/test/*`, `tui/test/command-parse.test.ts` | Pass |
@@ -67,14 +67,14 @@ Method: spec line → implementation → test → status. Last run: `bun test` (
 5. **`TurnChunk`** — Optional `speaker` / `autonomous` on chunks for TUI routing (additive).
 6. **`createEngine` models** — Spec shows required `models`; `CreateEngineOptions.models` is optional when `animae.yaml` defines `models` (CLI builds ports from env). Missing both paths throws `MODEL_CONFIG` with explicit message (fixed this audit).
 7. **`animae init --preset`** — Previously wrote unquoted `@…` preset ids (invalid YAML). **Fixed:** quote via `JSON.stringify` (`cli/src/commands/init.ts`, test added).
-8. **Binary output path** — Build script writes `animae/dist/animae`; Lilium writes `games/lilium/dist/lilium`. Root `bun run build:all && bun run smoke`.
+8. **Binary output path** — Build script writes `animae/dist/animae`; example-game writes `games/<host>/dist/example-game`. Root `bun run build:all && bun run smoke`.
 9. **`init --preset` without built-in registry** — Still warns when preset bundle not registered; validate may pass skeleton-only until models/preset resolve at `run`/`serve`.
 
 ## Fixes applied (this audit)
 
 - `resolveEngineModels()` + stricter `MODEL_CONFIG` when S1/S2 missing (`model/config.ts`, `create-engine.ts`).
 - Tests: `engine/create-engine.test.ts`, `scene/turn-taking.test.ts`, timeline `on()` wildcard, theme/keymap spec keys, preset-dnd NOTICE, init preset quoting.
-- Lilium `:credits` command surfaces `@animae/preset-dnd` `notice` (§19.5 game attribution).
+- example-game `:credits` command surfaces `@animae/preset-dnd` `notice` (§19.5 game attribution).
 
 ## Verification commands
 

@@ -99,7 +99,7 @@ function validateBottomLines(merged: Record<string, unknown>): void {
   if (!r.success) throw new AnimaeError("ENTITY_INVALID", "invalid bottom_lines in proposal");
 }
 
-function characterToJson(def: CharacterDef): Record<string, JsonValue> {
+export function characterToJson(def: CharacterDef): Record<string, JsonValue> {
   return JSON.parse(JSON.stringify(def)) as Record<string, JsonValue>;
 }
 
