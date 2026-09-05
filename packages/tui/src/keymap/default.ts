@@ -10,6 +10,8 @@ export const defaultKeymap: Required<Keymap> = {
   focusNext: ["tab"],
   scrollPageUp: ["pageup"],
   scrollPageDown: ["pagedown"],
+  commandPalette: ["p"],
+  toggleMouse: ["m"],
   help: ["f1"],
   eventLog: ["f2"],
   timeline: ["f3"],
@@ -40,7 +42,9 @@ export function matchKeyAction(
           action === "save" ||
           action === "load" ||
           action === "rewindTurn" ||
-          action === "quit"
+          action === "quit" ||
+          action === "commandPalette" ||
+          action === "toggleMouse"
         ) {
           return action;
         }

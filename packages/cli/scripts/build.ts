@@ -1,13 +1,17 @@
 #!/usr/bin/env bun
+import { readFile } from "node:fs/promises";
 import { mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertSingletonInkReactBundle } from "./bundle-singleton-guard.ts";
+import { inkCompileBundlerFlags } from "./ink-compile-options.ts";
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const animaeRoot = join(cliRoot, "..", "..");
 const distDir = join(animaeRoot, "dist");
 const binTs = join(cliRoot, "src", "bin.ts");
 const outBin = join(distDir, "animae");
+const metafile = join(distDir, ".bundle-meta.json");
 
 const passthrough: string[] = [];
 for (let i = 2; i < process.argv.length; i++) {
@@ -25,6 +29,11 @@ async function run(cmd: string[], cwd: string): Promise<void> {
   if (code !== 0) process.exit(code);
 }
 
+async function adHocSign(bin: string): Promise<void> {
+  if (process.platform !== "darwin") return;
+  await run(["codesign", "--force", "--sign", "-", bin], cliRoot);
+}
+
 await mkdir(distDir, { recursive: true });
 
 console.log("Building Node-compatible CLI (tsc)…");
@@ -40,13 +49,20 @@ const compileArgs = [
   binTs,
   "--compile",
   "--minify",
+  "--production",
   "--outfile",
   outBin,
+  ...inkCompileBundlerFlags(metafile),
   ...passthrough,
-  "--define",
-  "process.env.DEV='false'",
 ];
 await run(["bun", ...compileArgs], cliRoot);
+
+const meta = JSON.parse(await readFile(metafile, "utf8")) as Parameters<
+  typeof assertSingletonInkReactBundle
+>[0];
+assertSingletonInkReactBundle(meta, "animae compile");
+
+await adHocSign(outBin);
 
 const st = await stat(outBin);
 console.log(`Executable: ${outBin} (${st.size} bytes)`);

@@ -1,4 +1,6 @@
 import { Box, Text, useStdout } from "ink";
+import { Clickable } from "./Clickable.tsx";
+import { Button } from "./Button.tsx";
 import { useEffect, useMemo, useState } from "react";
 import { useAppState } from "../context/app-state-context.tsx";
 import { Typewriter } from "./Typewriter.tsx";
@@ -100,6 +102,7 @@ export function Transcript({ width, rows }: { width: number; rows?: number }) {
   }, [activeVisible, lastIncomplete, theme.bell, stdout]);
 
   const scroll = state.transcriptScroll;
+  const scrolledUp = scroll > 0;
   const entryWindow = transcriptEntryWindow(rows ?? 24);
   const visibleEntries = entries.slice(
     Math.max(0, entries.length - entryWindow - scroll),
@@ -107,8 +110,22 @@ export function Transcript({ width, rows }: { width: number; rows?: number }) {
   );
 
   return (
-    <Box flexDirection="column" flexGrow={1} overflow="hidden">
-      {visibleEntries.map((entry) => {
+    <Clickable
+      hint="Transcript scroll"
+      onWheel={(ev) => {
+        const delta = ev.button === "wheelUp" ? 4 : ev.button === "wheelDown" ? -4 : 0;
+        if (delta) dispatch({ type: "scrollTranscript", delta });
+      }}
+    >
+      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+        {scrolledUp ? (
+          <Button
+            label="跳到最新"
+            hint="Follow transcript tail"
+            onPress={() => dispatch({ type: "scrollTranscriptTail" })}
+          />
+        ) : null}
+        {visibleEntries.map((entry) => {
         const isActive = entry.id === lastIncomplete?.id;
         const lines = wrapToWidth(entry.text, wrapCols);
 
@@ -171,7 +188,8 @@ export function Transcript({ width, rows }: { width: number; rows?: number }) {
               })}
           </Box>
         );
-      })}
-    </Box>
+        })}
+      </Box>
+    </Clickable>
   );
 }

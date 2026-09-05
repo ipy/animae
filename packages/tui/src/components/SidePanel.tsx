@@ -5,10 +5,11 @@ import { useAppState } from "../context/app-state-context.tsx";
 import { useEngineContext } from "../context/engine-context.tsx";
 import { FieldList } from "./FieldList.tsx";
 import { ParticipantTracks } from "./ParticipantTracks.tsx";
+import { Clickable } from "./Clickable.tsx";
 
 export function SidePanel({ width }: { width: number }) {
   const theme = useTheme();
-  const { config, state } = useAppState();
+  const { config, state, dispatch } = useAppState();
   const { engine, viewer } = useEngineContext();
   const scene = useQuery("scene") as {
     location?: string;
@@ -56,12 +57,23 @@ export function SidePanel({ width }: { width: number }) {
           ))}
         </Box>
       ) : null}
-      {sections.map((s) => (
-        <Box key={s.id} flexDirection="column" marginTop={1}>
-          <Text dimColor>{s.title}</Text>
-          <s.render viewer={viewer} engine={engine} />
-        </Box>
-      ))}
+      {sections.map((s) => {
+        const collapsed = state.collapsedPanels[s.id] === true;
+        return (
+          <Box key={s.id} flexDirection="column" marginTop={1}>
+            <Clickable
+              hint={`Toggle ${s.title}`}
+              onPress={() => dispatch({ type: "togglePanelCollapsed", panelId: s.id })}
+            >
+              <Text dimColor>
+                {collapsed ? "▸ " : "▾ "}
+                {s.title}
+              </Text>
+            </Clickable>
+            {!collapsed ? <s.render viewer={viewer} engine={engine} /> : null}
+          </Box>
+        );
+      })}
       {state.sidePanelScroll > 0 ? (
         <Text dimColor>scroll +{state.sidePanelScroll}</Text>
       ) : null}

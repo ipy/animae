@@ -18,17 +18,33 @@ Terminal game shell built on **Ink 8** and **React 19**. All panel data is read 
 | Option | Purpose |
 |--------|---------|
 | `commands` | Extra `:` commands; string result → system transcript line |
+| `actions` | Toolbar / command-palette / prompt actions (`TuiAction`) |
+| `entityActions` | Context actions for `focusTarget` entity ids (roster rows) |
 | `panels` | Extra SidePanel sections (`render({ viewer, engine })`) |
 | `header` / `footer` | Replace default chrome slots in `defaultLayout` |
+| `mouse` | `true` / `false` / `auto` (default); `NO_MOUSE=1` disables |
+| `nameHints` | Strings for Tab autocomplete (member names, nicknames) |
 | `onSceneEnd` | Called after `engine.scene.end` |
 | `initialMessage` | System line in transcript at start |
 | `onReady` | Dev harness hook (automation); not for production games |
 
 Works with **no scene** (hint + `:` commands). With `scene`, starts automatically; transcript persists after `endScene`.
 
+## Mouse (xterm SGR)
+
+When stdin/stdout are a TTY, the shell enables `?1000/1002/1006` (+ optional `?1003` hover). SGR sequences are stripped **before** Ink’s key parser so clicks never leak into the input line. **Shift+drag** is left to the terminal for native text selection. Toggle: `:mouse on|off`, **Ctrl+M**, or `NO_MOUSE=1`.
+
+Hooks/components: `MouseProvider`, `useMouseTarget`, `Clickable`, `Button`, `useElementRect` (via `measureElement`).
+
+## Actions API
+
+Register **`TuiAction`** items on `RunTuiOptions.actions` and **`EntityTuiAction`** on `entityActions`. Each action has `id`, `label`, optional `hint`, `hotkey`, `when(ctx)`, optional `args` (inline prompt: text or select), and `run`. They feed the **action toolbar**, **entity context menu** (when `focusTarget` is set), and **command palette** alongside `commands`.
+
+Host games dispatch `setFocusTarget` / `setEntityMenu` via `useAppState()` (exported from `@animae/tui` hooks).
+
 ## Keys (§21.3)
 
-Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, F1–F5 overlays, Ctrl+S/L/Z, Esc, Ctrl+C quit.
+Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ autocomplete), **Ctrl+P** or **`/`** (empty input) command palette, Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, wheel on transcript, F1–F5 overlays, Ctrl+S/L/Z/M, Esc, Ctrl+C quit.
 
 **Choice digits vs input:** `1`–`9` pick choices only when the input draft is **empty** and focus is **not** on the input line. With focus on input (including while choices are visible), digits are inserted as text.
 

@@ -1,5 +1,7 @@
 import { Box, Text, useApp, useWindowSize } from "ink";
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import type { SgrMouseEvent } from "../input/mouse-sgr.ts";
+import { useTheme } from "../hooks/use-theme.ts";
 import type { LayoutProps, RunTuiOptions, SceneId } from "../types.ts";
 import { EngineProvider, useEngineContext } from "../context/engine-context.tsx";
 import { ThemeProvider } from "../context/theme-context.tsx";
@@ -29,6 +31,15 @@ import {
 } from "../utils/display-width.ts";
 import { graphemeCount } from "../utils/grapheme.ts";
 import { transcriptEntryWindow } from "../utils/transcript-limits.ts";
+import { useMouseDispatch } from "../context/mouse-context.tsx";
+import { MouseCaptureBridge } from "./MouseCaptureBridge.tsx";
+import { ActionRunnerProvider } from "../context/action-runner-context.tsx";
+import { CommandPalette } from "../components/CommandPalette.tsx";
+import { PromptDialog, handlePromptKey } from "../components/PromptDialog.tsx";
+import { EntityActionMenu } from "../components/EntityActionMenu.tsx";
+import { useActionRunner } from "../context/action-runner-context.tsx";
+import { applyTabAutocomplete } from "../components/AutocompletePopup.tsx";
+import { buildPaletteEntries } from "../utils/action-list.ts";
 
 export interface TuiAppProps extends RunTuiOptions {
   onReady?: () => void;
@@ -72,10 +83,22 @@ export function TuiApp(props: TuiAppProps) {
       cueRegistry,
       customCommands: props.commands ?? {},
       panels: props.panels ?? [],
+      actions: props.actions ?? [],
+      entityActions: props.entityActions ?? [],
       theme,
       onSceneEnd: props.onSceneEnd,
+      nameHints: props.nameHints ?? [],
     }),
-    [cueRegistry, props.commands, props.panels, theme, props.onSceneEnd],
+    [
+      cueRegistry,
+      props.commands,
+      props.panels,
+      props.actions,
+      props.entityActions,
+      theme,
+      props.onSceneEnd,
+      props.nameHints,
+    ],
   );
 
   const Layout = (props.layout ?? defaultLayout) as ComponentType<LayoutProps>;
@@ -94,7 +117,17 @@ export function TuiApp(props: TuiAppProps) {
             header={props.header}
             footer={props.footer}
           >
-            <TuiShell Layout={Layout} exitOnCtrlC={props.exitOnCtrlC !== false} />
+            <MouseCaptureBridge
+              mouseOption={props.mouse ?? "auto"}
+              stdin={props.stdin}
+              stdout={props.stdout}
+            >
+              <TuiShell
+                Layout={Layout}
+                exitOnCtrlC={props.exitOnCtrlC !== false}
+                nameHints={props.nameHints ?? []}
+              />
+            </MouseCaptureBridge>
           </AppStateProvider>
         </KeymapProvider>
       </ThemeProvider>
@@ -105,9 +138,36 @@ export function TuiApp(props: TuiAppProps) {
 function TuiShell({
   Layout,
   exitOnCtrlC,
+  nameHints,
 }: {
   Layout: ComponentType<LayoutProps>;
   exitOnCtrlC: boolean;
+  nameHints: string[];
+}) {
+  const { config } = useAppState();
+  const dispatchMouse = useMouseDispatch();
+  return (
+    <ActionRunnerProvider actions={config.actions} entityActions={config.entityActions}>
+      <TuiShellInner
+        Layout={Layout}
+        exitOnCtrlC={exitOnCtrlC}
+        nameHints={nameHints}
+        dispatchMouse={dispatchMouse}
+      />
+    </ActionRunnerProvider>
+  );
+}
+
+function TuiShellInner({
+  Layout,
+  exitOnCtrlC,
+  nameHints,
+  dispatchMouse,
+}: {
+  Layout: ComponentType<LayoutProps>;
+  exitOnCtrlC: boolean;
+  nameHints: string[];
+  dispatchMouse: ReturnType<typeof useMouseDispatch>;
 }) {
   const app = useApp();
   const { engine, viewer, actor } = useEngineContext();
@@ -115,12 +175,37 @@ function TuiShell({
   const { submit } = useTurn();
   const { keymap } = useKeymapContext();
   const { columns, rows } = useWindowSize();
+  const theme = useTheme();
   const mode = selectLayoutMode(columns, rows);
   const scrollPage = transcriptEntryWindow(rows);
+  const sideW =
+    mode === "two-column"
+      ? Math.max(20, Math.floor((columns * theme.sidePanel.widthPercent) / 100))
+      : 0;
+  const transcriptCols = mode === "two-column" ? columns - sideW - 1 : columns;
+
+  const handleMouse = useCallback(
+    (ev: SgrMouseEvent) => {
+      dispatchMouse(ev);
+      if (ev.button !== "wheelUp" && ev.button !== "wheelDown") return;
+      const col0 = ev.col - 1;
+      const delta = ev.button === "wheelUp" ? 4 : -4;
+      if (mode === "two-column" && col0 >= transcriptCols) {
+        dispatch({ type: "scrollSide", delta });
+      } else {
+        dispatch({ type: "scrollTranscript", delta });
+      }
+    },
+    [dispatchMouse, dispatch, mode, transcriptCols],
+  );
   const [timelineIdx, setTimelineIdx] = useState(0);
   const [loadIdx, setLoadIdx] = useState(0);
   const inputDraftRef = useRef(state.inputDraft);
   const inputCursorRef = useRef(state.inputCursor);
+  const { completePrompt, actions, entityActions, actionContext, runAction, runEntityAction } =
+    useActionRunner();
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     inputDraftRef.current = state.inputDraft;
@@ -149,9 +234,89 @@ function TuiShell({
     });
   }, [engine, dispatch]);
 
+  useEffect(() => {
+    const onSignal = () => {
+      void onQuit();
+    };
+    process.on("SIGINT", onSignal);
+    process.on("SIGTERM", onSignal);
+    return () => {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+    };
+  }, [onQuit]);
+
   useParsedInput(
     (ev) => {
-      if (state.typewriterActive && !state.overlay && !ev.ctrl) {
+      const s = stateRef.current;
+      if (s.prompt) {
+        void handlePromptKey(s, dispatch, completePrompt, ev);
+        return;
+      }
+
+      if (s.paletteOpen) {
+        if (ev.key.escape) {
+          dispatch({ type: "setPalette", open: false });
+          return;
+        }
+        if (ev.key.upArrow) {
+          dispatch({ type: "setPalette", open: true, index: Math.max(0, s.paletteIndex - 1) });
+          return;
+        }
+        if (ev.key.downArrow) {
+          dispatch({ type: "setPalette", open: true, index: s.paletteIndex + 1 });
+          return;
+        }
+        if (ev.key.backspace) {
+          dispatch({
+            type: "setPalette",
+            open: true,
+            query: s.paletteQuery.slice(0, -1),
+            index: 0,
+          });
+          return;
+        }
+        if (ev.key.return) {
+          void (async () => {
+            const entries = buildPaletteEntries(
+              s.paletteQuery,
+              actionContext,
+              actions,
+              entityActions,
+              config.customCommands,
+              s.focusTarget,
+            );
+            const entry = entries[Math.min(s.paletteIndex, entries.length - 1)];
+            dispatch({ type: "setPalette", open: false });
+            if (!entry) return;
+            if (entry.kind === "action" && entry.action) await runAction(entry.action);
+            if (entry.kind === "entity" && entry.entityAction && s.focusTarget) {
+              await runEntityAction(entry.entityAction, s.focusTarget);
+            }
+            if (entry.kind === "command" && entry.commandName) {
+              const result = await runCommandLine(
+                `:${entry.commandName}`,
+                commandApi,
+                config.customCommands,
+              );
+              if (result === "quit") void onQuit();
+            }
+          })();
+          return;
+        }
+        if (!ev.ctrl && ev.input) {
+          dispatch({
+            type: "setPalette",
+            open: true,
+            query: s.paletteQuery + ev.input,
+            index: 0,
+          });
+          return;
+        }
+        return;
+      }
+
+      if (s.typewriterActive && !s.overlay && !ev.ctrl) {
         dispatch({ type: "skipTypewriter" });
         // Input line must stay usable while intro typewriter runs (PTY `:help` / `:quit`).
         if (state.focus !== "input" || state.choices) {
@@ -243,8 +408,28 @@ function TuiShell({
         }
       }
 
+      if (action === "commandPalette") {
+        dispatch({ type: "setPalette", open: true, query: "", index: 0 });
+        return;
+      }
+      if (action === "toggleMouse") {
+        const next = !state.mouseCapture;
+        commandApi.setMouseCapture(next);
+        commandApi.notify(next ? "Mouse on" : "Mouse off");
+        return;
+      }
+
       const inputFocused = state.focus === "input" && !state.choices;
       if (inputFocused) {
+        if (ev.key.tab && !ev.shift) {
+          if (applyTabAutocomplete(state, dispatch, nameHints, config.customCommands)) return;
+          dispatch({ type: "setAutocomplete", open: true });
+          return;
+        }
+        if (ev.input === "/" && inputDraftRef.current.length === 0) {
+          dispatch({ type: "setPalette", open: true, query: "", index: 0 });
+          return;
+        }
         if (ev.key.return || action === "submit") {
           void submitLine(inputDraftRef.current);
           return;
@@ -287,6 +472,9 @@ function TuiShell({
           const insert = ev.input;
           const next = insertAtGrapheme(inputDraftRef.current, inputCursorRef.current, insert);
           setInputDraft(next, inputCursorRef.current + graphemeCount(insert));
+          if (next.trimStart().startsWith(":") || nameHints.length > 0) {
+            dispatch({ type: "setAutocomplete", open: true });
+          }
           return;
         }
       }
@@ -304,15 +492,13 @@ function TuiShell({
         return;
       }
       if (action === "scrollPageUp") {
-        if (state.focus === "transcript")
-          dispatch({ type: "scrollTranscript", delta: scrollPage });
-        else dispatch({ type: "scrollSide", delta: scrollPage });
+        if (s.focus === "sidePanel") dispatch({ type: "scrollSide", delta: scrollPage });
+        else dispatch({ type: "scrollTranscript", delta: scrollPage });
         return;
       }
       if (action === "scrollPageDown") {
-        if (state.focus === "transcript")
-          dispatch({ type: "scrollTranscript", delta: -scrollPage });
-        else dispatch({ type: "scrollSide", delta: -scrollPage });
+        if (s.focus === "sidePanel") dispatch({ type: "scrollSide", delta: -scrollPage });
+        else dispatch({ type: "scrollTranscript", delta: -scrollPage });
         return;
       }
       if (action === "help") dispatch({ type: "setOverlay", overlay: "help" });
@@ -336,7 +522,7 @@ function TuiShell({
         });
       }
     },
-    { isActive: true },
+    { isActive: true, onMouse: handleMouse },
   );
 
   async function submitLine(line: string) {
@@ -396,6 +582,9 @@ function TuiShell({
         {state.overlay === "sidePanel" && mode !== "two-column" ? (
           <SidePanel width={columns} />
         ) : null}
+        <CommandPalette />
+        <PromptDialog />
+        <EntityActionMenu />
       </Box>
     </RunnerProvider>
   );

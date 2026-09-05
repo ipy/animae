@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { useAppState } from "../context/app-state-context.tsx";
 import { useQuery } from "../hooks/use-query.ts";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useMouseContextOptional } from "../context/mouse-context.tsx";
 
 export function Footer() {
   const theme = useTheme();
@@ -10,6 +11,8 @@ export function Footer() {
   const budgetBeat = useQuery("director/beat/budget") as Record<string, unknown> | null;
   const budget = budgetDirect ?? budgetBeat;
 
+  const mouse = useMouseContextOptional();
+  const hoverHint = mouse?.hoverHint;
   const route = state.lastRoute ? state.lastRoute.toUpperCase() : "—";
   const budgetStr =
     budget && typeof budget === "object"
@@ -21,7 +24,9 @@ export function Footer() {
 
   return (
     <Box borderStyle={theme.border === "none" ? undefined : theme.border} borderColor={theme.colors.border} paddingX={1} justifyContent="space-between">
-      <Text dimColor>F1 help · F2 log · F3 timeline · Tab focus · Enter send</Text>
+      <Text dimColor>
+        F1 help · Ctrl+P palette · Tab complete · {hoverHint ? hoverHint : "Mouse · Shift+drag selects text"}
+      </Text>
       <Text color={theme.colors.dim}>
         {route} {budgetStr ? `· ${budgetStr}` : ""}
       </Text>

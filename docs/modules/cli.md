@@ -34,7 +34,9 @@ Produces:
 - Built-in presets are **statically imported** in `src/presets.ts` (`@animae/preset-base`, `@animae/preset-dnd`) and pulled from `src/bin.ts` so the compiled binary does not rely on runtime `import(specifier)`. `BUILTIN_PRESET_BUNDLES` is resolved at module load for the bundler graph.
 - `packages/cli/dist/bin.js` — Node ≥ 24 entry via `tsc` (`package.json` `"bin": { "animae": "./dist/bin.js" }`; verify with `node packages/cli/dist/bin.js --version`).
 
-Ink’s optional `react-devtools-core` is a direct CLI dependency so compiled binaries resolve it; `process.env.DEV` is forced to `false` at compile time (devtools path is not loaded when `DEV !== 'true'`).
+Do not add a direct `react-devtools-core` dependency (it creates a second `ink@8` peer tree in Bun’s store). Compiled binaries set `process.env.DEV='false'` via `ink-compile-options.ts` so Ink never loads devtools at runtime.
+
+The compile script writes `--metafile=…` and runs `bundle-singleton-guard.ts`: more than one physical `react` / `ink` / `react-reconciler` path in the graph fails the build (prevents invalid hook calls in compiled TUI binaries). When the engine repo is embedded in a host monorepo, that host should hoist dependencies from its root (`animae/node_modules` must not coexist with the host’s root `node_modules`).
 
 Release smoke from repo root: `bun run build:all && bun run smoke` (see `scripts/smoke.ts`, `scripts/animae-stdio-smoke.ts`). Ink packaging gate (unreachable LLM, base panel, `:help`/`:quit`): `python3 scripts/packaging-tui-verify.py`. PTY session with stub LLM: `python3 scripts/pty-smoke.py`.
 

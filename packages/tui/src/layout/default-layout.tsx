@@ -10,6 +10,8 @@ import { selectLayoutMode } from "../utils/layout-mode.ts";
 import { TooSmall } from "../components/TooSmall.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
 import { useAppState } from "../context/app-state-context.tsx";
+import { ActionToolbar } from "../components/ActionToolbar.tsx";
+import { AutocompletePopup } from "../components/AutocompletePopup.tsx";
 
 export function DefaultLayout(props: LayoutProps) {
   const { columns, rows } = useWindowSize();
@@ -33,6 +35,7 @@ export function DefaultLayout(props: LayoutProps) {
   return (
     <Box flexDirection="column" height={rows}>
       <HeaderComp {...props} />
+      <ActionToolbar width={columns} />
       {!props.hasScene ? (
         <Box paddingX={1}>
           <Text dimColor>{props.noSceneHint}</Text>
@@ -50,6 +53,7 @@ export function DefaultLayout(props: LayoutProps) {
         </Box>
       ) : null}
       <ChoiceMenu />
+      <AutocompletePopup nameHints={config.nameHints} />
       <InputLine
         width={columns}
         value={state.inputDraft}

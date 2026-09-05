@@ -19,6 +19,7 @@ import type {
   SidePanelSection,
   TranscriptEntry,
   LayoutFocus,
+  PromptState,
 } from "../types.ts";
 import { trimTranscript } from "../utils/transcript-limits.ts";
 import type { CueRenderer, Theme } from "../types.ts";
@@ -46,9 +47,19 @@ export interface AppState {
   turnError: string | undefined;
   inputDraft: string;
   inputCursor: number;
+  focusTarget: string | undefined;
+  paletteOpen: boolean;
+  paletteQuery: string;
+  paletteIndex: number;
+  autocompleteOpen: boolean;
+  autocompleteIndex: number;
+  prompt: PromptState | undefined;
+  entityMenuOpen: boolean;
+  collapsedPanels: Record<string, boolean>;
+  mouseCapture: boolean;
 }
 
-type Action =
+export type AppStateAction =
   | { type: "setScene"; sceneId: SceneId | undefined }
   | { type: "setFocus"; focus: LayoutFocus }
   | { type: "setOverlay"; overlay: OverlayId | undefined }
@@ -63,15 +74,24 @@ type Action =
   | { type: "pushHistory"; line: string }
   | { type: "setHistoryIndex"; index: number | undefined }
   | { type: "scrollTranscript"; delta: number }
+  | { type: "scrollTranscriptTail" }
   | { type: "scrollSide"; delta: number }
   | { type: "setTypewriterActive"; active: boolean }
   | { type: "setPendingRewind"; eventId: string | undefined }
   | { type: "setEventFilter"; kinds: string[] | undefined }
   | { type: "skipTypewriter" }
   | { type: "setTurnError"; error: string | undefined }
-  | { type: "setInputDraft"; value: string; cursor: number };
+  | { type: "setInputDraft"; value: string; cursor: number }
+  | { type: "setFocusTarget"; target: string | undefined }
+  | { type: "setPalette"; open: boolean; query?: string; index?: number }
+  | { type: "setAutocomplete"; open: boolean; index?: number }
+  | { type: "setPrompt"; prompt: PromptState | undefined }
+  | { type: "patchPrompt"; patch: Partial<PromptState> }
+  | { type: "setEntityMenu"; open: boolean }
+  | { type: "togglePanelCollapsed"; panelId: string }
+  | { type: "setMouseCapture"; on: boolean };
 
-function reducer(state: AppState, action: Action): AppState {
+function reducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
     case "setScene":
       return { ...state, sceneId: action.sceneId };
@@ -127,6 +147,8 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         transcriptScroll: Math.max(0, state.transcriptScroll + action.delta),
       };
+    case "scrollTranscriptTail":
+      return { ...state, transcriptScroll: 0 };
     case "scrollSide":
       return { ...state, sidePanelScroll: Math.max(0, state.sidePanelScroll + action.delta) };
     case "setTypewriterActive":
@@ -141,6 +163,37 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, turnError: action.error };
     case "setInputDraft":
       return { ...state, inputDraft: action.value, inputCursor: action.cursor };
+    case "setFocusTarget":
+      return { ...state, focusTarget: action.target, entityMenuOpen: action.target ? state.entityMenuOpen : false };
+    case "setPalette":
+      return {
+        ...state,
+        paletteOpen: action.open,
+        paletteQuery: action.query ?? (action.open ? state.paletteQuery : ""),
+        paletteIndex: action.index ?? (action.open ? 0 : 0),
+      };
+    case "setAutocomplete":
+      return {
+        ...state,
+        autocompleteOpen: action.open,
+        autocompleteIndex: action.index ?? 0,
+      };
+    case "setPrompt":
+      return { ...state, prompt: action.prompt };
+    case "patchPrompt":
+      return state.prompt ? { ...state, prompt: { ...state.prompt, ...action.patch } } : state;
+    case "setEntityMenu":
+      return { ...state, entityMenuOpen: action.open };
+    case "togglePanelCollapsed":
+      return {
+        ...state,
+        collapsedPanels: {
+          ...state.collapsedPanels,
+          [action.panelId]: !state.collapsedPanels[action.panelId],
+        },
+      };
+    case "setMouseCapture":
+      return { ...state, mouseCapture: action.on };
     default:
       return state;
   }
@@ -169,6 +222,16 @@ export function initialAppState(): AppState {
     turnError: undefined,
     inputDraft: "",
     inputCursor: 0,
+    focusTarget: undefined,
+    paletteOpen: false,
+    paletteQuery: "",
+    paletteIndex: 0,
+    autocompleteOpen: false,
+    autocompleteIndex: 0,
+    prompt: undefined,
+    entityMenuOpen: false,
+    collapsedPanels: {},
+    mouseCapture: true,
   };
 }
 
@@ -176,15 +239,18 @@ export interface AppConfig {
   cueRegistry: Map<string, CueRenderer>;
   customCommands: Record<string, CustomCommand>;
   panels: SidePanelSection[];
+  actions: import("../types.ts").TuiAction[];
+  entityActions: import("../types.ts").EntityTuiAction[];
   theme: Theme;
   onSceneEnd?: (report: unknown) => void;
   header?: ComponentType<LayoutProps>;
   footer?: ComponentType<LayoutProps>;
+  nameHints: string[];
 }
 
 interface AppStateContextValue {
   state: AppState;
-  dispatch: Dispatch<Action>;
+  dispatch: Dispatch<AppStateAction>;
   config: AppConfig;
   commandApi: CommandApi;
 }
@@ -248,6 +314,10 @@ export function AppStateProvider({
     dispatch({ type: "setOverlay", overlay: undefined });
   }, []);
 
+  const setMouseCapture = useCallback((on: boolean) => {
+    dispatch({ type: "setMouseCapture", on });
+  }, []);
+
   const notify = useCallback(
     (text: string, level?: "info" | "warn" | "error") => {
       const prefix = level === "warn" ? "⚠ " : level === "error" ? "✖ " : "";
@@ -277,8 +347,9 @@ export function AppStateProvider({
       notify,
       openOverlay,
       closeOverlay,
+      setMouseCapture,
     }),
-    [engine, viewer, actor, state.sceneId, notify, openOverlay, closeOverlay, config],
+    [engine, viewer, actor, state.sceneId, notify, openOverlay, closeOverlay, setMouseCapture, config],
   );
 
   const value = useMemo(

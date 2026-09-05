@@ -14,7 +14,13 @@ export type {
   CommandApi,
   CustomCommand,
   SidePanelSection,
+  TuiAction,
+  EntityTuiAction,
+  ActionContext,
+  ActionArgField,
 } from "./types.ts";
+
+export { runCommandLine } from "./commands/builtin.ts";
 
 export { loadTheme } from "./theme/load.ts";
 export { defaultTheme } from "./theme/defaults.ts";

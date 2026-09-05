@@ -12,3 +12,7 @@ export { TimelineBrowser } from "./TimelineBrowser.tsx";
 export { ExplainView } from "./ExplainView.tsx";
 export { Inspector } from "./Inspector.tsx";
 export { Overlay } from "./Overlay.tsx";
+export { Clickable } from "./Clickable.tsx";
+export { Button } from "./Button.tsx";
+export { ActionToolbar } from "./ActionToolbar.tsx";
+export { CommandPalette } from "./CommandPalette.tsx";

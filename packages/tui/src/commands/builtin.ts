@@ -94,6 +94,22 @@ export const builtinCommands: Record<string, CustomCommand> = {
       /* handled by runner */
     },
   },
+  mouse: {
+    description: "Toggle terminal mouse capture (on|off|status)",
+    usage: ":mouse [on|off|status]",
+    run: async (args, api) => {
+      const mode = (args[0] ?? "status").toLowerCase();
+      if (mode === "on") {
+        api.setMouseCapture(true);
+        return "Mouse capture enabled (Shift+drag still selects text in most terminals).";
+      }
+      if (mode === "off") {
+        api.setMouseCapture(false);
+        return "Mouse capture disabled — native selection restored.";
+      }
+      return "Usage: :mouse on|off|status · shortcut Ctrl+M";
+    },
+  },
 };
 
 export async function runCommandLine(

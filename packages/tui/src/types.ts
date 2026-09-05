@@ -62,6 +62,8 @@ export type KeyAction =
   | "focusNext"
   | "scrollPageUp"
   | "scrollPageDown"
+  | "commandPalette"
+  | "toggleMouse"
   | "help"
   | "eventLog"
   | "timeline"
@@ -72,6 +74,57 @@ export type KeyAction =
   | "rewindTurn"
   | "closeOverlay"
   | "quit";
+
+export interface ActionContext {
+  engine: Engine;
+  viewer: Viewer;
+  actor: string;
+  sceneId: () => string | undefined;
+  focusTarget?: string;
+  commandApi: CommandApi;
+}
+
+export interface ActionArgField {
+  id: string;
+  label: string;
+  type: "text" | "select";
+  options?: Array<{ value: string; label: string }>;
+  optional?: boolean;
+}
+
+export interface TuiAction {
+  id: string;
+  label: string;
+  hint?: string;
+  hotkey?: string;
+  palette?: boolean;
+  toolbar?: boolean;
+  when?: (ctx: ActionContext) => boolean;
+  args?: ActionArgField[];
+  run: (ctx: ActionContext, args: Record<string, string>) => void | Promise<void>;
+}
+
+/** Per-entity actions (roster rows, list items). */
+export interface EntityTuiAction {
+  id: string;
+  label: string;
+  hint?: string;
+  hotkey?: string;
+  when?: (ctx: ActionContext, entityId: string) => boolean;
+  args?: ActionArgField[];
+  run: (ctx: ActionContext, entityId: string, args: Record<string, string>) => void | Promise<void>;
+}
+
+export interface PromptRequest {
+  title: string;
+  fields: ActionArgField[];
+  initial?: Record<string, string>;
+}
+
+export interface PromptState extends PromptRequest {
+  values: Record<string, string>;
+  fieldIndex: number;
+}
 
 export type Keymap = Partial<Record<KeyAction, string[]>>;
 
@@ -89,6 +142,7 @@ export interface CommandApi {
   notify(text: string, level?: "info" | "warn" | "error"): void;
   openOverlay(name: OverlayId): void;
   closeOverlay(): void;
+  setMouseCapture(on: boolean): void;
 }
 
 export interface CustomCommand {
@@ -116,6 +170,12 @@ export interface LayoutProps {
 
 export interface RunTuiOptions {
   engine: Engine;
+  /** Terminal mouse reporting (xterm SGR). `auto` when TTY; `NO_MOUSE=1` disables. */
+  mouse?: boolean | "auto";
+  /** Toolbar / palette / prompt actions registered by the host game. */
+  actions?: TuiAction[];
+  /** Context menu actions for `focusTarget` entity ids (e.g. roster members). */
+  entityActions?: EntityTuiAction[];
   viewer?: Viewer;
   scene?:
     | { location: string; participants: string[]; fields?: string[] }
@@ -138,6 +198,8 @@ export interface RunTuiOptions {
   exitOnCtrlC?: boolean;
   /** @internal dev harness — fired once after mount (before scene start completes). */
   onReady?: () => void;
+  /** Autocomplete hints for member names / nicknames (host-provided). */
+  nameHints?: string[];
 }
 
 export interface TranscriptCue {
