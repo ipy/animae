@@ -10,6 +10,7 @@ import { AppStateProvider, useAppState } from "../context/app-state-context.tsx"
 import { RunnerProvider } from "../context/runner-context.tsx";
 import { defaultLayout } from "../layout/default-layout.tsx";
 import { useParsedInput } from "../hooks/use-parsed-input.ts";
+import { isCompleteControlSequence } from "../ink/vendor/input-parser.js";
 import { choiceIndexFromKey, matchKeyAction } from "../keymap/default.ts";
 import { HelpOverlay } from "../components/HelpOverlay.tsx";
 import { EventLog } from "../components/EventLog.tsx";
@@ -39,6 +40,7 @@ import { PromptDialog, handlePromptKey } from "../components/PromptDialog.tsx";
 import { EntityActionMenu } from "../components/EntityActionMenu.tsx";
 import { useActionRunner } from "../context/action-runner-context.tsx";
 import { applyTabAutocomplete } from "../components/AutocompletePopup.tsx";
+import { InputDraftProvider, useInputDraftActions } from "../context/input-draft-context.tsx";
 import { buildPaletteEntries } from "../utils/action-list.ts";
 
 export interface TuiAppProps extends RunTuiOptions {
@@ -148,12 +150,14 @@ function TuiShell({
   const dispatchMouse = useMouseDispatch();
   return (
     <ActionRunnerProvider actions={config.actions} entityActions={config.entityActions}>
-      <TuiShellInner
-        Layout={Layout}
-        exitOnCtrlC={exitOnCtrlC}
-        nameHints={nameHints}
-        dispatchMouse={dispatchMouse}
-      />
+      <InputDraftProvider>
+        <TuiShellInner
+          Layout={Layout}
+          exitOnCtrlC={exitOnCtrlC}
+          nameHints={nameHints}
+          dispatchMouse={dispatchMouse}
+        />
+      </InputDraftProvider>
     </ActionRunnerProvider>
   );
 }
@@ -200,23 +204,30 @@ function TuiShellInner({
   );
   const [timelineIdx, setTimelineIdx] = useState(0);
   const [loadIdx, setLoadIdx] = useState(0);
-  const inputDraftRef = useRef(state.inputDraft);
-  const inputCursorRef = useRef(state.inputCursor);
+  const { setDraft: setInputDraft, clearDraft, readDraft } = useInputDraftActions();
   const { completePrompt, actions, entityActions, actionContext, runAction, runEntityAction } =
     useActionRunner();
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  useEffect(() => {
-    inputDraftRef.current = state.inputDraft;
-    inputCursorRef.current = state.inputCursor;
-  }, [state.inputDraft, state.inputCursor]);
-
-  const setInputDraft = (value: string, cursor: number) => {
-    inputDraftRef.current = value;
-    inputCursorRef.current = cursor;
-    dispatch({ type: "setInputDraft", value, cursor });
+  const patchInputDraft = (value: string, cursor: number) => {
+    setInputDraft(value, cursor);
   };
+  const draftNow = () => readDraft();
+
+  const syncAutocomplete = useCallback(
+    (next: string) => {
+      const s = stateRef.current;
+      const want =
+        (next.trimStart().startsWith(":") || nameHints.length > 0) &&
+        s.focus === "input" &&
+        !s.choices;
+      if (want !== s.autocompleteOpen) {
+        dispatch({ type: "setAutocomplete", open: want });
+      }
+    },
+    [dispatch, nameHints.length],
+  );
 
   const onQuit = async () => {
     app.exit();
@@ -246,6 +257,17 @@ function TuiShellInner({
     };
   }, [onQuit]);
 
+  const insertInputText = useCallback(
+    (text: string) => {
+      if (!text) return;
+      const { draft, cursor } = draftNow();
+      const next = insertAtGrapheme(draft, cursor, text);
+      patchInputDraft(next, cursor + graphemeCount(text));
+      syncAutocomplete(next);
+    },
+    [syncAutocomplete],
+  );
+
   useParsedInput(
     (ev) => {
       const s = stateRef.current;
@@ -257,6 +279,7 @@ function TuiShellInner({
       if (s.paletteOpen) {
         if (ev.key.escape) {
           dispatch({ type: "setPalette", open: false });
+          dispatch({ type: "setFocus", focus: "input" });
           return;
         }
         if (ev.key.upArrow) {
@@ -319,7 +342,7 @@ function TuiShellInner({
       if (s.typewriterActive && !s.overlay && !ev.ctrl) {
         dispatch({ type: "skipTypewriter" });
         // Input line must stay usable while intro typewriter runs (PTY `:help` / `:quit`).
-        if (state.focus !== "input" || state.choices) {
+        if (s.focus !== "input" || s.choices) {
           return;
         }
       }
@@ -332,15 +355,17 @@ function TuiShellInner({
       const action = matchKeyAction(keymap, ev.name, ev.input, {
         ctrl: ev.ctrl,
         shift: ev.shift,
+        meta: ev.key.meta,
       });
 
-      if (state.overlay) {
+      if (s.overlay) {
         if (action === "closeOverlay" || ev.key.escape) {
           dispatch({ type: "setOverlay", overlay: undefined });
           dispatch({ type: "setPendingRewind", eventId: undefined });
+          dispatch({ type: "setFocus", focus: "input" });
           return;
         }
-        if (state.overlay === "timeline") {
+        if (s.overlay === "timeline") {
           if (ev.key.upArrow) setTimelineIdx((i) => Math.max(0, i - 1));
           if (ev.key.downArrow) setTimelineIdx((i) => i + 1);
           if (ev.key.return) {
@@ -350,7 +375,7 @@ function TuiShellInner({
             });
           }
         }
-        if (state.overlay === "loadSlots") {
+        if (s.overlay === "loadSlots") {
           if (ev.key.upArrow) setLoadIdx((i) => Math.max(0, i - 1));
           if (ev.key.downArrow) setLoadIdx((i) => i + 1);
           if (ev.key.return) {
@@ -362,8 +387,8 @@ function TuiShellInner({
             });
           }
         }
-        if (state.overlay === "rewindConfirm" && ev.key.return && state.pendingRewindEventId) {
-          void engine.timeline.rewind(state.pendingRewindEventId).then(() => {
+        if (s.overlay === "rewindConfirm" && ev.key.return && s.pendingRewindEventId) {
+          void engine.timeline.rewind(s.pendingRewindEventId).then(() => {
             dispatch({ type: "setPendingRewind", eventId: undefined });
             dispatch({ type: "setOverlay", overlay: undefined });
             commandApi.notify("Rewound branch");
@@ -372,11 +397,15 @@ function TuiShellInner({
         return;
       }
 
-      if (state.choices) {
+      if (s.choices) {
+        if (ev.key.escape) {
+          dispatch({ type: "setFocus", focus: "input" });
+          return;
+        }
         if (ev.key.upArrow || action === "choiceUp") {
           dispatch({
             type: "setChoices",
-            choices: { ...state.choices, selected: Math.max(0, state.choices.selected - 1) },
+            choices: { ...s.choices, selected: Math.max(0, s.choices.selected - 1) },
           });
           return;
         }
@@ -384,25 +413,24 @@ function TuiShellInner({
           dispatch({
             type: "setChoices",
             choices: {
-              ...state.choices,
-              selected: Math.min(state.choices.choices.length - 1, state.choices.selected + 1),
+              ...s.choices,
+              selected: Math.min(s.choices.choices.length - 1, s.choices.selected + 1),
             },
           });
           return;
         }
         const pick = choiceIndexFromKey(ev.name, ev.input);
-        const digitsPickChoices =
-          inputDraftRef.current.length === 0 && state.focus !== "input";
+        const digitsPickChoices = draftNow().draft.length === 0 && s.focus !== "input";
         if (
           pick !== undefined &&
           digitsPickChoices &&
-          pick < state.choices.choices.length
+          pick < s.choices.choices.length
         ) {
-          void submit("", state.choices.choices[pick]!.id);
+          void submit("", s.choices.choices[pick]!.id);
           return;
         }
         if (ev.key.return || action === "submit") {
-          const choice = state.choices.choices[state.choices.selected];
+          const choice = s.choices.choices[s.choices.selected];
           if (choice) void submit("", choice.id);
           return;
         }
@@ -413,25 +441,35 @@ function TuiShellInner({
         return;
       }
       if (action === "toggleMouse") {
-        const next = !state.mouseCapture;
+        const next = !s.mouseCapture;
         commandApi.setMouseCapture(next);
         commandApi.notify(next ? "Mouse on" : "Mouse off");
         return;
       }
 
-      const inputFocused = state.focus === "input" && !state.choices;
+      const inputFocused = s.focus === "input" && !s.choices;
       if (inputFocused) {
         if (ev.key.tab && !ev.shift) {
-          if (applyTabAutocomplete(state, dispatch, nameHints, config.customCommands)) return;
+          if (
+            applyTabAutocomplete(
+              { ...s, inputDraft: draftNow().draft, inputCursor: draftNow().cursor },
+              dispatch,
+              nameHints,
+              config.customCommands,
+              patchInputDraft,
+              draftNow().draft,
+            )
+          )
+            return;
           dispatch({ type: "setAutocomplete", open: true });
           return;
         }
-        if (ev.input === "/" && inputDraftRef.current.length === 0) {
+        if (ev.input === "/" && draftNow().draft.length === 0) {
           dispatch({ type: "setPalette", open: true, query: "", index: 0 });
           return;
         }
         if (ev.key.return || action === "submit") {
-          void submitLine(inputDraftRef.current);
+          void submitLine(draftNow().draft);
           return;
         }
         if (ev.key.upArrow) {
@@ -443,50 +481,59 @@ function TuiShellInner({
           return;
         }
         if (ev.key.backspace) {
-          const { text, cursor } = deleteGraphemeBefore(
-            inputDraftRef.current,
-            inputCursorRef.current,
-          );
-          setInputDraft(text, cursor);
+          const { draft, cursor } = draftNow();
+          const deleted = deleteGraphemeBefore(draft, cursor);
+          patchInputDraft(deleted.text, deleted.cursor);
+          syncAutocomplete(deleted.text);
           return;
         }
         if (ev.key.delete) {
-          setInputDraft(
-            deleteGraphemeAfter(inputDraftRef.current, inputCursorRef.current),
-            inputCursorRef.current,
-          );
+          const { draft, cursor } = draftNow();
+          const next = deleteGraphemeAfter(draft, cursor);
+          patchInputDraft(next, cursor);
+          syncAutocomplete(next);
           return;
         }
         if (ev.key.leftArrow) {
-          setInputDraft(inputDraftRef.current, Math.max(0, inputCursorRef.current - 1));
+          const { draft, cursor } = draftNow();
+          patchInputDraft(draft, Math.max(0, cursor - 1));
           return;
         }
         if (ev.key.rightArrow) {
-          setInputDraft(
-            inputDraftRef.current,
-            Math.min(graphemeCount(inputDraftRef.current), inputCursorRef.current + 1),
-          );
+          const { draft, cursor } = draftNow();
+          patchInputDraft(draft, Math.min(graphemeCount(draft), cursor + 1));
           return;
         }
-        if (!ev.ctrl && ev.input) {
+        const insertAction = matchKeyAction(keymap, ev.name, ev.input, {
+          ctrl: ev.ctrl,
+          shift: ev.shift,
+          meta: ev.key.meta,
+        });
+        const isPrintableInput =
+          ev.input &&
+          !ev.key.return &&
+          !ev.key.tab &&
+          !ev.key.escape &&
+          !isCompleteControlSequence(ev.input) &&
+          !insertAction;
+        if (!ev.ctrl && isPrintableInput) {
           const insert = ev.input;
-          const next = insertAtGrapheme(inputDraftRef.current, inputCursorRef.current, insert);
-          setInputDraft(next, inputCursorRef.current + graphemeCount(insert));
-          if (next.trimStart().startsWith(":") || nameHints.length > 0) {
-            dispatch({ type: "setAutocomplete", open: true });
-          }
+          const { draft, cursor } = draftNow();
+          const next = insertAtGrapheme(draft, cursor, insert);
+          patchInputDraft(next, cursor + graphemeCount(insert));
+          syncAutocomplete(next);
           return;
         }
       }
 
       if (action === "focusNext") {
-        if (mode === "single-column" && state.focus === "transcript") {
+        if (mode === "single-column" && s.focus === "transcript") {
           dispatch({ type: "setOverlay", overlay: "sidePanel" });
           dispatch({ type: "setFocus", focus: "sidePanel" });
         } else {
           dispatch({
             type: "setFocus",
-            focus: state.focus === "transcript" ? "sidePanel" : "transcript",
+            focus: s.focus === "transcript" ? "sidePanel" : "transcript",
           });
         }
         return;
@@ -522,7 +569,16 @@ function TuiShellInner({
         });
       }
     },
-    { isActive: true, onMouse: handleMouse },
+    {
+      isActive: true,
+      onMouse: handleMouse,
+      onPaste: (text) => {
+        const s = stateRef.current;
+        if (s.prompt || s.paletteOpen || s.overlay) return;
+        if (s.focus !== "input" || s.choices) return;
+        insertInputText(text.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
+      },
+    },
   );
 
   async function submitLine(line: string) {
@@ -531,11 +587,13 @@ function TuiShellInner({
     if (trimmed.startsWith(":")) {
       const result = await runCommandLine(trimmed, commandApi, config.customCommands);
       if (result === "quit") void onQuit();
-      setInputDraft("", 0);
+      clearDraft();
+      dispatch({ type: "setAutocomplete", open: false });
       return;
     }
     dispatch({ type: "pushHistory", line: trimmed });
-    setInputDraft("", 0);
+    clearDraft();
+    dispatch({ type: "setAutocomplete", open: false });
     await submit(trimmed);
   }
 
@@ -550,7 +608,7 @@ function TuiShellInner({
         : state.historyIndex + delta;
     if (idx === undefined || idx < 0 || idx >= hist.length) return;
     const line = hist[idx]!;
-    setInputDraft(line, graphemeCount(line));
+    patchInputDraft(line, graphemeCount(line));
     dispatch({ type: "setHistoryIndex", index: idx });
   }
 

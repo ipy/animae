@@ -19,6 +19,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test",
+    "test:pty": "python3 scripts/pty-input-harness.py --target dev --quick && python3 scripts/pty-input-harness.py --target dist --quick",
+    "test:pty:full": "python3 scripts/pty-input-harness.py --target both && python3 scripts/pty_tui_rigor.py",
+    "test:pty:rigor": "python3 scripts/pty_tui_rigor.py",
     "demo": "bun run scripts/demo.ts"
   },
   "dependencies": {

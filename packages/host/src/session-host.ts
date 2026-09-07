@@ -1,0 +1,341 @@
+import type { Engine, Viewer } from "@animae/engine";
+import { AnimaeError } from "@animae/engine";
+import { runHostCommandLine } from "./builtin-commands.ts";
+import { createHostCommandApi, setHostSceneId, type CommandApiState } from "./command-api.ts";
+import { consumeTurnStream } from "./turn-consumer.ts";
+import type {
+  HostAction,
+  HostActionContext,
+  HostCommand,
+  HostEntityAction,
+  HostFooterState,
+  HostHeaderState,
+  HostPanelSection,
+  HostSessionUiState,
+  StreamCallbacks,
+} from "./types.ts";
+
+export interface SessionHostOptions {
+  engine: Engine;
+  viewer?: Viewer;
+  actor?: string;
+  commands?: Record<string, HostCommand>;
+  actions?: HostAction[];
+  entityActions?: HostEntityAction[];
+  panels?: HostPanelSection[];
+  initialMessage?: string;
+  transcriptLimit?: number;
+  onSceneEnd?: () => void | Promise<void>;
+  headerState?: (ctx: { engine: Engine; viewer: Viewer }) => HostHeaderState | Promise<HostHeaderState>;
+  footerState?: (ctx: { engine: Engine; viewer: Viewer }) => HostFooterState | Promise<HostFooterState>;
+}
+
+export interface ActionDescriptor {
+  id: string;
+  label: string;
+  hint?: string;
+  hotkey?: string;
+  toolbar?: boolean;
+  entityScoped?: boolean;
+  args?: HostAction["args"];
+}
+
+let systemLineSeq = 0;
+
+export class SessionHost {
+  readonly engine: Engine;
+  readonly viewer: Viewer;
+  readonly actor: string;
+  readonly ui: HostSessionUiState;
+
+  private readonly commands: Record<string, HostCommand>;
+  private readonly actions: HostAction[];
+  private readonly entityActions: HostEntityAction[];
+  private readonly panels: HostPanelSection[];
+  private readonly apiState: CommandApiState = {};
+  private readonly commandApi: ReturnType<typeof createHostCommandApi>;
+  private readonly onSceneEnd?: () => void | Promise<void>;
+  private readonly headerFn?: SessionHostOptions["headerState"];
+  private readonly footerFn?: SessionHostOptions["footerState"];
+
+  private activeTurnAbort?: AbortController;
+  private activeRequestId?: string;
+  private streamCallbacks: StreamCallbacks = {};
+
+  constructor(opts: SessionHostOptions) {
+    this.engine = opts.engine;
+    this.viewer = opts.viewer ?? "player";
+    this.actor = opts.actor ?? "player";
+    this.commands = opts.commands ?? {};
+    this.actions = opts.actions ?? [];
+    this.entityActions = opts.entityActions ?? [];
+    this.panels = [...(opts.panels ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    this.onSceneEnd = opts.onSceneEnd;
+    this.headerFn = opts.headerState;
+    this.footerFn = opts.footerState;
+
+    this.ui = {
+      hasScene: false,
+      pending: false,
+      speaking: false,
+      transcript: [],
+      transcriptLimit: opts.transcriptLimit ?? 400,
+    };
+
+    this.commandApi = createHostCommandApi(this.engine, this.viewer, this.actor, this.apiState, (text, level) => {
+      this.appendSystemLine(text, level);
+      this.streamCallbacks.onToast?.(level ?? "info", text);
+    });
+
+    if (opts.initialMessage) {
+      this.appendSystemLine(opts.initialMessage, "info");
+    }
+    this.syncSceneFlag();
+  }
+
+  setStreamCallbacks(cb: StreamCallbacks): void {
+    this.streamCallbacks = cb;
+  }
+
+  /** Attach an already-started engine scene (e.g. after external bootstrap). */
+  attachScene(sceneId: string): void {
+    setHostSceneId(this.apiState, sceneId);
+    this.syncSceneFlag();
+  }
+
+  private syncSceneFlag(): void {
+    const sid = this.apiState.sceneId;
+    this.ui.sceneId = sid;
+    this.ui.hasScene = Boolean(sid);
+  }
+
+  private appendSystemLine(text: string, _level?: "info" | "warn" | "error"): void {
+    this.ui.transcript.push({
+      id: `sys_${++systemLineSeq}`,
+      kind: "system",
+      text,
+      complete: true,
+    });
+    while (this.ui.transcript.length > this.ui.transcriptLimit) this.ui.transcript.shift();
+  }
+
+  actionContext(focusTarget?: string): HostActionContext {
+    return {
+      engine: this.engine,
+      viewer: this.viewer,
+      actor: this.actor,
+      sceneId: () => this.apiState.sceneId,
+      focusTarget,
+      commandApi: this.commandApi,
+    };
+  }
+
+  listActions(focusTarget?: string): ActionDescriptor[] {
+    const ctx = this.actionContext(focusTarget);
+    const out: ActionDescriptor[] = [];
+    for (const a of this.actions) {
+      if (a.when && !a.when(ctx)) continue;
+      out.push({
+        id: a.id,
+        label: a.label,
+        hint: a.hint,
+        hotkey: a.hotkey,
+        toolbar: a.toolbar,
+        args: a.args,
+      });
+    }
+    if (focusTarget) {
+      for (const a of this.entityActions) {
+        if (a.when && !a.when(ctx, focusTarget)) continue;
+        out.push({
+          id: `entity:${a.id}`,
+          label: a.label,
+          hint: a.hint,
+          hotkey: a.hotkey,
+          entityScoped: true,
+          args: a.args,
+        });
+      }
+    }
+    return out;
+  }
+
+  async buildSnapshot(): Promise<Record<string, unknown>> {
+    this.syncSceneFlag();
+    const header = this.headerFn
+      ? await this.headerFn({ engine: this.engine, viewer: this.viewer })
+      : defaultHeader(this.engine, this.viewer);
+    const footer = this.footerFn
+      ? await this.footerFn({ engine: this.engine, viewer: this.viewer })
+      : defaultFooter(this.engine, this.viewer);
+
+    const panelData: Record<string, unknown> = {};
+    for (const p of this.panels) {
+      panelData[p.id] = await p.data({ engine: this.engine, viewer: this.viewer });
+    }
+
+    const liveScene = this.engine.query(this.viewer, "scene") as { participants?: string[] } | null | undefined;
+    const participants =
+      this.apiState.sceneParticipants ??
+      liveScene?.participants?.filter((p: string) => p !== this.actor) ??
+      [];
+
+    return {
+      protocolVersion: 1,
+      scene: {
+        id: this.ui.sceneId,
+        active: this.ui.hasScene,
+        location: this.engine.query(this.viewer, "world.location"),
+        speaker: this.ui.speaking ? "…" : undefined,
+        participants,
+      },
+      header,
+      footer,
+      transcript: this.ui.transcript.slice(-80),
+      choices: this.ui.choices,
+      focusTarget: this.ui.focusTarget,
+      pending: this.ui.pending,
+      turnError: this.ui.turnError,
+      actions: this.listActions(this.ui.focusTarget),
+      panels: panelData,
+      roster: this.engine.query(this.viewer, "characters"),
+      jobs: this.engine.query(this.viewer, "world.vars"),
+      resources: this.engine.query(this.viewer, "world.vars"),
+      factions: this.engine.query(this.viewer, "world.vars"),
+      calendar: this.engine.query(this.viewer, "world.calendar"),
+      achievements: this.engine.query(this.viewer, "world.vars"),
+      mods: this.engine.mods?.() ?? null,
+      branch: this.engine.timeline.current().name,
+    };
+  }
+
+  async startScene(params: { location: string; participants: string[]; fields?: string[] }): Promise<void> {
+    await this.commandApi.startScene(params);
+    this.syncSceneFlag();
+    this.streamCallbacks.onStateChange?.();
+  }
+
+  async endScene(): Promise<void> {
+    await this.commandApi.endScene();
+    if (this.onSceneEnd) await this.onSceneEnd();
+    this.syncSceneFlag();
+    this.streamCallbacks.onStateChange?.();
+  }
+
+  selectFocus(entityId?: string): void {
+    this.ui.focusTarget = entityId;
+    this.streamCallbacks.onStateChange?.();
+  }
+
+  cancelActive(requestId?: string): boolean {
+    if (this.activeTurnAbort && (!requestId || requestId === this.activeRequestId)) {
+      this.activeTurnAbort.abort();
+      this.activeTurnAbort = undefined;
+      this.ui.pending = false;
+      this.streamCallbacks.onBusy?.(false, this.activeRequestId);
+      return true;
+    }
+    return false;
+  }
+
+  async runCommand(name: string, args: string[], requestId?: string): Promise<void> {
+    const cmd = this.commands[name];
+    if (cmd) {
+      const out = await cmd.run(args, this.commandApi);
+      if (typeof out === "string" && out.length) this.commandApi.notify(out);
+    } else {
+      const argPart = args.length ? ` ${args.join(" ")}` : "";
+      await runHostCommandLine(`:${name}${argPart}`, this.commandApi, this.commands);
+    }
+    this.syncSceneFlag();
+    this.streamCallbacks.onStateChange?.();
+    void requestId;
+  }
+
+  async runAction(actionId: string, args: Record<string, string>, entityId?: string): Promise<void> {
+    const ctx = this.actionContext(entityId ?? this.ui.focusTarget);
+    if (actionId.startsWith("entity:")) {
+      const eid = entityId ?? this.ui.focusTarget;
+      if (!eid) throw new AnimaeError("NO_FOCUS", "Select an entity first");
+      const rawId = actionId.slice("entity:".length);
+      const act = this.entityActions.find((a) => a.id === rawId);
+      if (!act) throw new AnimaeError("UNKNOWN_ACTION", `Unknown entity action: ${rawId}`);
+      await act.run(ctx, eid, args);
+    } else {
+      const act = this.actions.find((a) => a.id === actionId);
+      if (!act) throw new AnimaeError("UNKNOWN_ACTION", `Unknown action: ${actionId}`);
+      await act.run(ctx, args);
+    }
+    this.syncSceneFlag();
+    this.streamCallbacks.onStateChange?.();
+  }
+
+  async submitInput(text: string, choiceId?: string, requestId?: string): Promise<void> {
+    const sceneId = this.apiState.sceneId;
+    if (!sceneId) {
+      throw new AnimaeError("NO_SCENE", "No active scene");
+    }
+    if (this.ui.pending) {
+      throw new AnimaeError("TURN_IN_PROGRESS", "A turn is already in progress");
+    }
+
+    this.ui.pending = true;
+    this.ui.turnError = undefined;
+    this.ui.choices = undefined;
+    this.activeRequestId = requestId;
+    this.activeTurnAbort = new AbortController();
+    this.streamCallbacks.onBusy?.(true, requestId);
+
+    try {
+      const stream = this.engine.scene.turn({
+        sceneId,
+        actor: this.actor,
+        text,
+        choiceId,
+      });
+      await consumeTurnStream(stream, this.ui, {
+        requestId,
+        stream: this.streamCallbacks,
+        abortSignal: this.activeTurnAbort?.signal,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.ui.turnError = msg;
+      this.appendSystemLine(msg, "error");
+      throw err;
+    } finally {
+      this.ui.pending = false;
+      this.activeTurnAbort = undefined;
+      this.activeRequestId = undefined;
+      this.streamCallbacks.onBusy?.(false, requestId);
+      this.streamCallbacks.onStateChange?.();
+    }
+  }
+
+  async queryPath(path: string, viewer?: string): Promise<unknown> {
+    const v = viewer ?? this.viewer;
+    return this.engine.queryAsync ? await this.engine.queryAsync(v, path) : this.engine.query(v, path);
+  }
+}
+
+function defaultHeader(engine: Engine, viewer: Viewer): HostHeaderState {
+  const t = engine.world.now();
+  const h = Math.floor(t.minute / 60);
+  const m = t.minute % 60;
+  return {
+    time: { day: t.day, minute: t.minute, label: `Day ${t.day} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}` },
+    location: engine.query(viewer, "world.location") as string | undefined,
+    branch: engine.timeline.current().name,
+  };
+}
+
+function defaultFooter(engine: Engine, viewer: Viewer): HostFooterState {
+  const beat = engine.query(viewer, "director/beat") as { label?: string } | null;
+  let budget: unknown;
+  try {
+    budget = engine.query(viewer, "budget");
+  } catch {
+    budget = undefined;
+  }
+  return { beat: beat?.label, budget };
+}

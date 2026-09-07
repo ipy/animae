@@ -10,8 +10,27 @@ import { selectLayoutMode } from "../utils/layout-mode.ts";
 import { TooSmall } from "../components/TooSmall.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
 import { useAppState } from "../context/app-state-context.tsx";
+import { useInputDraftDisplay } from "../context/input-draft-context.tsx";
 import { ActionToolbar } from "../components/ActionToolbar.tsx";
 import { AutocompletePopup } from "../components/AutocompletePopup.tsx";
+
+function InputChrome({
+  width,
+  active,
+  nameHints,
+}: {
+  width: number;
+  active: boolean;
+  nameHints: string[];
+}) {
+  const { draft, cursor } = useInputDraftDisplay();
+  return (
+    <>
+      <AutocompletePopup nameHints={nameHints} />
+      <InputLine width={width} value={draft} cursor={cursor} active={active} />
+    </>
+  );
+}
 
 export function DefaultLayout(props: LayoutProps) {
   const { columns, rows } = useWindowSize();
@@ -53,13 +72,7 @@ export function DefaultLayout(props: LayoutProps) {
         </Box>
       ) : null}
       <ChoiceMenu />
-      <AutocompletePopup nameHints={config.nameHints} />
-      <InputLine
-        width={columns}
-        value={state.inputDraft}
-        cursor={state.inputCursor}
-        active={inputActive}
-      />
+      <InputChrome width={columns} active={inputActive} nameHints={config.nameHints} />
       <FooterComp {...props} />
     </Box>
   );

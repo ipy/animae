@@ -1,0 +1,32 @@
+{
+  "name": "@animae/web",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "WebSocket protocol and HTTP server for Animae game hosts",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./protocol": {
+        "types": "./dist/protocol/index.d.ts",
+        "default": "./dist/protocol/index.js"
+      }
+    }
+  },
+  "files": ["dist", "src", "docs", "ref-client", "README.md"],
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*",
+    "@animae/host": "workspace:*",
+    "zod": "^4.1.12"
+  }
+}

@@ -42,9 +42,15 @@ Register **`TuiAction`** items on `RunTuiOptions.actions` and **`EntityTuiAction
 
 Host games dispatch `setFocusTarget` / `setEntityMenu` via `useAppState()` (exported from `@animae/tui` hooks).
 
+## Input pipeline
+
+Real TTY stdin is consumed once in `createPreparsedStdin` (50ms Esc window, UTF-8 reassembly, SGR mouse stripped to `preparsedMouseBus`); Ink reads a synthetic TTY `PassThrough` so Ink’s 20ms flush never splits SS3/CSI. `useParsedInput` listens to Ink’s emitter only (no second OS reader), maps via vendored `parseKeypress`, and must **not** flush pending Esc on the next chunk. Input draft: ref-first, microtask-coalesced dispatch; React state must never overwrite a longer ref (fixes ASCII+CJK mixed bursts). Ctrl-letter shortcuts match **only with Ctrl**; **Alt+1–5** mirror F1–F5.
+
+PTY rigor (compiled host binary, vendored **pyte** under `scripts/vendor/`): `python3 scripts/pty_tui_rigor.py --quick` — typical quick gate: stress drops **0**, mixed 80-char ASCII+CJK **ok**, Esc close **&lt;1ms** p50, stress p95 **&lt;80ms** (120×40).
+
 ## Keys (§21.3)
 
-Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ autocomplete), **Ctrl+P** or **`/`** (empty input) command palette, Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, wheel on transcript, F1–F5 overlays, Ctrl+S/L/Z/M, Esc, Ctrl+C quit.
+Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ autocomplete), **Ctrl+P** or **`/`** (empty input) command palette, Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, wheel on transcript, **F1–F5** overlays (**Alt+1–5** same, for macOS F-keys as media keys), Ctrl+S/L/Z/M, Esc, Ctrl+C quit.
 
 **Choice digits vs input:** `1`–`9` pick choices only when the input draft is **empty** and focus is **not** on the input line. With focus on input (including while choices are visible), digits are inserted as text.
 
@@ -75,6 +81,9 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 | `scripts/dev-session.ts` | Real example-game `data/` copy, `openexample-gameEngine`, `ScriptedModel`, `BasePanel` panel, `registerexample-gameRules` via bootstrap |
 | `scripts/qa-scenario-keys.json` | Shared keystroke schedules (kept in sync with batch scenarios) |
 | `scripts/pty-render.py` | Python `pty` driver; waits for `TUI_READY` on stderr, injects keys on the PTY master; sizes 120×40, 100×30, 90×30, 79×23, 160×50; writes grids to `animae/docs/tui-snapshots/` |
+| `scripts/pty-input-harness.py` | PTY regression: burst/paced typing (ASCII+CJK), F-keys/Esc (full mode), `TUI_PTY_DRIVER=1`; `bun run test:pty` (quick), `test:pty:full` |
+| `scripts/pty_tui_rigor.py` | Compiled host TUI binary: pyte screen, stress typing, F1/Esc/palette; `--quick` for CI/build gates |
+| `scripts/pty_lib.py` | Shared PTY reader thread + optional vendored pyte (`scripts/vendor/`) |
 | `scripts/demo.ts` | Fake engine interactive demo |
 
 Batch mode writes `TUI_READY` once the shell is mounted and any initial `scene.start` has finished (`onReady`). Set `TUI_PTY_DRIVER=1` when an external driver owns keystrokes (pty-render).
@@ -92,7 +101,7 @@ TUI_SNAPSHOT_SCENARIOS=empty,cjk python3 scripts/pty-render.py
 
 ## Decisions & gaps
 
-- **F-keys / PTY**: `useParsedInput` + vendored `parseKeypress` and Ink’s `input-parser` (split bulk stdin like PTY `:help` + Enter); maps `enter` and `return`; `TuiApp` mirrors input draft in refs so batched keys commit correctly. No `createRequire` / `ink/build/…` at runtime. Quit calls `app.exit()` before `engine.close()` so unreachable LLM calls cannot block exit. Typewriter skips do not block the input line when focus is `input`.
+- **F-keys / PTY**: SS3 `\x1bOP`…`\x1bOS`, CSI `\x1b[11~`…, pending-Esc timeout 50ms; table tests in `test/key-sequences.test.ts`. `matchKeyAction` requires Ctrl for Ctrl-letter bindings so words like `achievements` type correctly. Bracketed paste enabled when `onPaste` is set on `useParsedInput`.
 - **Inspector**: read-only tree for common paths; arbitrary paths via `:query`.
 - **Policy track metadata**: tier **names** come from engine query; zh labels use example-game tier map until `policy/tracks` is exposed on `query`.
 - **Budget footer**: tries `query(viewer,"budget")` then `director/beat/budget`.

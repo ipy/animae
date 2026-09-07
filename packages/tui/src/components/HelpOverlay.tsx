@@ -8,7 +8,7 @@ export function HelpOverlay() {
         <Text>Enter — submit input · ↑/↓ — choice / history</Text>
         <Text>1–9 — pick choice · any key — skip typewriter</Text>
         <Text>Tab — focus transcript / side panel · PgUp/PgDn — scroll</Text>
-        <Text>F1 help · F2 event log · F3 timeline · F4 explain · F5 inspector</Text>
+        <Text>F1–F5 overlays · Alt+1–5 same (macOS F-keys as media keys) · Ctrl+P palette</Text>
         <Text>Ctrl+S save · Ctrl+L load · Ctrl+Z rewind turn · Ctrl+C quit</Text>
         <Text>Esc — close overlay</Text>
         <Box marginTop={1}>

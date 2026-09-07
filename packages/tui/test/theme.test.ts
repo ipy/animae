@@ -18,7 +18,10 @@ test("themeSchema validates yaml-shaped object", () => {
 });
 
 test("loadTheme merges partial overrides", () => {
+  const prev = process.env.NO_COLOR;
+  delete process.env.NO_COLOR;
   const theme = loadTheme({ typewriter: { charsPerSecond: 12, enabled: false } });
+  if (prev !== undefined) process.env.NO_COLOR = prev;
   expect(theme.typewriter.charsPerSecond).toBe(12);
   expect(theme.typewriter.enabled).toBe(false);
   expect(theme.colors.primary).toBe("cyan");

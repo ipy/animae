@@ -1,13 +1,13 @@
 import { Box, Text, useStdout } from "ink";
 import { Clickable } from "./Clickable.tsx";
 import { Button } from "./Button.tsx";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useAppState } from "../context/app-state-context.tsx";
 import { Typewriter } from "./Typewriter.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
 import { useSpeakerColor } from "../hooks/use-speaker-color.ts";
 import { useSpeakerLabel } from "../hooks/use-speaker-label.ts";
-import { wrapToWidth } from "../utils/display-width.ts";
+import { cachedWrapToWidth } from "../utils/wrap-cache.ts";
 import { transcriptEntryWindow } from "../utils/transcript-limits.ts";
 import { expressionLabel } from "../cues/builtins.tsx";
 import { cueVisibleAt } from "../cues/registry.ts";
@@ -59,7 +59,7 @@ function DialogueBlock({
           onComplete={onComplete}
         />
       ) : (
-        wrapToWidth(entry.text, wrapCols).map((line, li) => (
+        cachedWrapToWidth(entry.text, wrapCols).map((line, li) => (
           <Text key={li} color={theme.colors.narration}>
             {line}
           </Text>
@@ -69,7 +69,7 @@ function DialogueBlock({
   );
 }
 
-export function Transcript({ width, rows }: { width: number; rows?: number }) {
+export const Transcript = memo(function Transcript({ width, rows }: { width: number; rows?: number }) {
   const theme = useTheme();
   const { state, dispatch, config } = useAppState();
   const { stdout } = useStdout();
@@ -127,8 +127,6 @@ export function Transcript({ width, rows }: { width: number; rows?: number }) {
         ) : null}
         {visibleEntries.map((entry) => {
         const isActive = entry.id === lastIncomplete?.id;
-        const lines = wrapToWidth(entry.text, wrapCols);
-
         if (entry.kind === "system") {
           return (
             <Text key={entry.id} dimColor>
@@ -192,4 +190,4 @@ export function Transcript({ width, rows }: { width: number; rows?: number }) {
       </Box>
     </Clickable>
   );
-}
+});

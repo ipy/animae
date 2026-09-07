@@ -11,3 +11,11 @@ test("lone ESC is flushed as escape key (Ink-compatible)", () => {
   expect(flushed).toBe("\u001b");
   expect(parseKeypress(flushed!).name).toBe("escape");
 });
+
+test("pending ESC + SS3 suffix becomes function key (not escape then letters)", () => {
+  const parser = createInputParser();
+  expect(parser.push("\u001b")).toEqual([]);
+  const events = parser.push("OP");
+  expect(events).toEqual(["\u001bOP"]);
+  expect(parseKeypress(events[0] as string).name).toBe("f1");
+});

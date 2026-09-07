@@ -25,7 +25,8 @@ export function Footer() {
   return (
     <Box borderStyle={theme.border === "none" ? undefined : theme.border} borderColor={theme.colors.border} paddingX={1} justifyContent="space-between">
       <Text dimColor>
-        F1 help · Ctrl+P palette · Tab complete · {hoverHint ? hoverHint : "Mouse · Shift+drag selects text"}
+        F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load ·{" "}
+        {hoverHint ? hoverHint : "Mouse · Shift+drag selects text"}
       </Text>
       <Text color={theme.colors.dim}>
         {route} {budgetStr ? `· ${budgetStr}` : ""}

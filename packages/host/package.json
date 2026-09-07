@@ -1,0 +1,25 @@
+{
+  "name": "@animae/host",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "UI-agnostic game session host (commands, actions, panels) for TUI and Web",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*"
+  }
+}

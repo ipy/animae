@@ -12,14 +12,24 @@ function isCompleteTheme(source: ThemePatch | Theme): source is Theme {
   );
 }
 
+function applyNoColor(theme: Theme): Theme {
+  if (process.env.NO_COLOR === undefined) return theme;
+  const plain = theme.colors.narration;
+  const colors = { ...theme.colors };
+  for (const k of Object.keys(colors) as Array<keyof Theme["colors"]>) {
+    colors[k] = plain;
+  }
+  return { ...theme, colors, border: "single" };
+}
+
 export function loadTheme(source: Theme | ThemePatch | string | undefined): Theme {
-  if (source === undefined) return defaultTheme;
+  if (source === undefined) return applyNoColor(defaultTheme);
   if (typeof source !== "string") {
-    if (isCompleteTheme(source)) return source;
-    return mergeTheme(themeSchema.parse(source));
+    if (isCompleteTheme(source)) return applyNoColor(source);
+    return applyNoColor(mergeTheme(themeSchema.parse(source)));
   }
   const raw = readFileSync(source, "utf8");
   const doc = parseYaml(raw);
   const parsed = themeSchema.parse(doc);
-  return mergeTheme(parsed);
+  return applyNoColor(mergeTheme(parsed));
 }

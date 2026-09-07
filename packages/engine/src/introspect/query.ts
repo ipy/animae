@@ -167,9 +167,15 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
     const loc = state.locations[id] ?? k.catalog.location(id);
     if (!loc) return undefined;
     const st = state.locations[id];
+    const authored = loc as {
+      summary?: string;
+      connects?: Array<{ to: string; label?: string; minutes?: number }>;
+    };
     return {
       id: loc.id,
       name: loc.name,
+      summary: authored.summary,
+      connects: authored.connects,
       vars: st?.vars ?? (loc as { vars?: Record<string, unknown> }).vars ?? {},
       lastSimulated: st?.lastSimulated ?? null,
     };

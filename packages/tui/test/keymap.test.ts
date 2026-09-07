@@ -3,6 +3,7 @@ import { choiceIndexFromKey, defaultKeymap, matchKeyAction } from "../src/keymap
 
 test("matchKeyAction binds ctrl chords", () => {
   expect(matchKeyAction(defaultKeymap, "s", "s", { ctrl: true })).toBe("save");
+  expect(matchKeyAction(defaultKeymap, "s", "s", { ctrl: false })).toBeUndefined();
   expect(matchKeyAction(defaultKeymap, "f1", "", { ctrl: false })).toBe("help");
 });
 

@@ -59,6 +59,7 @@ export async function handlePromptKey(
 
   if (ev.key.escape) {
     dispatch({ type: "setPrompt", prompt: undefined });
+    dispatch({ type: "setFocus", focus: "input" });
     return true;
   }
 

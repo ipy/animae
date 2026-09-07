@@ -24,13 +24,38 @@ export const defaultKeymap: Required<Keymap> = {
   quit: ["c"],
 };
 
+const META_OVERLAY_DIGITS: Partial<Record<keyof Required<Keymap>, string>> = {
+  help: "1",
+  eventLog: "2",
+  timeline: "3",
+  explain: "4",
+  inspector: "5",
+};
+
+/** Single-letter bindings that require Ctrl (or Meta overlay digits), never plain typing. */
+const CTRL_LETTER_ACTIONS = new Set<keyof Required<Keymap>>([
+  "save",
+  "load",
+  "rewindTurn",
+  "quit",
+  "commandPalette",
+  "toggleMouse",
+]);
+
 export function matchKeyAction(
   keymap: Required<Keymap>,
   keyName: string,
   input: string,
-  modifiers: { ctrl?: boolean; shift?: boolean },
+  modifiers: { ctrl?: boolean; shift?: boolean; meta?: boolean },
 ): keyof Required<Keymap> | undefined {
   const logical = keyName || input;
+  if (modifiers.meta && !modifiers.ctrl) {
+    for (const [action, digit] of Object.entries(META_OVERLAY_DIGITS) as Array<
+      [keyof Required<Keymap>, string]
+    >) {
+      if (logical === digit || input === digit) return action;
+    }
+  }
   for (const [action, keys] of Object.entries(keymap) as Array<
     [keyof Required<Keymap>, string[]]
   >) {
@@ -51,7 +76,10 @@ export function matchKeyAction(
         continue;
       }
       if (modifiers.ctrl) continue;
-      if (k === logical) return action;
+      if (k === logical) {
+        if (k.length === 1 && CTRL_LETTER_ACTIONS.has(action)) continue;
+        return action;
+      }
     }
   }
   return undefined;

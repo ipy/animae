@@ -22,6 +22,11 @@ export type ParsedInput = {
 };
 
 type Handler = (ev: ParsedInput) => void;
+type PasteHandler = (text: string) => void;
+
+type StdinContext = StdinInternal & {
+  setBracketedPasteMode?: (enabled: boolean) => void;
+};
 
 function emitParsedKeypress(data: string, handler: Handler, internal_exitOnCtrlC: boolean) {
   const keypress = parseKeypress(data);
@@ -77,11 +82,20 @@ function emitParsedKeypress(data: string, handler: Handler, internal_exitOnCtrlC
 /** Stdin listener that exposes parseKeypress `name` (incl. F-keys). */
 export function useParsedInput(
   handler: Handler,
-  options?: { isActive?: boolean; onMouse?: (ev: SgrMouseEvent) => void },
+  options?: {
+    isActive?: boolean;
+    onMouse?: (ev: SgrMouseEvent) => void;
+    onPaste?: PasteHandler;
+  },
 ) {
-  const stdinCtx = useStdin() as StdinInternal;
-  const { isRawModeSupported, setRawMode, internal_eventEmitter, internal_exitOnCtrlC } =
-    stdinCtx;
+  const stdinCtx = useStdin() as StdinContext;
+  const {
+    isRawModeSupported,
+    setRawMode,
+    setBracketedPasteMode,
+    internal_eventEmitter,
+    internal_exitOnCtrlC,
+  } = stdinCtx;
   const active = options?.isActive !== false;
   const inputParserRef = useRef(createInputParser());
   const mousePendingRef = useRef("");
@@ -90,7 +104,10 @@ export function useParsedInput(
   const onMouseRef = useRef(options?.onMouse);
   onMouseRef.current = options?.onMouse;
   const pendingFlushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const PENDING_ESC_MS = 20;
+  /** Match Ink App pending flush; slightly longer for loaded main thread. */
+  const PENDING_ESC_MS = 50;
+  const onPasteRef = useRef(options?.onPaste);
+  onPasteRef.current = options?.onPaste;
 
   const clearPendingFlush = () => {
     if (pendingFlushRef.current !== undefined) {
@@ -111,27 +128,22 @@ export function useParsedInput(
   useEffect(() => {
     if (!active || !isRawModeSupported) return;
     setRawMode(true);
+    setBracketedPasteMode?.(Boolean(onPasteRef.current));
     return () => {
       clearPendingFlush();
       setRawMode(false);
+      setBracketedPasteMode?.(false);
       inputParserRef.current.reset();
       mousePendingRef.current = "";
     };
-  }, [active, isRawModeSupported, setRawMode]);
+  }, [active, isRawModeSupported, setRawMode, setBracketedPasteMode]);
 
   const handleKeypress = useEffectEvent((data: string) => {
     emitParsedKeypress(data, handlerRef.current, internal_exitOnCtrlC);
   });
 
-  const flushPendingEscapeNow = () => {
-    if (!inputParserRef.current.hasPendingEscape()) return;
-    const pendingEscape = inputParserRef.current.flushPendingEscape();
-    if (pendingEscape) handleKeypress(pendingEscape);
-  };
-
   const onData = useEffectEvent((data: string) => {
     clearPendingFlush();
-    flushPendingEscapeNow();
     let keyboardChunk = data;
     const onMouse = onMouseRef.current;
     if (onMouse) {
@@ -157,9 +169,19 @@ export function useParsedInput(
     if (inputParserRef.current.hasPendingEscape()) schedulePendingEscapeFlush();
   });
 
+  const onPaste = useEffectEvent((text: string) => {
+    onPasteRef.current?.(text);
+  });
+
   useEffect(() => {
     if (!active) return;
     internal_eventEmitter.on("input", onData);
     return () => internal_eventEmitter.removeListener("input", onData);
   }, [active, internal_eventEmitter, onData]);
+
+  useEffect(() => {
+    if (!active || !onPasteRef.current) return;
+    internal_eventEmitter.on("paste", onPaste);
+    return () => internal_eventEmitter.removeListener("paste", onPaste);
+  }, [active, internal_eventEmitter, onPaste]);
 }
