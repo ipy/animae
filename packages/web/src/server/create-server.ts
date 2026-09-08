@@ -15,6 +15,7 @@ import { SessionRoom, type WebSessionHooks } from "./session-room.ts";
 
 interface WsData {
   id: string;
+  clientId: string;
   role: "controller" | "spectator";
   authenticated: boolean;
   messageTimes: number[];
@@ -90,6 +91,7 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
         const upgraded = server.upgrade(req, {
           data: {
             id: randomUUID(),
+            clientId: randomUUID(),
             role: "spectator" as const,
             authenticated: false,
             messageTimes: [] as number[],

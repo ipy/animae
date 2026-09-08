@@ -9,12 +9,14 @@ import { runModsExplain, runModsList, runModsValidate } from "./commands/mods.ts
 import { printError } from "./errors.ts";
 import { helpText, parseCli, type GlobalCliOptions } from "./args.ts";
 import { readPackageVersion } from "./version.ts";
+import { runI18n } from "./commands/i18n.ts";
 
 function engineOpts(global: GlobalCliOptions) {
   return {
     root: global.root,
     modelMode: global.modelMode,
     seed: global.seed,
+    lang: global.lang,
   };
 }
 
@@ -56,6 +58,8 @@ export async function runCli(argv: string[], _env: Record<string, string | undef
         return runExportCard(parsed.id, engineOpts(parsed.global));
       case "serve":
         return runServe({ ...engineOpts(parsed.global), stdio: parsed.stdio });
+      case "i18n":
+        return runI18n(parsed.sub, parsed.rest);
       default:
         return 1;
     }

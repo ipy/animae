@@ -15,6 +15,7 @@ import type {
 } from "../types.ts";
 import { useAppState } from "./app-state-context.tsx";
 import { useEngineContext } from "./engine-context.tsx";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 type PromptResolver = (values: Record<string, string>) => void | Promise<void>;
 
@@ -52,6 +53,7 @@ export function ActionRunnerProvider({
   entityActions: EntityTuiAction[];
   children: ReactNode;
 }) {
+  const { t } = useTuiI18n();
   const { state, dispatch, commandApi } = useAppState();
   const { engine, viewer, actor } = useEngineContext();
   const promptDoneRef = useRef<PromptResolver | undefined>(undefined);
@@ -110,12 +112,12 @@ export function ActionRunnerProvider({
         await run(merged);
         return;
       }
-      openPrompt({ title: "输入", fields: required, initial: preset }, async (values) => {
+      openPrompt({ title: t("prompt.input_title"), fields: required, initial: preset }, async (values) => {
         const merged: Record<string, string> = { ...(preset ?? {}), ...values };
         await run(merged);
       });
     },
-    [openPrompt],
+    [openPrompt, t],
   );
 
   const runAction = useCallback(

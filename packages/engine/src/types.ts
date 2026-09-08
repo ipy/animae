@@ -92,15 +92,39 @@ export interface Rng {
   pick<T>(xs: readonly T[]): T;
 }
 
+/** Optional presentation payload for localizing at the UI/protocol edge. */
+export interface AnimaeErrorPresentation {
+  messageKey: string;
+  params?: Record<string, JsonValue>;
+  namespace?: string;
+}
+
 /** Errors thrown by the engine are AnimaeError with a stable `code`. */
 export class AnimaeError extends Error {
   readonly code: string;
   readonly details?: unknown;
-  constructor(code: string, message: string, details?: unknown) {
+  readonly messageKey?: string;
+  readonly params?: Record<string, JsonValue>;
+  readonly messageNamespace?: string;
+  constructor(code: string, message: string, details?: unknown, presentation?: AnimaeErrorPresentation) {
     super(message);
     this.name = "AnimaeError";
     this.code = code;
     this.details = details;
+    if (presentation) {
+      this.messageKey = presentation.messageKey;
+      this.params = presentation.params;
+      this.messageNamespace = presentation.namespace;
+    }
+  }
+
+  /** Localize using an Animae i18n instance (`t` accepts `namespace:key` or bare keys). */
+  localizedMessage(t: (key: string, params?: Record<string, JsonValue>) => string): string {
+    if (this.messageKey) {
+      const key = this.messageNamespace ? `${this.messageNamespace}:${this.messageKey}` : this.messageKey;
+      return t(key, this.params);
+    }
+    return this.message;
   }
 }
 

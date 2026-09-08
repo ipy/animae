@@ -4,8 +4,10 @@ import { useActionRunner } from "../context/action-runner-context.tsx";
 import { listToolbarActions } from "../utils/action-list.ts";
 import { Button } from "./Button.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function ActionToolbar({ width }: { width: number }) {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const { actions, actionContext, runAction } = useActionRunner();
   const visible = useMemo(
@@ -16,7 +18,7 @@ export function ActionToolbar({ width }: { width: number }) {
 
   return (
     <Box paddingX={1} gap={1} flexWrap="wrap">
-      <Text dimColor>动作 </Text>
+      <Text dimColor>{t("toolbar.actions")} </Text>
       {visible.map((a) => (
         <Button
           key={a.id}
@@ -26,7 +28,7 @@ export function ActionToolbar({ width }: { width: number }) {
           onPress={() => void runAction(a)}
         />
       ))}
-      <Text color={theme.colors.dim}> · Ctrl+P 命令</Text>
+      <Text color={theme.colors.dim}>{t("toolbar.command_hint")}</Text>
     </Box>
   );
 }

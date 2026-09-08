@@ -168,12 +168,14 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
       const text = await resolveLogicalText(path);
       if (text === undefined) return undefined;
       let mtimeMs = 0;
-      const b = await base.stat(path);
-      if (b) mtimeMs = Math.max(mtimeMs, b.mtimeMs);
-      for (const mod of modLayers) {
-        for (const rel of [path, patchPathFor(path), appendPathFor(path)].filter(Boolean) as string[]) {
-          const st = await base.stat(modOverlayPath(mod.prefix, rel));
-          if (st) mtimeMs = Math.max(mtimeMs, st.mtimeMs);
+      if (typeof base.stat === "function") {
+        const b = await base.stat(path);
+        if (b) mtimeMs = Math.max(mtimeMs, b.mtimeMs);
+        for (const mod of modLayers) {
+          for (const rel of [path, patchPathFor(path), appendPathFor(path)].filter(Boolean) as string[]) {
+            const st = await base.stat(modOverlayPath(mod.prefix, rel));
+            if (st) mtimeMs = Math.max(mtimeMs, st.mtimeMs);
+          }
         }
       }
       return { size: text.length, mtimeMs: mtimeMs || Date.now(), isDir: false };

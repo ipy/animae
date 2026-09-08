@@ -14,6 +14,7 @@
       engine/        @animae/engine       src/<module>/…, test/…
       preset-base/   @animae/preset-base
       preset-dnd/    @animae/preset-dnd
+      i18n/          @animae/i18n         catalogs, ICU subset, locale negotiation, hygiene helpers
       tui/           @animae/tui          Ink 8 components + default layout
       cli/           animae               CLI, `serve --stdio` JSON-RPC, `bun build --compile` script
   games/<host>/                ← the game (depends on animae only through its public packages)
@@ -40,7 +41,7 @@
 * **Determinism (I6/I7)**: no `Math.random`, no `Date.now()` inside rules/pipeline decisions. Randomness only via `timeline.rng(key)` (seed + branch root + key). Side jobs that emit events (scene-end reflection, offscreen narrate, memory propagation) run **awaited** inside the mutation gate before the caller resolves (`scene.end`, `world.advance` segments); deferred reflection is flushed synchronously at the next `scene.start`. Timeline `append` is queued so concurrent async work cannot reorder persisted events.
   Wall-clock is allowed only for metadata (`SaveSlot.createdAt`, lock files). All LLM calls go through a `ModelPort` wrapped by record/replay.
 * **Docs**: each module owner documents public behaviour in `animae/docs/modules/<module>.md` (short: purpose, API, decisions, edge cases) and keeps it updated.
-* **Language of docs/content**: code + docs in English; the spec is Chinese; the game's authored content is Chinese (zh-CN).
+* **Language of docs/content**: engine code and `animae/docs` are English; game authored content is localized via locale layers (see [`i18n.md`](./i18n.md)).
 
 ## 3. Module ownership (engine/src/…)
 
@@ -65,6 +66,13 @@
 | `rpc/` | JSON-RPC 2.0 server over any duplex (used by CLI `serve --stdio`) |
 
 ## 4. Pinned decisions (the spec leaves these open)
+
+### 4.0 Locales (UI, prompts, output, content)
+* **UI locale** (`i18n.locale`): all engine-produced system/UI strings (errors, CLI/TUI, validate/doctor, introspection labels). Resolved: explicit config / `createEngine` / CLI `--lang` → `ANIMAE_LOCALE` → `LC_*` / `LANG` → default `en`.
+* **Prompt locale** (`i18n.promptLocale`): static LLM scaffolding in `engine/src/prompts/<locale>/`; default `zh-CN` in config resolver (product tuning — not referenced in code strings). English set must stay in parity (`animae i18n check`).
+* **Output locale** (`i18n.outputLocale`, default UI locale): player-facing model text; render prompts append output-language directive from catalogs + `Intl.DisplayNames`.
+* **Content locale** (`i18n.contentLocale`, default output locale): `locales/<locale>/` overlays + `strings/<locale>.yaml` with `$t:` in authored YAML.
+* **No natural-language literals in TS** under `animae/` (CJK scan in CI); catalogs use neutral English keys (`error.config.invalid`). Full design: [`i18n.md`](./i18n.md).
 
 ### 4.1 Ids, time, RNG
 * Event id `evt_` + zero-padded counter (min width 4) — unique within an ancestor chain; child branches continue numbering after `forkAt`.

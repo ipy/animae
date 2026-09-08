@@ -129,6 +129,7 @@ function makeKernel(
     get policy() {
       return policy;
     },
+    i18n: { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
     rules: { cel, register: () => {}, fn: () => undefined, has: () => false, run: () => [] },
     timeline: {
       branch: () => ({ name: "main" }),

@@ -21,6 +21,7 @@ import { parseKnowledgeMarkdown } from "./knowledge.ts";
 import { crossReferenceAuthored } from "./validate.ts";
 import type { ModProvenanceEntry, ResolvedMod } from "../mod.ts";
 import { modFingerprint } from "../mods/resolve.ts";
+import { loadStringTables, resolveStringRefs } from "../i18n/string-resolve.ts";
 
 export async function loadAuthored(
   storage: StoragePort,
@@ -29,6 +30,7 @@ export async function loadAuthored(
     extraKnowledge?: Record<string, string>;
     resolvedMods?: ResolvedMod[];
     modProvenance?: Map<string, ModProvenanceEntry>;
+    localeChain?: readonly string[];
   },
 ): Promise<Authored> {
   const issues: ConfigIssue[] = [];
@@ -212,8 +214,8 @@ export async function loadAuthored(
     fileHashes["__mods__"] = modFingerprint(opts.resolvedMods);
   }
 
-  const authored: Authored = {
-    config,
+  let localeWarnings: string[] = [];
+  let loadedContent = {
     world,
     locations,
     items,
@@ -226,10 +228,22 @@ export async function loadAuthored(
     knowledge,
     characters,
     templates,
+  };
+  if (opts?.localeChain?.length) {
+    const resolver = await loadStringTables(storage, opts.localeChain);
+    localeWarnings = [...resolver.warnings];
+    loadedContent = resolveStringRefs(loadedContent, resolver) as typeof loadedContent;
+    localeWarnings.push(...resolver.warnings);
+  }
+
+  const authored: Authored = {
+    config,
+    ...loadedContent,
     hash: aggregateHash(fileHashes),
     files: fileHashes,
     mods: opts?.resolvedMods,
     modProvenance: opts?.modProvenance ? Object.fromEntries(opts.modProvenance) : undefined,
+    localeWarnings: localeWarnings.length ? localeWarnings : undefined,
   };
 
   const xrefIssues = crossReferenceAuthored(authored, () => {});

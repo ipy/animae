@@ -11,6 +11,7 @@ import { cachedWrapToWidth } from "../utils/wrap-cache.ts";
 import { transcriptEntryWindow } from "../utils/transcript-limits.ts";
 import { expressionLabel } from "../cues/builtins.tsx";
 import { cueVisibleAt } from "../cues/registry.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 function DialogueBlock({
   entry,
@@ -29,6 +30,7 @@ function DialogueBlock({
   onComplete: () => void;
   skipSignal: number;
 }) {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const speakerColor = useSpeakerColor(entry.speaker);
   const speakerLabel = useSpeakerLabel(entry.speaker);
@@ -45,7 +47,7 @@ function DialogueBlock({
             {speakerLabel ?? entry.speaker}
           </Text>
           {expr ? <Text dimColor> [{expr}]</Text> : null}
-          <Text>：</Text>
+          <Text>{t("transcript.speaker_suffix")}</Text>
         </Text>
       ) : null}
       {isActive ? (
@@ -70,6 +72,7 @@ function DialogueBlock({
 }
 
 export const Transcript = memo(function Transcript({ width, rows }: { width: number; rows?: number }) {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const { state, dispatch, config } = useAppState();
   const { stdout } = useStdout();
@@ -120,7 +123,7 @@ export const Transcript = memo(function Transcript({ width, rows }: { width: num
       <Box flexDirection="column" flexGrow={1} overflow="hidden">
         {scrolledUp ? (
           <Button
-            label="跳到最新"
+            label={t("transcript.jump_latest")}
             hint="Follow transcript tail"
             onPress={() => dispatch({ type: "scrollTranscriptTail" })}
           />
@@ -151,7 +154,7 @@ export const Transcript = memo(function Transcript({ width, rows }: { width: num
           }
           return (
             <Text key={entry.id} italic dimColor>
-              （{entry.text}）
+              ({entry.text})
             </Text>
           );
         }

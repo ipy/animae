@@ -5,6 +5,8 @@ export interface GlobalCliOptions {
   root: string;
   modelMode?: ModelMode;
   seed?: number;
+  /** BCP-47 UI locale (overrides env negotiation for engine-owned CLI/TUI output). */
+  lang?: string;
   help?: boolean;
   version?: boolean;
 }
@@ -20,7 +22,8 @@ export type ParsedCli =
   | { kind: "timeline"; global: GlobalCliOptions; sub: string; rest: string[] }
   | { kind: "import-card"; global: GlobalCliOptions; file: string }
   | { kind: "export-card"; global: GlobalCliOptions; id: string }
-  | { kind: "serve"; global: GlobalCliOptions; stdio: boolean };
+  | { kind: "serve"; global: GlobalCliOptions; stdio: boolean }
+  | { kind: "i18n"; global: GlobalCliOptions; sub: string; rest: string[] };
 
 const COMMANDS = new Set([
   "init",
@@ -32,6 +35,7 @@ const COMMANDS = new Set([
   "import-card",
   "export-card",
   "serve",
+  "i18n",
   "help",
 ]);
 
@@ -52,11 +56,13 @@ Commands:
   import-card <file>             Import a character card
   export-card <id>               Export a character card
   serve --stdio                  JSON-RPC sidecar on stdin/stdout
+  i18n check|pseudo|extract      Locale catalog / prompt hygiene
 
 Global flags:
   --root <dir>                   Data root (default: cwd)
   --model-mode live|record|replay
   --seed <n>
+  --lang <locale>                UI locale (BCP-47, e.g. en, zh-CN)
   --version
   --help
 `;
@@ -75,7 +81,7 @@ function splitCommand(argv: string[]): { globalArgv: string[]; command: string; 
   return { globalArgv: argv, command: "", rest: [] };
 }
 
-const GLOBAL_FLAG_TOKENS = new Set(["--root", "--model-mode", "--seed", "--version", "--help"]);
+const GLOBAL_FLAG_TOKENS = new Set(["--root", "--model-mode", "--seed", "--lang", "--version", "--help"]);
 
 /** Move global flags (and their values) out of a subcommand argument list. */
 export function peelGlobalFlags(argv: string[]): { globalArgv: string[]; rest: string[] } {
@@ -83,7 +89,7 @@ export function peelGlobalFlags(argv: string[]): { globalArgv: string[]; rest: s
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i]!;
-    if (t === "--root" || t === "--model-mode" || t === "--seed") {
+    if (t === "--root" || t === "--model-mode" || t === "--seed" || t === "--lang") {
       globalArgv.push(t, argv[i + 1] ?? "");
       i++;
       continue;
@@ -104,6 +110,7 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
       root: { type: "string" },
       "model-mode": { type: "string" },
       seed: { type: "string" },
+      lang: { type: "string" },
       version: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -125,6 +132,7 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
     root: values.root as string | undefined,
     modelMode,
     seed,
+    lang: values.lang as string | undefined,
     help: values.help as boolean,
     version: values.version as boolean,
   };
@@ -244,6 +252,10 @@ export function parseCli(argv: string[]): ParsedCli {
       });
       if (!values.stdio) throw new Error("serve requires --stdio");
       return { kind: "serve", global, stdio: true };
+    }
+    case "i18n": {
+      const sub = rest[0] ?? "check";
+      return { kind: "i18n", global, sub, rest: rest.slice(1) };
     }
     default:
       throw new Error(`Unknown command: ${command}`);

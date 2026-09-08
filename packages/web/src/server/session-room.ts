@@ -21,6 +21,7 @@ export interface WebSessionHooks {
 
 interface WsData {
   id: string;
+  clientId: string;
   role: ClientRole;
   authenticated: boolean;
   messageTimes: number[];
@@ -34,6 +35,12 @@ export class SessionRoom {
 
   private seq = 0;
   private controllerId?: string;
+  /** Persistent client id (from hello) for the current controller connection. */
+  private controllerClientId?: string;
+  /** After controller disconnect, prior clientId may preempt a new controller until this time (ms). */
+  private releasedControllerClientId?: string;
+  private releasedUntil = 0;
+  private readonly controllerReclaimGraceMs = 12_000;
   private readonly clients = new Map<string, ServerWebSocket<WsData>>();
   private readonly patchBuffer: ServerMessage[] = [];
   private readonly patchBufferLimit = 500;
@@ -190,8 +197,58 @@ export class SessionRoom {
   }
 
   removeClient(id: string): void {
-    if (this.controllerId === id) this.controllerId = undefined;
+    if (this.controllerId === id) {
+      this.releasedControllerClientId = this.controllerClientId;
+      this.releasedUntil = Date.now() + this.controllerReclaimGraceMs;
+      this.controllerId = undefined;
+    }
     this.clients.delete(id);
+  }
+
+  private assignController(ws: ServerWebSocket<WsData>, clientId: string): void {
+    const prev = this.controllerId;
+    if (prev && prev !== ws.data.id) {
+      const old = this.clients.get(prev);
+      if (old) {
+        old.data.role = "spectator";
+        this.send(old, {
+          v: WEB_PROTOCOL_VERSION,
+          type: "role",
+          seq: this.nextSeq(),
+          role: "spectator",
+          message: "Another client took control of this session.",
+        });
+      }
+    }
+    this.controllerId = ws.data.id;
+    this.controllerClientId = clientId;
+    if (clientId === this.releasedControllerClientId) {
+      this.releasedControllerClientId = undefined;
+      this.releasedUntil = 0;
+    }
+    ws.data.role = "controller";
+  }
+
+  private tryHelloController(ws: ServerWebSocket<WsData>, clientId: string): ClientRole {
+    if (
+      this.controllerId &&
+      this.controllerId !== ws.data.id &&
+      this.releasedControllerClientId === clientId &&
+      Date.now() < this.releasedUntil
+    ) {
+      this.assignController(ws, clientId);
+      return "controller";
+    }
+    if (!this.controllerId) {
+      this.assignController(ws, clientId);
+      return "controller";
+    }
+    if (this.controllerId === ws.data.id) {
+      ws.data.role = "controller";
+      return "controller";
+    }
+    ws.data.role = "spectator";
+    return "spectator";
   }
 
   private rateLimit(data: WsData): boolean {
@@ -254,15 +311,11 @@ export class SessionRoom {
         ws.close(1008, "auth");
         return;
       }
-      const role = m.role ?? "spectator";
-      if (role === "controller") {
-        if (this.controllerId && this.controllerId !== data.id) {
-          this.err(ws, "CONTROLLER_TAKEN", "Another controller is active");
-          data.role = "spectator";
-        } else {
-          this.controllerId = data.id;
-          data.role = "controller";
-        }
+      const clientId = m.clientId ?? data.clientId ?? data.id;
+      data.clientId = clientId;
+      const wantControl = (m.role ?? "controller") === "controller";
+      if (wantControl) {
+        data.role = this.tryHelloController(ws, clientId);
       } else {
         data.role = "spectator";
       }
@@ -275,9 +328,57 @@ export class SessionRoom {
         role: data.role,
         controllerPresent: Boolean(this.controllerId),
         protocolVersion: WEB_PROTOCOL_VERSION,
+        clientId,
       });
       await this.pushSnapshot();
       if (typeof m.resumeSeq === "number") this.replaySince(m.resumeSeq, ws);
+      return;
+    }
+
+    if (m.type === "release_control") {
+      if (!data.authenticated) {
+        this.err(ws, "HELLO_REQUIRED", "Send hello first", m.id);
+        return;
+      }
+      if (this.controllerId === data.id) {
+        this.controllerId = undefined;
+        this.controllerClientId = undefined;
+        this.releasedControllerClientId = undefined;
+        this.releasedUntil = 0;
+        data.role = "spectator";
+        this.send(ws, {
+          v: WEB_PROTOCOL_VERSION,
+          type: "role",
+          seq: this.nextSeq(),
+          role: "spectator",
+        });
+      }
+      this.ok(ws, m.id, { role: data.role });
+      return;
+    }
+
+    if (m.type === "claim_controller") {
+      if (!data.authenticated) {
+        this.err(ws, "HELLO_REQUIRED", "Send hello first", m.id);
+        return;
+      }
+      const clientId = data.clientId;
+      if (!this.controllerId || m.force === true) {
+        this.assignController(ws, clientId);
+        this.send(ws, {
+          v: WEB_PROTOCOL_VERSION,
+          type: "role",
+          seq: this.nextSeq(),
+          role: "controller",
+        });
+        this.ok(ws, m.id, { role: "controller" });
+        return;
+      }
+      if (this.controllerId === data.id) {
+        this.ok(ws, m.id, { role: "controller" });
+        return;
+      }
+      this.err(ws, "CONTROLLER_TAKEN", "Another controller is active; use force to take over", m.id);
       return;
     }
 
@@ -299,7 +400,6 @@ export class SessionRoom {
       "cancel",
       "models_probe",
       "ollama_models",
-      "content_pack_notice",
     ]);
     if (needsControl.has(m.type) && data.role !== "controller") {
       this.err(ws, "READ_ONLY", "Spectators cannot control the session", "id" in m ? m.id : undefined);

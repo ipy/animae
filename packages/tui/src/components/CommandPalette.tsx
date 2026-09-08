@@ -8,8 +8,10 @@ import { Clickable } from "./Clickable.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
 import { runCommandLine } from "../commands/builtin.ts";
 import { useRunner } from "../context/runner-context.tsx";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function CommandPalette() {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const { state, dispatch, config, commandApi } = useAppState();
   const { actions, entityActions, actionContext, runAction, runEntityAction } = useActionRunner();
@@ -59,8 +61,10 @@ export function CommandPalette() {
   };
 
   return (
-    <Overlay title="命令面板 (Ctrl+P · ↑↓ · Enter · Esc)">
-      <Text dimColor>筛选：{state.paletteQuery || "（全部）"}</Text>
+    <Overlay title={t("palette.title")}>
+      <Text dimColor>
+        {t("palette.filter", { query: state.paletteQuery || t("palette.filter_all") })}
+      </Text>
       <Box flexDirection="column" marginTop={1}>
         {window.map((e, i) => {
           const idx = Math.max(0, selected - 8) + i;

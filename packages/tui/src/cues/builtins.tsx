@@ -16,7 +16,7 @@ export const builtinCueRenderers: Record<string, CueRenderer> = {
     const text = String(cue.args["text"] ?? "");
     return (
       <Text italic dimColor>
-        （{text}）
+        ({text})
       </Text>
     );
   },

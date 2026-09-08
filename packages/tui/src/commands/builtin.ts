@@ -94,6 +94,21 @@ export const builtinCommands: Record<string, CustomCommand> = {
       /* handled by runner */
     },
   },
+  lang: {
+    description: "Set UI language",
+    usage: ":lang <locale>",
+    run: async (args, api) => {
+      const setUiLocale = api.setUiLocale;
+      const t = api.t ?? ((k: string) => k);
+      const loc = args[0]?.trim();
+      if (!loc) {
+        api.notify(t("command.lang_usage"), "warn");
+        return;
+      }
+      setUiLocale?.(loc);
+      api.notify(t("command.lang_set", { locale: loc }));
+    },
+  },
   mouse: {
     description: "Toggle terminal mouse capture (on|off|status)",
     usage: ":mouse [on|off|status]",

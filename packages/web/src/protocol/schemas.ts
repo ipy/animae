@@ -13,6 +13,21 @@ export const ClientHelloSchema = z.object({
   role: z.enum(["controller", "spectator"]).optional(),
   resumeSeq: z.number().int().nonnegative().optional(),
   token: z.string().optional(),
+  /** Stable browser tab identity — survives reconnect for controller seat. */
+  clientId: z.string().min(8).max(128).optional(),
+});
+
+export const ClientClaimControllerSchema = z.object({
+  ...envelope,
+  type: z.literal("claim_controller"),
+  id: requestId,
+  force: z.boolean().optional(),
+});
+
+export const ClientReleaseControlSchema = z.object({
+  ...envelope,
+  type: z.literal("release_control"),
+  id: requestId,
 });
 
 export const ClientInputSchema = z.object({
@@ -177,6 +192,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientModelsProbeSchema,
   ClientOllamaModelsSchema,
   ClientContentPackNoticeSchema,
+  ClientClaimControllerSchema,
+  ClientReleaseControlSchema,
   ClientPingSchema,
 ]);
 
@@ -188,6 +205,15 @@ export const ServerHelloOkSchema = z.object({
   role: z.enum(["controller", "spectator"]),
   controllerPresent: z.boolean(),
   protocolVersion: z.number().int(),
+  clientId: z.string().optional(),
+});
+
+export const ServerRoleSchema = z.object({
+  ...envelope,
+  type: z.literal("role"),
+  seq: z.number().int().nonnegative(),
+  role: z.enum(["controller", "spectator"]),
+  message: z.string().optional(),
 });
 
 export const ServerSnapshotSchema = z.object({
@@ -280,6 +306,7 @@ export const ServerPongSchema = z.object({
 
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   ServerHelloOkSchema,
+  ServerRoleSchema,
   ServerSnapshotSchema,
   ServerPatchSchema,
   ServerStreamSchema,

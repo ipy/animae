@@ -25,6 +25,7 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
         api.notify(`Loaded ${args[0]}`);
         return;
       }
+      api.openOverlay("loadSlots");
       api.notify("Open load UI or pass slot name", "warn");
     },
   },
@@ -54,6 +55,7 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
     run: async (args, api) => {
       const turnId = args[0];
       if (!turnId) {
+        api.openOverlay("explain");
         api.notify("Pass turnId to explain", "warn");
         return;
       }

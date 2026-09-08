@@ -119,6 +119,10 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     mods: () => ({ mods: [], drift: false, provenance: {} }),
     info: () => ({
       language: "zh",
+      locale: "en",
+      promptLocale: "zh-CN",
+      outputLocale: "zh",
+      contentLocale: "zh",
       branch: "main",
       sessionId: "sess",
       models: { s1: "s1", s2: "s2" },

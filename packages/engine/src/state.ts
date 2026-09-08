@@ -122,7 +122,11 @@ export interface EngineState {
   budget: { turns: number; s2Turns: number; s2Scene: number; degraded: string[] };
   /** memory index: owner → entry count/ids by kind (entries themselves live in artifacts) */
   memoryIndex: Record<CharacterId, { count: number; lastId?: string }>;
-  config: { hash: string; mods?: { id: string; version: string; contentHash: string }[] };
+  config: {
+    hash: string;
+    mods?: { id: string; version: string; contentHash: string }[];
+    i18n?: { locale: string; promptLocale: string; outputLocale: string; contentLocale: string };
+  };
   /** entities generated at runtime (from `entity.created` / `entity.spawned` events); mirrored to timelines/<branch>/entities/ */
   generated: { characters: Record<string, CharacterDef>; locations: Record<string, LocationDef>; items: Record<string, ItemDef> };
   /** runtime nicknames / aliases (from `entity.alias_set`) */

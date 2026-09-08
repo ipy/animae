@@ -20,6 +20,7 @@ export interface OpenEngineOptions {
   root: string;
   modelMode?: ModelMode;
   seed?: number;
+  lang?: string;
   models?: CreateEngineOptions["models"];
   /** extra presets registered for lookup (extends chain) */
   presets?: PresetBundle[];
@@ -86,5 +87,6 @@ export async function openEngine(opts: OpenEngineOptions): Promise<Engine> {
     modelMode: opts.modelMode,
     seed: opts.seed,
     models: opts.models,
+    i18n: opts.lang ? { locale: opts.lang } : undefined,
   });
 }

@@ -25,9 +25,13 @@ export interface SessionHostOptions {
   panels?: HostPanelSection[];
   initialMessage?: string;
   transcriptLimit?: number;
-  onSceneEnd?: () => void | Promise<void>;
+  onSceneEnd?: (api: ReturnType<typeof createHostCommandApi>) => void | Promise<void>;
   headerState?: (ctx: { engine: Engine; viewer: Viewer }) => HostHeaderState | Promise<HostHeaderState>;
   footerState?: (ctx: { engine: Engine; viewer: Viewer }) => HostFooterState | Promise<HostFooterState>;
+  /** When a colon command runs, open the side panel on this tab (game-specific map). */
+  sidePanelTabForCommand?: Record<string, string>;
+  /** Free-roam routing before NO_SCENE errors (game-provided). */
+  resolveFreeInput?: import("./types.ts").HostResolveFreeInputFn;
 }
 
 export interface ActionDescriptor {
@@ -54,9 +58,11 @@ export class SessionHost {
   private readonly panels: HostPanelSection[];
   private readonly apiState: CommandApiState = {};
   private readonly commandApi: ReturnType<typeof createHostCommandApi>;
-  private readonly onSceneEnd?: () => void | Promise<void>;
+  private readonly onSceneEnd?: SessionHostOptions["onSceneEnd"];
   private readonly headerFn?: SessionHostOptions["headerState"];
   private readonly footerFn?: SessionHostOptions["footerState"];
+  private readonly sidePanelTabForCommand: Record<string, string>;
+  private readonly resolveFreeInput?: import("./types.ts").HostResolveFreeInputFn;
 
   private activeTurnAbort?: AbortController;
   private activeRequestId?: string;
@@ -73,6 +79,8 @@ export class SessionHost {
     this.onSceneEnd = opts.onSceneEnd;
     this.headerFn = opts.headerState;
     this.footerFn = opts.footerState;
+    this.sidePanelTabForCommand = opts.sidePanelTabForCommand ?? {};
+    this.resolveFreeInput = opts.resolveFreeInput;
 
     this.ui = {
       hasScene: false,
@@ -80,12 +88,44 @@ export class SessionHost {
       speaking: false,
       transcript: [],
       transcriptLimit: opts.transcriptLimit ?? 400,
+      overlay: null,
+      mouseCapture: false,
     };
 
-    this.commandApi = createHostCommandApi(this.engine, this.viewer, this.actor, this.apiState, (text, level) => {
-      this.appendSystemLine(text, level);
-      this.streamCallbacks.onToast?.(level ?? "info", text);
-    });
+    const uiBridge = {
+      openOverlay: (name: string) => {
+        this.ui.overlay = name;
+        const dot = name.indexOf(".");
+        if (dot > 0) {
+          this.ui.sidePanelTab = name.slice(dot + 1);
+          this.ui.overlay = name.slice(0, dot);
+        }
+        if (name === "sidePanel" || this.ui.overlay === "sidePanel") {
+          /* keep sidePanelTab if set */
+        }
+        this.streamCallbacks.onStateChange?.();
+      },
+      closeOverlay: () => {
+        this.ui.overlay = null;
+        this.streamCallbacks.onStateChange?.();
+      },
+      setMouseCapture: (on: boolean) => {
+        this.ui.mouseCapture = on;
+        this.streamCallbacks.onStateChange?.();
+      },
+    };
+
+    this.commandApi = createHostCommandApi(
+      this.engine,
+      this.viewer,
+      this.actor,
+      this.apiState,
+      (text, level) => {
+        this.appendSystemLine(text, level);
+        this.streamCallbacks.onToast?.(level ?? "info", text);
+      },
+      uiBridge,
+    );
 
     if (opts.initialMessage) {
       this.appendSystemLine(opts.initialMessage, "info");
@@ -206,6 +246,11 @@ export class SessionHost {
       achievements: this.engine.query(this.viewer, "world.vars"),
       mods: this.engine.mods?.() ?? null,
       branch: this.engine.timeline.current().name,
+      ui: {
+        overlay: this.ui.overlay ?? null,
+        sidePanelTab: this.ui.sidePanelTab,
+        mouseCapture: this.ui.mouseCapture ?? false,
+      },
     };
   }
 
@@ -217,7 +262,7 @@ export class SessionHost {
 
   async endScene(): Promise<void> {
     await this.commandApi.endScene();
-    if (this.onSceneEnd) await this.onSceneEnd();
+    if (this.onSceneEnd) await this.onSceneEnd(this.commandApi);
     this.syncSceneFlag();
     this.streamCallbacks.onStateChange?.();
   }
@@ -239,6 +284,11 @@ export class SessionHost {
   }
 
   async runCommand(name: string, args: string[], requestId?: string): Promise<void> {
+    const tabHint = this.sidePanelTabForCommand[name];
+    if (tabHint) {
+      this.ui.sidePanelTab = tabHint;
+      this.ui.overlay = "sidePanel";
+    }
     const cmd = this.commands[name];
     if (cmd) {
       const out = await cmd.run(args, this.commandApi);
@@ -271,7 +321,17 @@ export class SessionHost {
   }
 
   async submitInput(text: string, choiceId?: string, requestId?: string): Promise<void> {
-    const sceneId = this.apiState.sceneId;
+    let sceneId = this.apiState.sceneId;
+    if (!sceneId && this.resolveFreeInput) {
+      const pick = choiceId && !text.trim() ? choiceId : text;
+      const routed = await this.resolveFreeInput(pick, this.commandApi, this.ui.focusTarget);
+      if (routed === "handled") {
+        this.syncSceneFlag();
+        this.streamCallbacks.onStateChange?.();
+        return;
+      }
+      sceneId = this.apiState.sceneId;
+    }
     if (!sceneId) {
       throw new AnimaeError("NO_SCENE", "No active scene");
     }

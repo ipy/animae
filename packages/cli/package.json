@@ -24,6 +24,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@animae/i18n": "workspace:*",
     "@animae/engine": "workspace:*",
     "@animae/preset-base": "workspace:*",
     "@animae/preset-dnd": "workspace:*",

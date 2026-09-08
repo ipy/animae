@@ -1,0 +1,17 @@
+{
+  "storage.path_escape": "路径超出数据根目录：{path}",
+  "storage.locked": "存储已被进程 {pid} 锁定",
+  "config.invalid": "配置无效",
+  "import.empty": "导入文件为空",
+  "import.hash_mismatch": "{path} 的哈希不匹配",
+  "dice.invalid": "骰子表达式无效：{detail}",
+  "time.backwards": "world.advance 不能将时间倒回",
+  "world.var_invalid": "world.set 路径不能为空",
+  "emit.failed": "事件未能持久化",
+  "location.unknown": "未知地点「{location}」",
+  "offscreen.entity": "catchUp 仅支持地点与角色实体",
+  "character.unknown": "未知角色「{id}」",
+  "schedule.unknown": "无日程项「{id}」",
+  "not_found": "未找到：{detail}",
+  "entity.duplicate": "实体已存在：{detail}"
+}

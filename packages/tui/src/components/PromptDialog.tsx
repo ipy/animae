@@ -3,8 +3,10 @@ import { useAppState } from "../context/app-state-context.tsx";
 import { useActionRunner } from "../context/action-runner-context.tsx";
 import { Overlay } from "./Overlay.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function PromptDialog() {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const { state, dispatch } = useAppState();
   const { completePrompt } = useActionRunner();
@@ -21,9 +23,9 @@ export function PromptDialog() {
       <Text>
         {field.label}
         {field.type === "select" && field.options ? (
-          <Text dimColor> (↑↓ 选择 · Enter 确认 · Esc 取消)</Text>
+          <Text dimColor> {t("prompt.select_hint")}</Text>
         ) : (
-          <Text dimColor> (Enter 确认 · Esc 取消)</Text>
+          <Text dimColor> {t("prompt.confirm_hint")}</Text>
         )}
       </Text>
       {field.type === "select" && field.options ? (

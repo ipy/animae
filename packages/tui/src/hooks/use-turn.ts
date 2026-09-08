@@ -7,14 +7,40 @@ let entrySeq = 0;
 
 export function useTurn() {
   const { engine, actor } = useEngineContext();
-  const { state, dispatch, commandApi } = useAppState();
+  const { state, dispatch, commandApi, config } = useAppState();
   const streamRef = useRef<AsyncIterable<TurnChunk> | undefined>(undefined);
 
   const submit = useCallback(
     async (text: string, choiceId?: string) => {
-      const sceneId = commandApi.sceneId();
+      let sceneId = commandApi.sceneId();
+      if (!sceneId && config.resolveFreeInput) {
+        const routed = await config.resolveFreeInput({
+          text,
+          choiceId,
+          api: commandApi,
+          focusTarget: state.focusTarget,
+          dispatch: (prompt, options) => {
+            dispatch({ type: "systemLine", text: prompt });
+            dispatch({
+              type: "setChoices",
+              choices: {
+                choices: options.map((o) => ({ id: o.id, text: o.label })),
+                selected: 0,
+              },
+            });
+            dispatch({ type: "setFocus", focus: "choices" });
+          },
+        });
+        if (routed === "handled") return;
+        sceneId = commandApi.sceneId();
+      }
       if (!sceneId) {
-        dispatch({ type: "systemLine", text: "No active scene — use :commands or start a scene." });
+        dispatch({
+          type: "systemLine",
+          text: config.resolveFreeInput
+            ? "No active scene — type a name to talk or use :help."
+            : "No active scene — use :commands or start a scene.",
+        });
         return;
       }
       dispatch({ type: "setPending", pending: true });
@@ -39,7 +65,7 @@ export function useTurn() {
         streamRef.current = undefined;
       }
     },
-    [engine, actor, commandApi, dispatch],
+    [engine, actor, commandApi, dispatch, config, state.focusTarget],
   );
 
   return {

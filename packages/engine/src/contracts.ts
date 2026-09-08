@@ -347,10 +347,20 @@ export type ModelFactory = (spec: import("./schema/authored.ts").ModelSpec) => M
 
 // ───────────────────────── kernel ─────────────────────────
 /** The dependency bundle shared by modules. Fields marked (live) are getters: they change on hot reload. */
+export interface EngineLocaleConfig {
+  locale: string;
+  promptLocale: string;
+  outputLocale: string;
+  contentLocale: string;
+  fallbackLocale: string;
+}
+
 export interface Kernel {
   storage: StoragePort;
   /** (live) */ authored: Authored;
   /** (live) */ policy: ResolvedPolicy;
+  /** resolved UI / prompt / content locales for this engine instance */
+  i18n: EngineLocaleConfig;
   rules: RuleEngine;
   timeline: TimelineStore;
   models: { s1: ModelPort; s2: ModelPort };

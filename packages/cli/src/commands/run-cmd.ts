@@ -31,6 +31,7 @@ async function startTui(
     viewer: (opts.viewer ?? "player") as import("@animae/engine").Viewer,
     scene: { sceneId },
     theme: opts.theme,
+    uiLocale: opts.lang ?? engine.info().locale,
   });
   return 0;
 }

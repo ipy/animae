@@ -77,6 +77,7 @@ export interface FakeKernelOpts {
   director?: Partial<Kernel["m"]["director"]>;
   embedding?: Kernel["embedding"];
   s2Handler?: (req: { label: string }) => unknown;
+  i18n?: Partial<Kernel["i18n"]>;
 }
 
 export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitted: EventDraft[]; setState: (s: EngineState) => void } {
@@ -159,6 +160,14 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
     storage,
     authored,
     policy,
+    i18n: {
+      locale: "en",
+      promptLocale: "en",
+      outputLocale: "en",
+      contentLocale: "en",
+      fallbackLocale: "en",
+      ...opts.i18n,
+    },
     rules,
     timeline,
     models: {

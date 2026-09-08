@@ -21,5 +21,8 @@
   },
   "dependencies": {
     "@animae/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@animae/tui": "workspace:*"
   }
 }

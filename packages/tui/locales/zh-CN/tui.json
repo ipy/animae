@@ -1,0 +1,39 @@
+{
+  "palette": {
+    "title": "命令面板 (Ctrl+P · ↑↓ · Enter · Esc)",
+    "filter": "筛选：{query}",
+    "filter_all": "（全部）"
+  },
+  "prompt": {
+    "select_hint": "(↑↓ 选择 · Enter 确认 · Esc 取消)",
+    "confirm_hint": "(Enter 确认 · Esc 取消)",
+    "input_title": "输入"
+  },
+  "entity_menu": {
+    "title": "目标 · {entityId}",
+    "hint": "Enter / 点击执行 · Esc 关闭"
+  },
+  "toolbar": {
+    "actions": "动作",
+    "command_hint": " · Ctrl+P 命令"
+  },
+  "transcript": {
+    "jump_latest": "跳到最新",
+    "speaker_suffix": "："
+  },
+  "cue": {
+    "action_wrap": "（{text}）"
+  },
+  "tiers": {
+    "distant": "疏远",
+    "close": "亲近",
+    "strangers": "陌生",
+    "acquaintances": "相识",
+    "friends": "朋友"
+  },
+  "command": {
+    "no_scene": "当前无场景 — 使用 :help 或 :commands 探索。",
+    "lang_set": "界面语言已设为 {locale}",
+    "lang_usage": "用法：:lang <locale>（如 en、zh-CN、en-XA）"
+  }
+}

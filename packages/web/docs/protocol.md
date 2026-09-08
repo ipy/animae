@@ -17,7 +17,9 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 
 | `type` | Purpose |
 |--------|---------|
-| `hello` | `{ role?: "controller" \| "spectator", resumeSeq?, token? }` |
+| `hello` | `{ role?: "controller" \| "spectator", resumeSeq?, token?, clientId? }` |
+| `claim_controller` | `{ id, force? }` — take the controller seat |
+| `release_control` | `{ id }` — voluntary spectator mode |
 | `input` | `{ id, text, choiceId? }` — player turn (controller) |
 | `command` | `{ id, name, args?: string[] }` — colon-style command |
 | `action` | `{ id, actionId, entityId?, args?: Record<string,string> }` |

@@ -46,6 +46,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     presets,
     resolvedMods: modCtx.overlay.ordered,
     modProvenance: modCtx.overlay.provenance,
+    localeChain: modCtx.i18n.fallbackChain,
   });
   await seedAuthoredStatFingerprint(modCtx.readStorage, authored, storage);
   const seed = opts.seed ?? authored.config.seed ?? 1;
@@ -122,6 +123,14 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     void kernel.emit([{ kind: "config.warning", code, message, ...extra }]);
   };
 
+  const engineLocale = {
+    locale: modCtx.i18n.locale,
+    promptLocale: modCtx.i18n.promptLocale,
+    outputLocale: modCtx.i18n.outputLocale,
+    contentLocale: modCtx.i18n.contentLocale,
+    fallbackLocale: modCtx.i18n.fallbackLocale,
+  };
+
   kernel = {
     storage,
     get authored() {
@@ -130,6 +139,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     get policy() {
       return live.policy;
     },
+    i18n: engineLocale,
     rules,
     timeline,
     models,
@@ -166,6 +176,12 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
         kind: "config.reloaded",
         hash: live.authored.hash,
         mods: modRecordFromResolved(modCtx.overlay.ordered),
+        i18n: {
+          locale: engineLocale.locale,
+          promptLocale: engineLocale.promptLocale,
+          outputLocale: engineLocale.outputLocale,
+          contentLocale: engineLocale.contentLocale,
+        },
       },
     ]);
   }
@@ -310,6 +326,10 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     info: () => ({
       preset: live.authored.config.preset,
       language: live.authored.world.language,
+      locale: engineLocale.locale,
+      promptLocale: engineLocale.promptLocale,
+      outputLocale: engineLocale.outputLocale,
+      contentLocale: engineLocale.contentLocale,
       branch: timeline.branch().name,
       sessionId: timeline.sessionId,
       models: { s1: models.s1.id, s2: models.s2.id },

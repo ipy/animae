@@ -23,6 +23,7 @@
     "smoke:ollama": "bun run scripts/smoke-ollama.ts"
   },
   "dependencies": {
+    "@animae/i18n": "workspace:*",
     "@ai-sdk/anthropic": "^4.0.92",
     "@ai-sdk/deepseek": "^3.0.76",
     "@ai-sdk/google": "^4.0.108",

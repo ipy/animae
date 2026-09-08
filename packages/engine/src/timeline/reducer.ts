@@ -333,9 +333,14 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
       break;
     }
     case "config.reloaded": {
-      const p = pl<{ hash: string; mods?: { id: string; version: string; contentHash: string }[] } & EngineEvent>(e);
+      const p = pl<{
+        hash: string;
+        mods?: { id: string; version: string; contentHash: string }[];
+        i18n?: { locale: string; promptLocale: string; outputLocale: string; contentLocale: string };
+      } & EngineEvent>(e);
       s.config.hash = p.hash;
       if (p.mods) s.config.mods = p.mods;
+      if (p.i18n) s.config.i18n = p.i18n;
       break;
     }
     case "utterance":

@@ -1,0 +1,17 @@
+{
+  "storage.path_escape": "Path escapes data root: {path}",
+  "storage.locked": "Storage locked by pid {pid}",
+  "config.invalid": "Invalid configuration",
+  "import.empty": "Empty import file",
+  "import.hash_mismatch": "Hash mismatch for {path}",
+  "dice.invalid": "Invalid dice expression: {detail}",
+  "time.backwards": "world.advance cannot move time backwards",
+  "world.var_invalid": "world.set path must be non-empty",
+  "emit.failed": "Event did not persist",
+  "location.unknown": "Unknown location \"{location}\"",
+  "offscreen.entity": "catchUp supports location and character entities only",
+  "character.unknown": "Unknown character \"{id}\"",
+  "schedule.unknown": "No schedule item \"{id}\"",
+  "not_found": "Not found: {detail}",
+  "entity.duplicate": "Entity already exists: {detail}"
+}

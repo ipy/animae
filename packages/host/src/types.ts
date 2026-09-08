@@ -15,6 +15,24 @@ export interface HostArgField {
   placeholder?: string;
 }
 
+/** Mirrors TUI `OverlayId` — host-neutral overlay names for remote UIs. */
+export type HostOverlayId =
+  | "help"
+  | "eventLog"
+  | "timeline"
+  | "explain"
+  | "inspector"
+  | "sidePanel"
+  | "loadSlots"
+  | "rewindConfirm"
+  | string;
+
+export type HostResolveFreeInputFn = (
+  text: string,
+  api: HostCommandApi,
+  focusTarget?: string,
+) => Promise<"turn" | "handled">;
+
 export interface HostCommandApi {
   engine: Engine;
   viewer: Viewer;
@@ -26,7 +44,17 @@ export interface HostCommandApi {
     fields?: string[];
   }): Promise<SceneId>;
   endScene(): Promise<void>;
+  attachScene?(id: SceneId): void;
   notify(text: string, level?: "info" | "warn" | "error"): void;
+  openOverlay(name: HostOverlayId): void;
+  closeOverlay(): void;
+  setMouseCapture(on: boolean): void;
+}
+
+export interface HostCommandUiBridge {
+  openOverlay(name: HostOverlayId): void;
+  closeOverlay(): void;
+  setMouseCapture(on: boolean): void;
 }
 
 export interface HostActionContext {
@@ -100,6 +128,11 @@ export interface HostSessionUiState {
   transcript: TranscriptEntry[];
   /** Max transcript entries retained server-side */
   transcriptLimit: number;
+  /** Active modal/overlay id for remote clients (null = closed). */
+  overlay?: HostOverlayId | null;
+  /** When side panel is opened, optional tab id for web/TUI sidebars. */
+  sidePanelTab?: string;
+  mouseCapture?: boolean;
 }
 
 export interface HostHeaderState {

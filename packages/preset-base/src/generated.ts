@@ -63,7 +63,7 @@ export const generatedBundle = {
         tracks: {
           affinity: {
             scope: "relation",
-            label: "好感",
+            label: "Affinity",
             min: 0,
             max: 100,
             initial: 50,
@@ -93,7 +93,7 @@ export const generatedBundle = {
           },
           trust: {
             scope: "relation",
-            label: "信任",
+            label: "Trust",
             min: 0,
             max: 100,
             initial: 50,
@@ -123,7 +123,7 @@ export const generatedBundle = {
           },
           mood: {
             scope: "self",
-            label: "情绪",
+            label: "Mood",
             min: -100,
             max: 100,
             initial: 0,

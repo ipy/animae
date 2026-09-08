@@ -242,10 +242,11 @@ export interface AppConfig {
   actions: import("../types.ts").TuiAction[];
   entityActions: import("../types.ts").EntityTuiAction[];
   theme: Theme;
-  onSceneEnd?: (report: unknown) => void;
+  onSceneEnd?: (report: unknown, api: CommandApi) => void | Promise<void>;
   header?: ComponentType<LayoutProps>;
   footer?: ComponentType<LayoutProps>;
   nameHints: string[];
+  resolveFreeInput?: import("../types.ts").ResolveFreeInputFn;
 }
 
 interface AppStateContextValue {
@@ -340,9 +341,12 @@ export function AppStateProvider({
       endScene: async () => {
         if (!state.sceneId) return;
         const report = await engine.scene.end(state.sceneId);
-        config.onSceneEnd?.(report);
+        await config.onSceneEnd?.(report, commandApi);
         dispatch({ type: "setScene", sceneId: undefined });
         dispatch({ type: "setChoices", choices: undefined });
+      },
+      attachScene: (id) => {
+        dispatch({ type: "setScene", sceneId: id });
       },
       notify,
       openOverlay,

@@ -22,6 +22,25 @@ mods:
   await storage.writeAtomic("world/world.yaml", "title: Base\nlanguage: en\n");
 }
 
+test("layered storage stat without base.stat", async () => {
+  const s = testStorage();
+  await seedMinimal(s);
+  await s.writeAtomic("world/world.yaml", "title: Base\nlanguage: en\n");
+  const baseNoStat = {
+    readText: (path: string) => s.readText(path),
+    writeAtomic: () => Promise.reject(new Error("ro")),
+    list: (dir: string) => s.list(dir),
+    listFiles: (dir: string) => s.listFiles(dir),
+    mkdir: () => Promise.reject(new Error("ro")),
+    remove: () => Promise.reject(new Error("ro")),
+    acquireLock: () => s.acquireLock(),
+    releaseLock: () => s.releaseLock(),
+  };
+  const layered = createLayeredStorage({ base: baseNoStat as never, modLayers: [] });
+  const st = await layered.stat("world/world.yaml");
+  expect(st?.size).toBeGreaterThan(0);
+});
+
 test("patch merge operators", () => {
   expect(applyPatchMerge([1], { $append: [2] })).toEqual([1, 2]);
   expect(applyPatchMerge([1, 2], { $prepend: [0] })).toEqual([0, 1, 2]);

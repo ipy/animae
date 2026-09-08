@@ -42,6 +42,7 @@ import { useActionRunner } from "../context/action-runner-context.tsx";
 import { applyTabAutocomplete } from "../components/AutocompletePopup.tsx";
 import { InputDraftProvider, useInputDraftActions } from "../context/input-draft-context.tsx";
 import { buildPaletteEntries } from "../utils/action-list.ts";
+import { TuiI18nProvider, useTuiI18n } from "../i18n/context.tsx";
 
 export interface TuiAppProps extends RunTuiOptions {
   onReady?: () => void;
@@ -90,6 +91,7 @@ export function TuiApp(props: TuiAppProps) {
       theme,
       onSceneEnd: props.onSceneEnd,
       nameHints: props.nameHints ?? [],
+      resolveFreeInput: props.resolveFreeInput,
     }),
     [
       cueRegistry,
@@ -100,6 +102,7 @@ export function TuiApp(props: TuiAppProps) {
       theme,
       props.onSceneEnd,
       props.nameHints,
+      props.resolveFreeInput,
     ],
   );
 
@@ -128,6 +131,8 @@ export function TuiApp(props: TuiAppProps) {
                 Layout={Layout}
                 exitOnCtrlC={props.exitOnCtrlC !== false}
                 nameHints={props.nameHints ?? []}
+                noSceneHint={props.noSceneHint}
+                initialUiLocale={props.uiLocale}
               />
             </MouseCaptureBridge>
           </AppStateProvider>
@@ -141,24 +146,31 @@ function TuiShell({
   Layout,
   exitOnCtrlC,
   nameHints,
+  noSceneHint,
+  initialUiLocale,
 }: {
   Layout: ComponentType<LayoutProps>;
   exitOnCtrlC: boolean;
   nameHints: string[];
+  noSceneHint?: string;
+  initialUiLocale?: string;
 }) {
   const { config } = useAppState();
   const dispatchMouse = useMouseDispatch();
   return (
-    <ActionRunnerProvider actions={config.actions} entityActions={config.entityActions}>
-      <InputDraftProvider>
-        <TuiShellInner
-          Layout={Layout}
-          exitOnCtrlC={exitOnCtrlC}
-          nameHints={nameHints}
-          dispatchMouse={dispatchMouse}
-        />
-      </InputDraftProvider>
-    </ActionRunnerProvider>
+    <TuiI18nProvider initialLocale={initialUiLocale}>
+      <ActionRunnerProvider actions={config.actions} entityActions={config.entityActions}>
+        <InputDraftProvider>
+          <TuiShellInner
+            Layout={Layout}
+            exitOnCtrlC={exitOnCtrlC}
+            nameHints={nameHints}
+            noSceneHint={noSceneHint}
+            dispatchMouse={dispatchMouse}
+          />
+        </InputDraftProvider>
+      </ActionRunnerProvider>
+    </TuiI18nProvider>
   );
 }
 
@@ -166,13 +178,16 @@ function TuiShellInner({
   Layout,
   exitOnCtrlC,
   nameHints,
+  noSceneHint,
   dispatchMouse,
 }: {
   Layout: ComponentType<LayoutProps>;
   exitOnCtrlC: boolean;
   nameHints: string[];
+  noSceneHint?: string;
   dispatchMouse: ReturnType<typeof useMouseDispatch>;
 }) {
+  const { t, setLocale: setUiLocale } = useTuiI18n();
   const app = useApp();
   const { engine, viewer, actor } = useEngineContext();
   const { state, dispatch, commandApi, config } = useAppState();
@@ -585,7 +600,11 @@ function TuiShellInner({
     const trimmed = line.trim();
     if (!trimmed) return;
     if (trimmed.startsWith(":")) {
-      const result = await runCommandLine(trimmed, commandApi, config.customCommands);
+      const result = await runCommandLine(
+        trimmed,
+        { ...commandApi, setUiLocale, t },
+        config.customCommands,
+      );
       if (result === "quit") void onQuit();
       clearDraft();
       dispatch({ type: "setAutocomplete", open: false });
@@ -619,7 +638,7 @@ function TuiShellInner({
     focus: state.focus,
     overlay: state.overlay,
     hasScene: Boolean(state.sceneId),
-    noSceneHint: "No active scene — use :help or :commands to explore.",
+    noSceneHint: noSceneHint ?? t("command.no_scene"),
   };
 
   return (

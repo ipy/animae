@@ -17,5 +17,6 @@ export type {
 } from "./types.ts";
 export { SessionHost, type SessionHostOptions, type ActionDescriptor } from "./session-host.ts";
 export { createHostCommandApi, setHostSceneId, type CommandApiState } from "./command-api.ts";
+export { COMMAND_API_METHODS, guardCommandApi, type CommandApiMethodName } from "./command-api-contract.ts";
 export { consumeTurnStream } from "./turn-consumer.ts";
 export { hostBuiltinCommands, runHostCommandLine } from "./builtin-commands.ts";

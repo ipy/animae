@@ -216,6 +216,7 @@ export function buildTestKernel(authored: Authored, policy = openPolicy()): Kern
     get policy() {
       return policy;
     },
+    i18n: { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
     rules,
     timeline,
     models: {} as Kernel["models"],

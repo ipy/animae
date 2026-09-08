@@ -6,8 +6,10 @@ import { listEntityActions } from "../utils/action-list.ts";
 import { Overlay } from "./Overlay.tsx";
 import { Clickable } from "./Clickable.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function EntityActionMenu() {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const { state, dispatch } = useAppState();
   const { entityActions, actionContext, runEntityAction } = useActionRunner();
@@ -20,8 +22,8 @@ export function EntityActionMenu() {
   );
 
   return (
-    <Overlay title={`目标 · ${entityId}`}>
-      <Text dimColor>Enter / 点击执行 · Esc 关闭</Text>
+    <Overlay title={t("entity_menu.title", { entityId })}>
+      <Text dimColor>{t("entity_menu.hint")}</Text>
       <Box flexDirection="column" marginTop={1}>
         {actions.map((a) => (
           <Clickable

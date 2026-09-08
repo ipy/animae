@@ -4,6 +4,8 @@ import { AnimaeConfigSchema } from "../schema/authored.ts";
 import { parseYaml } from "../store/util.ts";
 import { prepareModOverlay, type ModOverlayContext } from "../mods/prepare.ts";
 import type { ModBundle } from "../mod.ts";
+import { createLocaleOverlayStorage } from "../i18n/locale-storage.ts";
+import { resolveEngineI18n } from "../i18n/resolve-config.ts";
 
 export interface EngineModContext {
   overlay: ModOverlayContext;
@@ -11,6 +13,7 @@ export interface EngineModContext {
   configMods: string[];
   selection?: CreateEngineOptions["mods"];
   bundles: ModBundle[];
+  i18n: ReturnType<typeof resolveEngineI18n>;
 }
 
 export async function createEngineModContext(
@@ -19,7 +22,9 @@ export async function createEngineModContext(
 ): Promise<EngineModContext> {
   const configText = await baseStorage.readText("animae.yaml");
   const config = AnimaeConfigSchema.parse(parseYaml(configText ?? "{}"));
-  const { readStorage, ...overlay } = await prepareModOverlay(baseStorage, config.mods ?? [], {
+  const i18n = resolveEngineI18n(config.i18n, opts);
+  const localizedBase = createLocaleOverlayStorage({ base: baseStorage, localeChain: i18n.fallbackChain });
+  const { readStorage, ...overlay } = await prepareModOverlay(localizedBase, config.mods ?? [], {
     selection: opts.mods,
     bundles: opts.modBundles,
     engineVersion: "1.0.0",
@@ -30,6 +35,7 @@ export async function createEngineModContext(
     configMods: config.mods ?? [],
     selection: opts.mods,
     bundles: opts.modBundles ?? [],
+    i18n,
   };
 }
 

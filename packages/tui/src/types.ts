@@ -139,10 +139,16 @@ export interface CommandApi {
     fields?: string[];
   }): Promise<SceneId>;
   endScene(): Promise<void>;
+  /** Sync UI scene id when the engine already has an active scene (e.g. startup race). */
+  attachScene?(id: SceneId): void;
   notify(text: string, level?: "info" | "warn" | "error"): void;
   openOverlay(name: OverlayId): void;
   closeOverlay(): void;
   setMouseCapture(on: boolean): void;
+  /** @internal TUI i18n — set UI catalog locale (`:lang`). */
+  setUiLocale?(locale: string): void;
+  /** @internal TUI i18n — translate built-in chrome strings. */
+  t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
 }
 
 export interface CustomCommand {
@@ -168,6 +174,14 @@ export interface LayoutProps {
   noSceneHint: string;
 }
 
+export type ResolveFreeInputFn = (ctx: {
+  text: string;
+  choiceId?: string;
+  api: CommandApi;
+  focusTarget?: string;
+  dispatch?: (prompt: string, options: Array<{ id: string; label: string }>) => void;
+}) => Promise<"turn" | "handled">;
+
 export interface RunTuiOptions {
   engine: Engine;
   /** Terminal mouse reporting (xterm SGR). `auto` when TTY; `NO_MOUSE=1` disables. */
@@ -189,7 +203,7 @@ export interface RunTuiOptions {
   panels?: SidePanelSection[];
   header?: ComponentType<LayoutProps>;
   footer?: ComponentType<LayoutProps>;
-  onSceneEnd?: (report: unknown) => void;
+  onSceneEnd?: (report: unknown, api: CommandApi) => void | Promise<void>;
   initialMessage?: string;
   stdout?: NodeJS.WritableStream;
   stdin?: NodeJS.ReadableStream;
@@ -200,6 +214,12 @@ export interface RunTuiOptions {
   onReady?: () => void;
   /** Autocomplete hints for member names / nicknames (host-provided). */
   nameHints?: string[];
+  /** Shown in layout when no scene is active (host-provided copy). */
+  noSceneHint?: string;
+  /** BCP-47 UI locale for built-in TUI strings (default: negotiate from env). */
+  uiLocale?: string;
+  /** Free-roam text routing before rejecting input (game-provided). */
+  resolveFreeInput?: ResolveFreeInputFn;
 }
 
 export interface TranscriptCue {

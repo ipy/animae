@@ -88,6 +88,10 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
     mods: () => ({ mods: [], drift: false, provenance: {} }),
     info: () => ({
       language: "en",
+      locale: "en",
+      promptLocale: "zh-CN",
+      outputLocale: "en",
+      contentLocale: "en",
       branch: "main",
       sessionId: "sess",
       models: { s1: "s1", s2: "s2" },

@@ -24,6 +24,20 @@ export const ModelSpecSchema = z.strictObject({
 });
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 
+export const I18nConfigSchema = z.strictObject({
+  /** UI / CLI / player-facing locale (BCP-47) */
+  locale: z.string().default("en"),
+  /** LLM-internal prompt template locale (static prompt resources) */
+  promptLocale: z.string().default("zh-CN"),
+  /** player-facing generated text locale; defaults to `locale` */
+  outputLocale: z.string().optional(),
+  /** authored content overlay locale; defaults to `locale` */
+  contentLocale: z.string().optional(),
+  /** last-resort catalog locale */
+  fallbackLocale: z.string().default("en"),
+});
+export type I18nConfig = z.infer<typeof I18nConfigSchema>;
+
 export const AnimaeConfigSchema = z.strictObject({
   preset: z.string().optional(),
   seed: z.number().int().default(0),
@@ -31,6 +45,7 @@ export const AnimaeConfigSchema = z.strictObject({
   policies: z.array(z.string()).default([]),
   /** enabled content mod ids (see docs/mods.md); host may override via createEngine({ mods }) */
   mods: z.array(z.string()).default([]),
+  i18n: I18nConfigSchema.optional(),
 });
 /** Parsed config always includes `mods` (default `[]`); `mods?` on the type keeps test/fixture literals valid. */
 export type AnimaeConfig = Omit<z.infer<typeof AnimaeConfigSchema>, "mods"> & { mods?: string[] };
@@ -282,7 +297,7 @@ export const CardFrontmatterSchema = z.looseObject({
     .default({ motives: [], bottom_lines: [], taboos: [] }),
   lod: LodSchema.default("principal"),
   tags: Tags,
-  /** style prompt (文风) */
+  /** style prompt (writing voice) */
   style: z.string().optional(),
   x_import: z.unknown().optional(),
 });
@@ -397,4 +412,6 @@ export interface Authored {
   mods?: import("../mod.ts").ResolvedMod[];
   /** logical path -> layer that supplied merged content (after layered load) */
   modProvenance?: Record<string, import("../mod.ts").ModProvenanceEntry>;
+  /** missing $t: keys and string-table problems (non-fatal) */
+  localeWarnings?: string[];
 }

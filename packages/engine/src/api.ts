@@ -1,3 +1,4 @@
+import type { I18nConfig } from "./schema/authored.ts";
 import type { EmbeddingPort, ModelMode, ModelPort, StoragePort } from "./ports.ts";
 import type { PresetBundle } from "./preset.ts";
 import type { ModBundle, ModSelection, ModProvenanceEntry, ResolvedMod } from "./mod.ts";
@@ -23,6 +24,8 @@ export interface CreateEngineOptions {
   now?: () => Date;
   /** session id override (tests) */
   sessionId?: string;
+  /** overrides / extends `animae.yaml` `i18n:` */
+  i18n?: Partial<I18nConfig>;
 }
 
 export interface Engine {
@@ -107,7 +110,18 @@ export interface Engine {
   /** validates and (re)loads authored files; returns warnings */
   reload(): Promise<{ ok: boolean; errors: string[]; warnings: string[] }>;
   /** read-only info useful for UIs (not visibility filtered; contains no hidden state): engine/preset ids, language, models ids */
-  info(): { preset?: string; language: string; branch: string; sessionId: string; models: { s1: string; s2: string }; modelMode: ModelMode };
+  info(): {
+    preset?: string;
+    language: string;
+    locale: string;
+    promptLocale: string;
+    outputLocale: string;
+    contentLocale: string;
+    branch: string;
+    sessionId: string;
+    models: { s1: string; s2: string };
+    modelMode: ModelMode;
+  };
   /** enabled mods with provenance; `drift` when timeline record differs from current set */
   mods(): { mods: ResolvedMod[]; drift: boolean; driftMessage?: string; provenance: Record<string, ModProvenanceEntry> };
   close(): Promise<void>;

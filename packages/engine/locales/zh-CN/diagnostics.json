@@ -1,0 +1,7 @@
+{
+  "mod.drift": "当前启用的 mod 与时间线记录不一致",
+  "config.warning": "配置警告：{code}",
+  "locale.missing_string": "缺少内容翻译：{key}",
+  "output_language_directive": "所有面向玩家的叙述、对话与选项文本请使用 {language}（{tag}）。内部结构化字段可沿用当前工作语言。",
+  "prompt.working_language": "本请求的工作语言：{language}（{tag}）。"
+}

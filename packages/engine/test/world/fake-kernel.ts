@@ -262,6 +262,7 @@ export function createFakeKernel(opts?: Parameters<typeof minimalAuthored>[0] & 
     storage: {} as Kernel["storage"],
     authored,
     policy,
+    i18n: { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
     rules,
     timeline: timeline as unknown as Kernel["timeline"],
     models,

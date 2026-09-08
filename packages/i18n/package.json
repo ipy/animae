@@ -1,0 +1,22 @@
+{
+  "name": "@animae/i18n",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Internationalization for Animae (locales, ICU subset, tooling)",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "./browser": { "types": "./dist/browser.d.ts", "default": "./dist/browser.js" }
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test"
+  }
+}

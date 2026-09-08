@@ -1,6 +1,7 @@
 import type { Engine, Viewer } from "@animae/engine";
 import type { SceneId } from "@animae/engine";
-import type { HostCommandApi } from "./types.ts";
+import { guardCommandApi } from "./command-api-contract.ts";
+import type { HostCommandApi, HostCommandUiBridge } from "./types.ts";
 
 export interface CommandApiState {
   sceneId?: string;
@@ -13,8 +14,9 @@ export function createHostCommandApi(
   actor: string,
   state: CommandApiState,
   notify: (text: string, level?: "info" | "warn" | "error") => void,
+  ui: HostCommandUiBridge,
 ): HostCommandApi {
-  return {
+  const api: HostCommandApi = {
     engine,
     viewer,
     actor,
@@ -34,8 +36,21 @@ export function createHostCommandApi(
       state.sceneId = undefined;
       state.sceneParticipants = undefined;
     },
+    attachScene(id) {
+      state.sceneId = id;
+    },
     notify,
+    openOverlay(name) {
+      ui.openOverlay(name);
+    },
+    closeOverlay() {
+      ui.closeOverlay();
+    },
+    setMouseCapture(on) {
+      ui.setMouseCapture(on);
+    },
   };
+  return guardCommandApi(api);
 }
 
 export function setHostSceneId(state: CommandApiState, sceneId: SceneId | undefined): void {

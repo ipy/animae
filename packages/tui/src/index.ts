@@ -26,3 +26,5 @@ export { loadTheme } from "./theme/load.ts";
 export { defaultTheme } from "./theme/defaults.ts";
 export { defaultKeymap } from "./keymap/default.ts";
 export { createCueRegistry } from "./cues/registry.ts";
+export { createTuiI18n, tuiCatalogs } from "./i18n/tui-i18n.ts";
+export { localizeError } from "@animae/i18n";
