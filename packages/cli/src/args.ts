@@ -15,7 +15,7 @@ export type ParsedCli =
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "init"; dir: string; preset?: string; global: GlobalCliOptions }
-  | { kind: "validate"; global: GlobalCliOptions; mods?: string[] }
+  | { kind: "validate"; global: GlobalCliOptions; mods?: string[]; locale?: string }
   | { kind: "mods"; global: GlobalCliOptions; sub: "list" | "validate" | "explain"; path?: string; mods?: string[] }
   | { kind: "run"; global: GlobalCliOptions; scene?: string; withIds?: string[]; viewer?: string; theme?: string; plain?: boolean }
   | { kind: "inspect"; global: GlobalCliOptions; path: string; viewer?: string }
@@ -46,7 +46,7 @@ Usage:
 
 Commands:
   init <dir> [--preset <id>]     Create a new data root skeleton
-  validate [--mods a,b]          Load and validate authored data + policy (+ mods)
+  validate [--mods a,b] [--locale <tag>]  Load and validate authored data + policy (+ mods, UI string tables)
   mods list                      List mods under mods/
   mods validate [--mods a,b]     Validate mod manifests and dependency order
   mods explain <path>            Show which layer provided an authored path
@@ -170,12 +170,18 @@ export function parseCli(argv: string[]): ParsedCli {
     case "validate": {
       const { values } = parseArgs({
         args: rest,
-        options: { mods: { type: "string" } },
+        options: { mods: { type: "string" }, locale: { type: "string" } },
         allowPositionals: true,
       });
       const modsRaw = values.mods as string | undefined;
       const mods = modsRaw?.split(",").map((s) => s.trim()).filter(Boolean);
-      return { kind: "validate", global, mods: mods?.length ? mods : undefined };
+      const locale = (values.locale as string | undefined) ?? global.lang;
+      return {
+        kind: "validate",
+        global,
+        mods: mods?.length ? mods : undefined,
+        locale,
+      };
     }
     case "mods": {
       const sub = rest[0] as "list" | "validate" | "explain" | undefined;

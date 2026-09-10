@@ -1,4 +1,5 @@
-import type { Engine, TurnChunk, Viewer } from "@animae/engine";
+import type { Engine, JsonValue, TurnChunk, Viewer } from "@animae/engine";
+import type { LocalizableValue } from "@animae/i18n";
 import type { SceneId } from "@animae/engine";
 
 export type HostArgFieldType = "text" | "select" | "enum" | "number" | "entity";
@@ -45,10 +46,14 @@ export interface HostCommandApi {
   }): Promise<SceneId>;
   endScene(): Promise<void>;
   attachScene?(id: SceneId): void;
-  notify(text: string, level?: "info" | "warn" | "error"): void;
+  notify(text: LocalizableValue, level?: "info" | "warn" | "error"): void;
   openOverlay(name: HostOverlayId): void;
   closeOverlay(): void;
   setMouseCapture(on: boolean): void;
+  /** Viewer UI locale (web: per-client; TUI: `:lang` / `--lang`). */
+  locale?(): string;
+  /** Translate host catalog keys for the current viewer locale. */
+  t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
 }
 
 export interface HostCommandUiBridge {
@@ -89,6 +94,7 @@ export interface HostEntityAction {
 }
 
 export interface HostCommand {
+  /** `host` catalog key (e.g. `command.desc.help`); resolve with `api.t` for display. */
   description: string;
   usage?: string;
   run(args: string[], api: HostCommandApi): Promise<string | void>;
@@ -105,7 +111,9 @@ export interface TranscriptEntry {
   id: string;
   kind: "dialogue" | "narration" | "action" | "system" | "thought";
   speaker?: string;
-  text: string;
+  text: LocalizableValue;
+  /** Resolved copy + key for clients after `localizeSnapshot` (wire protocol). */
+  i18n?: { key: string; params?: Record<string, JsonValue> };
   complete: boolean;
   turnId?: string;
 }
@@ -123,7 +131,7 @@ export interface HostSessionUiState {
   focusTarget?: string;
   pending: boolean;
   speaking: boolean;
-  turnError?: string;
+  turnError?: LocalizableValue;
   choices?: HostChoiceState;
   transcript: TranscriptEntry[];
   /** Max transcript entries retained server-side */
@@ -136,7 +144,7 @@ export interface HostSessionUiState {
 }
 
 export interface HostHeaderState {
-  time?: { day: number; minute: number; label: string };
+  time?: { day: number; minute: number; label: LocalizableValue };
   location?: string;
   chapter?: string;
   branch?: string;

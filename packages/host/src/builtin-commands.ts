@@ -1,62 +1,69 @@
+import type { LocalizableValue } from "@animae/i18n";
 import type { HostCommand, HostCommandApi } from "./types.ts";
+
+function msg(key: string, params?: Record<string, string | number>): LocalizableValue {
+  return params ? { i18n: { key, params } } : { i18n: { key } };
+}
+
+function tr(api: HostCommandApi, key: string, params?: Record<string, string | number>): string {
+  return api.t?.(key, params) ?? key;
+}
 
 export const hostBuiltinCommands: Record<string, HostCommand> = {
   help: {
-    description: "Show command list",
+    description: "command.desc.help",
     run: async (_args, api) => {
-      api.notify(
-        ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help",
-      );
+      api.notify(msg("command.help_line"));
     },
   },
   save: {
-    description: "Save timeline slot",
+    description: "command.desc.save",
     run: async (_args, api) => {
       const slot = await api.engine.timeline.save();
-      api.notify(`Saved ${slot.label} @ ${slot.eventId}`);
+      api.notify(msg("command.saved", { label: slot.label, eventId: slot.eventId }));
     },
   },
   load: {
-    description: "Load save slot",
+    description: "command.desc.load",
     usage: ":load [slot]",
     run: async (args, api) => {
       if (args[0]) {
         await api.engine.timeline.load(args[0]!);
-        api.notify(`Loaded ${args[0]}`);
+        api.notify(msg("command.loaded", { slot: args[0]! }));
         return;
       }
       api.openOverlay("loadSlots");
-      api.notify("Open load UI or pass slot name", "warn");
+      api.notify(msg("command.load_ui_hint"), "warn");
     },
   },
   rewind: {
-    description: "Rewind to event",
+    description: "command.desc.rewind",
     usage: ":rewind <eventId>",
     run: async (args, api) => {
       const id = args[0];
       if (!id) {
-        api.notify("Usage: :rewind <eventId>", "warn");
+        api.notify(msg("command.rewind_usage"), "warn");
         return;
       }
       await api.engine.timeline.rewind(id);
-      api.notify(`Rewound to ${id}`);
+      api.notify(msg("command.rewound", { eventId: id }));
     },
   },
   branches: {
-    description: "List branches",
+    description: "command.desc.branches",
     run: async (_args, api) => {
       const branches = await api.engine.timeline.branches();
-      return branches.map((b) => b.name).join(", ") || "(none)";
+      return branches.map((b) => b.name).join(", ") || tr(api, "command.branches_none");
     },
   },
   explain: {
-    description: "Explain a turn",
+    description: "command.desc.explain",
     usage: ":explain [turnId]",
     run: async (args, api) => {
       const turnId = args[0];
       if (!turnId) {
         api.openOverlay("explain");
-        api.notify("Pass turnId to explain", "warn");
+        api.notify(msg("command.explain_hint"), "warn");
         return;
       }
       const ex = api.engine.explain(turnId, api.viewer);
@@ -64,13 +71,13 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
     },
   },
   query: {
-    description: "Query engine path",
+    description: "command.desc.query",
     usage: ":query <viewer> <path>",
     run: async (args, api) => {
       const [viewer, ...rest] = args;
       const path = rest.join(" ");
       if (!viewer || !path) {
-        api.notify("Usage: :query <viewer> <path>", "warn");
+        api.notify(msg("command.query_usage"), "warn");
         return;
       }
       const value = api.engine.query(viewer, path);
@@ -78,16 +85,16 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
     },
   },
   advance: {
-    description: "Advance world time",
+    description: "command.desc.advance",
     usage: ":advance <duration>",
     run: async (args, api) => {
       const dur = args.join(" ");
       if (!dur) {
-        api.notify("Usage: :advance <duration>", "warn");
+        api.notify(msg("command.advance_usage"), "warn");
         return;
       }
       await api.engine.world.advance(dur);
-      api.notify(`Advanced ${dur}`);
+      api.notify(msg("command.advanced", { duration: dur }));
     },
   },
 };
@@ -109,7 +116,7 @@ export async function runHostCommandLine(
   );
   const cmd = extra[name] ?? hostBuiltinCommands[name];
   if (!cmd) {
-    api.notify(`Unknown command: ${name}`, "warn");
+    api.notify(msg("command.unknown", { name }), "warn");
     return;
   }
   const out = await cmd.run(args, api);

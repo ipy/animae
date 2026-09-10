@@ -65,6 +65,8 @@ Generate TS from a directory: `bun scripts/gen-mod-bundle.ts` (see `packages/eng
 
 Same logical path: **later layer wins** (full file replace). **`*.patch.yaml`** deep-merges into the target. Character **`card.patch.yaml`** merges frontmatter; **`card.append.md`** appends to persona body.
 
+**Mod locale overlays:** After a mod layer wins on a path, the engine applies `mods/<modId>/locales/<locale>/…` the same way as root `locales/<locale>/…` (full replace, `.patch.yaml`, `card.append.md`). Use this for LLM-facing mod prose without CJK in neutral mod files.
+
 ### Patch operators
 
 Same as policy merge, plus:

@@ -8,5 +8,14 @@ export { findCjkStringLiterals } from "./cjk-scan.ts";
 export { runWithLocale, getRequestLocale, onLocaleChange, emitLocaleChange } from "./locale-context.ts";
 export { structuredMessage, formatStructuredMessage, type StructuredMessage } from "./structured-message.ts";
 export { localizeError, type LocalizableError } from "./localize-error.ts";
+export {
+  localizeValue,
+  localizeDeep,
+  isI18nRef,
+  isI18nEnvelope,
+  toI18nRef,
+  type I18nRef,
+  type LocalizableValue,
+} from "./localize-value.ts";
 export type { MessageKeyOf, ParamsForKey } from "./catalog-types.ts";
 export type * from "./types.ts";

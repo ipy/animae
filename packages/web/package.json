@@ -27,6 +27,7 @@
   "dependencies": {
     "@animae/engine": "workspace:*",
     "@animae/host": "workspace:*",
+    "@animae/i18n": "workspace:*",
     "zod": "^4.1.12"
   }
 }

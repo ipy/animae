@@ -8,7 +8,10 @@ export interface ResolvedEngineI18n {
   outputLocale: string;
   contentLocale: string;
   fallbackLocale: string;
+  /** UI / engine chrome string resolution */
   fallbackChain: readonly string[];
+  /** LLM-facing authored overlays + content string tables */
+  contentLocaleChain: readonly string[];
 }
 
 export function resolveEngineI18n(
@@ -25,13 +28,18 @@ export function resolveEngineI18n(
   };
   const locale = normalizeLocaleTag(merged.locale);
   const fallbackLocale = normalizeLocaleTag(merged.fallbackLocale);
+  const promptLocale = normalizeLocaleTag(merged.promptLocale);
   const chain = buildFallbackChain(locale, [fallbackLocale]);
+  const contentLocale = normalizeLocaleTag(merged.contentLocale ?? promptLocale);
+  const contentExtras = promptLocale !== contentLocale ? [promptLocale] : [];
+  const contentLocaleChain = buildFallbackChain(contentLocale, [...contentExtras, fallbackLocale]);
   return {
     locale,
-    promptLocale: normalizeLocaleTag(merged.promptLocale),
+    promptLocale,
     outputLocale: normalizeLocaleTag(merged.outputLocale ?? locale),
-    contentLocale: normalizeLocaleTag(merged.contentLocale ?? locale),
+    contentLocale,
     fallbackLocale,
     fallbackChain: chain,
+    contentLocaleChain,
   };
 }

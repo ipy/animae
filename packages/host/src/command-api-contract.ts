@@ -10,6 +10,8 @@ export const COMMAND_API_METHODS = [
   "openOverlay",
   "closeOverlay",
   "setMouseCapture",
+  "locale",
+  "t",
 ] as const;
 
 export type CommandApiMethodName = (typeof COMMAND_API_METHODS)[number];
@@ -22,6 +24,8 @@ const fnMethods = new Set<CommandApiMethodName>([
   "openOverlay",
   "closeOverlay",
   "setMouseCapture",
+  "locale",
+  "t",
 ]);
 
 export function guardCommandApi<T extends object>(api: T, label = "HostCommandApi"): T {

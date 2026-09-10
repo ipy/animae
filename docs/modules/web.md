@@ -27,3 +27,8 @@ Companion package **`@animae/host`** holds UI-agnostic `SessionHost` (commands, 
 - Snapshots are full-state for v1; `patch` message type is defined for future incremental updates.
 - Engine events broadcast on `event` messages (`engine.on("*")`).
 - Config secret masking is the host game's responsibility via `WebSessionHooks.configGet`.
+- Per-client UI locale: `hello.locale`, `hello_ok.locale`, `set_locale`, and `locale` ack messages; localized snapshots/errors/toasts via `runWithLocale` pattern inside `SessionRoom` (`broadcastLocalized`).
+
+## Changelog
+
+- **2026-10-30:** Per-client locale negotiation; `locale` server message; ref-client locale selector.

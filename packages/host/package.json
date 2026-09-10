@@ -20,7 +20,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@animae/engine": "workspace:*"
+    "@animae/engine": "workspace:*",
+    "@animae/i18n": "workspace:*"
   },
   "devDependencies": {
     "@animae/tui": "workspace:*"

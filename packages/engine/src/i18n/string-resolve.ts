@@ -57,6 +57,23 @@ function flattenStringTable(obj: Record<string, unknown>, prefix = ""): Record<s
   return out;
 }
 
+/** Lift `$t:key` to `{ i18n: { key } }` for late UI binding (does not read string tables). */
+export function liftStringRefs(value: unknown, path = ""): unknown {
+  if (typeof value === "string") {
+    const m = T_REF.exec(value.trim());
+    if (m) return { i18n: { key: m[1]! } };
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((v, i) => liftStringRefs(v, `${path}[${i}]`));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = liftStringRefs(v, path ? `${path}.${k}` : k);
+    return out;
+  }
+  return value;
+}
+
+/** Eager resolve for validate / tooling (uses `uiLocale` or `contentLocale` string tables). */
 export function resolveStringRefs(value: unknown, resolver: StringTableResolver, path = ""): unknown {
   if (typeof value === "string") {
     const m = T_REF.exec(value.trim());

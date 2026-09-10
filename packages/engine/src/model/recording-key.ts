@@ -21,6 +21,7 @@ export function recordingKey(
     maxSteps: req.maxSteps ?? (req.tools?.length ? 3 : 1),
     temperature: req.temperature,
     seed: req.seed,
+    recordingLocales: req.recordingLocales,
   };
   return sha256Hex(stableStringify(payload));
 }

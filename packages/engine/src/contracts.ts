@@ -55,6 +55,8 @@ export interface TurnCtx {
   text: string;
   choiceId?: string;
   autonomous: boolean;
+  /** Per-turn narration language override (web controller UI locale). */
+  outputLocale?: string;
   appraisal?: Appraisal;
   [k: string]: unknown;
 }

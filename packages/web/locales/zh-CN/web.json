@@ -1,0 +1,25 @@
+{
+  "error": {
+    "rate_limit": "消息过于频繁",
+    "parse": "JSON 无效",
+    "invalid_message": "消息无效",
+    "auth": "令牌无效",
+    "hello_required": "请先发送 hello",
+    "controller_taken": "已有控制端在线；可使用 force 接管",
+    "read_only": "旁观者无法控制会话",
+    "invalid": "请求无效",
+    "unsupported": "不可用",
+    "unknown": "未处理的消息类型",
+    "request_failed": "请求失败",
+    "branch_name_required": "branch 需要 name"
+  },
+  "role": {
+    "controller_lost": "其他客户端已接管此会话。"
+  },
+  "config": {
+    "reload_recommended": "配置已保存，建议重新加载。"
+  },
+  "locale": {
+    "unsupported": "不支持的语言：{locale}"
+  }
+}

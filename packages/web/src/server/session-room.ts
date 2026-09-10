@@ -1,10 +1,12 @@
 import type { ServerWebSocket } from "bun";
-import type { SessionHost } from "@animae/host";
+import { localizeSnapshot, type SessionHost } from "@animae/host";
 import { AnimaeError, type EngineEvent } from "@animae/engine";
+import { localizeDeep, localizeValue, matchAvailableLocale, runWithLocale, type FormatParams } from "@animae/i18n";
 import { ClientMessageSchema, type ServerMessage } from "../protocol/schemas.ts";
 import { diffSnapshot } from "./snapshot-diff.ts";
 import { WEB_PROTOCOL_VERSION } from "../protocol/version.ts";
 import type { WebSecurityConfig } from "./security.ts";
+import { WEB_SUPPORTED_LOCALES, createWebI18n, localeDisplayNames } from "../i18n/web-i18n.ts";
 
 export type ClientRole = "controller" | "spectator";
 
@@ -25,7 +27,10 @@ interface WsData {
   role: ClientRole;
   authenticated: boolean;
   messageTimes: number[];
+  locale: string;
 }
+
+type WebI18n = ReturnType<typeof createWebI18n>;
 
 export class SessionRoom {
   readonly sessionId: string;
@@ -35,16 +40,14 @@ export class SessionRoom {
 
   private seq = 0;
   private controllerId?: string;
-  /** Persistent client id (from hello) for the current controller connection. */
   private controllerClientId?: string;
-  /** After controller disconnect, prior clientId may preempt a new controller until this time (ms). */
   private releasedControllerClientId?: string;
   private releasedUntil = 0;
   private readonly controllerReclaimGraceMs = 12_000;
   private readonly clients = new Map<string, ServerWebSocket<WsData>>();
   private readonly patchBuffer: ServerMessage[] = [];
   private readonly patchBufferLimit = 500;
-  private lastSnapshotState?: Record<string, unknown>;
+  private lastLocalizedSnapshot = new Map<string, Record<string, unknown>>();
   private engineUnsubs: Array<() => void> = [];
 
   constructor(sessionId: string, host: SessionHost, security: WebSecurityConfig, hooks: WebSessionHooks = {}) {
@@ -88,13 +91,13 @@ export class SessionRoom {
         void this.pushSnapshot();
       },
       onToast: (level, text) => {
-        this.broadcast({
+        this.broadcastLocalized((i18n) => ({
           v: WEB_PROTOCOL_VERSION,
           type: "toast",
           seq: this.nextSeq(),
           level,
-          text,
-        });
+          text: String(localizeValue(text, i18n.t.bind(i18n))),
+        }));
       },
       onBusy: (active, requestId) => {
         this.broadcast({
@@ -111,13 +114,13 @@ export class SessionRoom {
     });
 
     const off = this.host.engine.on("*", (e: EngineEvent) => {
-      this.broadcast({
+      this.broadcastLocalized((i18n) => ({
         v: WEB_PROTOCOL_VERSION,
         type: "event",
         seq: this.nextSeq(),
         kind: e.kind,
-        payload: e,
-      });
+        payload: localizeDeep(e, i18n.t.bind(i18n)),
+      }));
     });
     this.engineUnsubs.push(off);
   }
@@ -141,7 +144,7 @@ export class SessionRoom {
   }
 
   private remember(msg: ServerMessage): void {
-    if (msg.type === "snapshot" || msg.type === "patch" || msg.type === "stream" || msg.type === "event") {
+    if (msg.type === "stream" || msg.type === "busy") {
       this.patchBuffer.push(msg);
       while (this.patchBuffer.length > this.patchBufferLimit) this.patchBuffer.shift();
     }
@@ -160,28 +163,54 @@ export class SessionRoom {
     }
   }
 
-  async pushSnapshot(forceFull = false): Promise<void> {
-    const state = await this.host.buildSnapshot();
-    if (!forceFull && this.lastSnapshotState) {
-      const ops = diffSnapshot(this.lastSnapshotState, state);
-      if (ops) {
-        this.lastSnapshotState = state;
-        this.broadcast({
-          v: WEB_PROTOCOL_VERSION,
-          type: "patch",
-          seq: this.nextSeq(),
-          ops,
-        });
-        return;
-      }
+  private broadcastLocalized(build: (i18n: WebI18n) => ServerMessage): void {
+    for (const ws of this.clients.values()) {
+      const i18n = this.i18nFor(ws);
+      this.send(ws, build(i18n));
     }
-    this.lastSnapshotState = state;
-    this.broadcast({
-      v: WEB_PROTOCOL_VERSION,
-      type: "snapshot",
-      seq: this.nextSeq(),
-      state,
-    });
+  }
+
+  private negotiateLocale(requested?: string): string {
+    const tag = requested ?? this.host.uiLocale?.() ?? "en";
+    return matchAvailableLocale(tag, WEB_SUPPORTED_LOCALES) ?? "en";
+  }
+
+  private i18nFor(ws: ServerWebSocket<WsData>): WebI18n {
+    return createWebI18n(ws.data.locale);
+  }
+
+  private localizeState(state: Record<string, unknown>, i18n: WebI18n): Record<string, unknown> {
+    return localizeSnapshot(state, i18n.t.bind(i18n));
+  }
+
+  async pushSnapshot(forceFull = false): Promise<void> {
+    const neutral = await this.host.buildSnapshot();
+    for (const ws of this.clients.values()) {
+      if (!ws.data.authenticated) continue;
+      const i18n = this.i18nFor(ws);
+      const state = this.localizeState(neutral, i18n);
+      const prev = this.lastLocalizedSnapshot.get(ws.data.id);
+      if (!forceFull && prev) {
+        const ops = diffSnapshot(prev, state);
+        if (ops) {
+          this.lastLocalizedSnapshot.set(ws.data.id, state);
+          this.send(ws, {
+            v: WEB_PROTOCOL_VERSION,
+            type: "patch",
+            seq: this.nextSeq(),
+            ops,
+          });
+          continue;
+        }
+      }
+      this.lastLocalizedSnapshot.set(ws.data.id, state);
+      this.send(ws, {
+        v: WEB_PROTOCOL_VERSION,
+        type: "snapshot",
+        seq: this.nextSeq(),
+        state,
+      });
+    }
   }
 
   replaySince(seq: number, ws: ServerWebSocket<WsData>): void {
@@ -193,6 +222,7 @@ export class SessionRoom {
   }
 
   registerClient(ws: ServerWebSocket<WsData>, id: string): void {
+    if (!ws.data.locale) ws.data.locale = "en";
     this.clients.set(id, ws);
   }
 
@@ -203,6 +233,7 @@ export class SessionRoom {
       this.controllerId = undefined;
     }
     this.clients.delete(id);
+    this.lastLocalizedSnapshot.delete(id);
   }
 
   private assignController(ws: ServerWebSocket<WsData>, clientId: string): void {
@@ -211,12 +242,13 @@ export class SessionRoom {
       const old = this.clients.get(prev);
       if (old) {
         old.data.role = "spectator";
+        const i18n = this.i18nFor(old);
         this.send(old, {
           v: WEB_PROTOCOL_VERSION,
           type: "role",
           seq: this.nextSeq(),
           role: "spectator",
-          message: "Another client took control of this session.",
+          message: i18n.t("role.controller_lost"),
         });
       }
     }
@@ -259,13 +291,21 @@ export class SessionRoom {
     return true;
   }
 
-  private err(ws: ServerWebSocket<WsData>, code: string, message: string, id?: string): void {
+  private err(
+    ws: ServerWebSocket<WsData>,
+    code: string,
+    messageKey: string,
+    params?: Record<string, unknown>,
+    id?: string,
+  ): void {
+    const i18n = this.i18nFor(ws);
     this.send(ws, {
       v: WEB_PROTOCOL_VERSION,
       type: "error",
       seq: this.nextSeq(),
       code,
-      message,
+      message: i18n.t(messageKey, params as FormatParams | undefined),
+      params,
       id,
     });
   }
@@ -284,7 +324,7 @@ export class SessionRoom {
   async handleMessage(ws: ServerWebSocket<WsData>, raw: string | Buffer): Promise<void> {
     const data = ws.data;
     if (!this.rateLimit(data)) {
-      this.err(ws, "RATE_LIMIT", "Too many messages");
+      this.err(ws, "RATE_LIMIT", "error.rate_limit");
       ws.close(1008, "rate limit");
       return;
     }
@@ -293,13 +333,13 @@ export class SessionRoom {
     try {
       parsed = JSON.parse(typeof raw === "string" ? raw : raw.toString("utf8"));
     } catch {
-      this.err(ws, "PARSE", "Invalid JSON");
+      this.err(ws, "PARSE", "error.parse");
       return;
     }
 
     const msg = ClientMessageSchema.safeParse(parsed);
     if (!msg.success) {
-      this.err(ws, "INVALID_MESSAGE", msg.error.message);
+      this.err(ws, "INVALID_MESSAGE", "error.invalid_message");
       return;
     }
 
@@ -307,12 +347,13 @@ export class SessionRoom {
 
     if (m.type === "hello") {
       if (this.security.authToken && m.token !== this.security.authToken) {
-        this.err(ws, "AUTH", "Invalid token");
+        this.err(ws, "AUTH", "error.auth");
         ws.close(1008, "auth");
         return;
       }
       const clientId = m.clientId ?? data.clientId ?? data.id;
       data.clientId = clientId;
+      data.locale = this.negotiateLocale(m.locale);
       const wantControl = (m.role ?? "controller") === "controller";
       if (wantControl) {
         data.role = this.tryHelloController(ws, clientId);
@@ -320,6 +361,7 @@ export class SessionRoom {
         data.role = "spectator";
       }
       data.authenticated = true;
+      const i18n = this.i18nFor(ws);
       this.send(ws, {
         v: WEB_PROTOCOL_VERSION,
         type: "hello_ok",
@@ -329,15 +371,46 @@ export class SessionRoom {
         controllerPresent: Boolean(this.controllerId),
         protocolVersion: WEB_PROTOCOL_VERSION,
         clientId,
+        locale: data.locale,
+        locales: localeDisplayNames(data.locale, WEB_SUPPORTED_LOCALES),
       });
-      await this.pushSnapshot();
+      this.send(ws, {
+        v: WEB_PROTOCOL_VERSION,
+        type: "locale",
+        seq: this.nextSeq(),
+        locale: data.locale,
+      });
+      await this.pushSnapshot(true);
       if (typeof m.resumeSeq === "number") this.replaySince(m.resumeSeq, ws);
+      return;
+    }
+
+    if (m.type === "set_locale") {
+      if (!data.authenticated) {
+        this.err(ws, "HELLO_REQUIRED", "error.hello_required", undefined, m.id);
+        return;
+      }
+      const next = matchAvailableLocale(m.locale, WEB_SUPPORTED_LOCALES);
+      if (!next) {
+        this.err(ws, "INVALID", "locale.unsupported", { locale: m.locale }, m.id);
+        return;
+      }
+      data.locale = next;
+      this.lastLocalizedSnapshot.delete(data.id);
+      await this.pushSnapshot(true);
+      this.send(ws, {
+        v: WEB_PROTOCOL_VERSION,
+        type: "locale",
+        seq: this.nextSeq(),
+        locale: next,
+      });
+      this.ok(ws, m.id, { locale: next });
       return;
     }
 
     if (m.type === "release_control") {
       if (!data.authenticated) {
-        this.err(ws, "HELLO_REQUIRED", "Send hello first", m.id);
+        this.err(ws, "HELLO_REQUIRED", "error.hello_required", undefined, m.id);
         return;
       }
       if (this.controllerId === data.id) {
@@ -359,7 +432,7 @@ export class SessionRoom {
 
     if (m.type === "claim_controller") {
       if (!data.authenticated) {
-        this.err(ws, "HELLO_REQUIRED", "Send hello first", m.id);
+        this.err(ws, "HELLO_REQUIRED", "error.hello_required", undefined, m.id);
         return;
       }
       const clientId = data.clientId;
@@ -378,12 +451,12 @@ export class SessionRoom {
         this.ok(ws, m.id, { role: "controller" });
         return;
       }
-      this.err(ws, "CONTROLLER_TAKEN", "Another controller is active; use force to take over", m.id);
+      this.err(ws, "CONTROLLER_TAKEN", "error.controller_taken", undefined, m.id);
       return;
     }
 
     if (!data.authenticated) {
-      this.err(ws, "HELLO_REQUIRED", "Send hello first");
+      this.err(ws, "HELLO_REQUIRED", "error.hello_required");
       return;
     }
 
@@ -402,140 +475,156 @@ export class SessionRoom {
       "ollama_models",
     ]);
     if (needsControl.has(m.type) && data.role !== "controller") {
-      this.err(ws, "READ_ONLY", "Spectators cannot control the session", "id" in m ? m.id : undefined);
+      this.err(ws, "READ_ONLY", "error.read_only", undefined, "id" in m ? m.id : undefined);
       return;
     }
 
     try {
       switch (m.type) {
-        case "ping":
-          this.send(ws, { v: WEB_PROTOCOL_VERSION, type: "pong", seq: this.nextSeq(), id: m.id });
-          break;
-        case "get_state": {
-          const state = await this.host.buildSnapshot();
-          this.ok(ws, m.id, { state });
-          break;
-        }
-        case "select_focus":
-          this.host.selectFocus(m.entityId);
-          await this.pushSnapshot();
-          if (m.id) this.ok(ws, m.id);
-          break;
-        case "input":
-          await this.host.submitInput(m.text, m.choiceId, m.id);
-          this.ok(ws, m.id);
-          break;
-        case "choose":
-          await this.host.submitInput("", m.choiceId, m.id);
-          this.ok(ws, m.id);
-          break;
-        case "command":
-          await this.host.runCommand(m.name, m.args, m.id);
-          this.ok(ws, m.id);
-          await this.pushSnapshot();
-          break;
-        case "action":
-          await this.host.runAction(m.actionId, m.args, m.entityId);
-          this.ok(ws, m.id);
-          await this.pushSnapshot();
-          break;
-        case "query": {
-          const value = await this.host.queryPath(m.path, m.viewer);
-          this.ok(ws, m.id, { value });
-          break;
-        }
-        case "rewind":
-          await this.host.engine.timeline.rewind(m.eventId);
-          this.ok(ws, m.id);
-          await this.pushSnapshot();
-          break;
-        case "branch": {
-          if (!m.name) {
-            this.err(ws, "INVALID", "branch requires name", m.id);
+          case "ping":
+            this.send(ws, { v: WEB_PROTOCOL_VERSION, type: "pong", seq: this.nextSeq(), id: m.id });
+            break;
+          case "get_state": {
+            const neutral = await this.host.buildSnapshot();
+            const state = this.localizeState(neutral, this.i18nFor(ws));
+            this.ok(ws, m.id, { state });
             break;
           }
-          await this.host.engine.timeline.switch(m.name);
-          this.ok(ws, m.id, { branch: this.host.engine.timeline.current() });
-          await this.pushSnapshot();
-          break;
-        }
-        case "save": {
-          const slot = await this.host.engine.timeline.save(m.label);
-          this.ok(ws, m.id, { slot });
-          break;
-        }
-        case "load":
-          if (m.slot) await this.host.engine.timeline.load(m.slot);
-          this.ok(ws, m.id);
-          await this.pushSnapshot();
-          break;
-        case "list_saves": {
-          const saves = await this.host.engine.timeline.saves();
-          this.ok(ws, m.id, { saves });
-          break;
-        }
-        case "config_get": {
-          if (!this.hooks.configGet) {
-            this.ok(ws, m.id, { config: {} });
+          case "select_focus":
+            this.host.selectFocus(m.entityId);
+            await this.pushSnapshot();
+            if (m.id) this.ok(ws, m.id);
+            break;
+          case "input":
+            await runWithLocale(this.i18nFor(ws), () =>
+              this.host.submitInput(m.text, m.choiceId, m.id, { outputLocale: ws.data.locale }),
+            );
+            this.ok(ws, m.id);
+            break;
+          case "choose":
+            await runWithLocale(this.i18nFor(ws), () =>
+              this.host.submitInput("", m.choiceId, m.id, { outputLocale: ws.data.locale }),
+            );
+            this.ok(ws, m.id);
+            break;
+          case "command":
+            await this.host.runCommand(m.name, m.args, m.id);
+            this.ok(ws, m.id);
+            await this.pushSnapshot();
+            break;
+          case "action":
+            await this.host.runAction(m.actionId, m.args, m.entityId);
+            this.ok(ws, m.id);
+            await this.pushSnapshot();
+            break;
+          case "query": {
+            const value = await this.host.queryPath(m.path, m.viewer);
+            this.ok(ws, m.id, { value });
             break;
           }
-          const config = await this.hooks.configGet(m.keys);
-          this.ok(ws, m.id, { config });
-          break;
-        }
-        case "config_set": {
-          if (!this.hooks.configSet) throw new Error("config_set not supported");
-          const meta = await this.hooks.configSet(m.patch, m.consent);
-          this.ok(ws, m.id, meta ?? undefined);
-          if (meta?.reloadRecommended) {
-            this.broadcast({
-              v: WEB_PROTOCOL_VERSION,
-              type: "toast",
-              seq: this.nextSeq(),
-              level: "warn",
-              text: meta.message ?? "Configuration saved; reload recommended.",
-            });
-          }
-          break;
-        }
-        case "models_probe": {
-          if (!this.hooks.modelsProbe) {
-            this.err(ws, "UNSUPPORTED", "models_probe not available", m.id);
+          case "rewind":
+            await this.host.engine.timeline.rewind(m.eventId);
+            this.ok(ws, m.id);
+            await this.pushSnapshot();
+            break;
+          case "branch": {
+            if (!m.name) {
+              this.err(ws, "INVALID", "error.branch_name_required", undefined, m.id);
+              break;
+            }
+            await this.host.engine.timeline.switch(m.name);
+            this.ok(ws, m.id, { branch: this.host.engine.timeline.current() });
+            await this.pushSnapshot();
             break;
           }
-          const result = await this.hooks.modelsProbe(m.slot);
-          this.ok(ws, m.id, result);
-          break;
-        }
-        case "ollama_models": {
-          if (!this.hooks.ollamaModels) {
-            this.err(ws, "UNSUPPORTED", "ollama_models not available", m.id);
+          case "save": {
+            const slot = await this.host.engine.timeline.save(m.label);
+            this.ok(ws, m.id, { slot });
             break;
           }
-          const result = await this.hooks.ollamaModels(m.baseURL);
-          this.ok(ws, m.id, result);
-          break;
-        }
-        case "content_pack_notice": {
-          if (!this.hooks.contentPackNotice) {
-            this.err(ws, "UNSUPPORTED", "content_pack_notice not available", m.id);
+          case "load":
+            if (m.slot) await this.host.engine.timeline.load(m.slot);
+            this.ok(ws, m.id);
+            await this.pushSnapshot();
+            break;
+          case "list_saves": {
+            const saves = await this.host.engine.timeline.saves();
+            this.ok(ws, m.id, { saves });
             break;
           }
-          const notice = await this.hooks.contentPackNotice(m.packId);
-          this.ok(ws, m.id, notice);
-          break;
-        }
-        case "cancel":
-          this.host.cancelActive(m.targetId ?? m.id);
-          this.ok(ws, m.id, { cancelled: true });
-          break;
-        default:
-          this.err(ws, "UNKNOWN", "Unhandled message type");
+          case "config_get": {
+            if (!this.hooks.configGet) {
+              this.ok(ws, m.id, { config: {} });
+              break;
+            }
+            const config = await this.hooks.configGet(m.keys);
+            this.ok(ws, m.id, { config });
+            break;
+          }
+          case "config_set": {
+            if (!this.hooks.configSet) throw new Error("config_set not supported");
+            const meta = await this.hooks.configSet(m.patch, m.consent);
+            this.ok(ws, m.id, meta ?? undefined);
+            if (meta?.reloadRecommended) {
+              this.broadcastLocalized((i18n) => ({
+                v: WEB_PROTOCOL_VERSION,
+                type: "toast",
+                seq: this.nextSeq(),
+                level: "warn",
+                text: meta.message ?? i18n.t("config.reload_recommended"),
+              }));
+            }
+            break;
+          }
+          case "models_probe": {
+            if (!this.hooks.modelsProbe) {
+              this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
+              break;
+            }
+            const result = await this.hooks.modelsProbe(m.slot);
+            this.ok(ws, m.id, result);
+            break;
+          }
+          case "ollama_models": {
+            if (!this.hooks.ollamaModels) {
+              this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
+              break;
+            }
+            const result = await this.hooks.ollamaModels(m.baseURL);
+            this.ok(ws, m.id, result);
+            break;
+          }
+          case "content_pack_notice": {
+            if (!this.hooks.contentPackNotice) {
+              this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
+              break;
+            }
+            const notice = await this.hooks.contentPackNotice(m.packId);
+            this.ok(ws, m.id, notice);
+            break;
+          }
+          case "cancel":
+            this.host.cancelActive(m.targetId ?? m.id);
+            this.ok(ws, m.id, { cancelled: true });
+            break;
+          default:
+            this.err(ws, "UNKNOWN", "error.unknown");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const i18n = this.i18nFor(ws);
       const code = err instanceof AnimaeError ? err.code : "REQUEST_FAILED";
-      this.err(ws, code, message, "id" in m ? m.id : undefined);
+      const params = err instanceof AnimaeError ? err.params : undefined;
+      const message =
+        err instanceof AnimaeError ? err.localizedMessage(i18n.t.bind(i18n)) : err instanceof Error ? err.message : String(err);
+      this.send(ws, {
+        v: WEB_PROTOCOL_VERSION,
+        type: "error",
+        seq: this.nextSeq(),
+        code,
+        message,
+        params,
+        id: "id" in m ? m.id : undefined,
+      });
     }
   }
 }

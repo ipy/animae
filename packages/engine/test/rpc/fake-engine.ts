@@ -86,6 +86,11 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
     exportCard: async () => "/tmp/card.acard.jsonl",
     reload: async () => ({ ok: true, errors: [], warnings: [] }),
     mods: () => ({ mods: [], drift: false, provenance: {} }),
+    setUiLocale: () => {},
+    display: {
+      resolve: (value) => value,
+      entityDisplayName: (id) => id,
+    },
     info: () => ({
       language: "en",
       locale: "en",

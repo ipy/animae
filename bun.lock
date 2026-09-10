@@ -8,6 +8,9 @@
         "@types/bun": "^1.4.4",
         "@types/node": "^26.6.6",
         "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
         "typescript": "^7.0.2",
       },
     },
@@ -19,10 +22,12 @@
       },
       "dependencies": {
         "@animae/engine": "workspace:*",
+        "@animae/host": "workspace:*",
+        "@animae/i18n": "workspace:*",
         "@animae/preset-base": "workspace:*",
         "@animae/preset-dnd": "workspace:*",
         "@animae/tui": "workspace:*",
-        "react-devtools-core": "^8.0.0",
+        "@animae/web": "workspace:*",
       },
     },
     "packages/engine": {
@@ -34,6 +39,7 @@
         "@ai-sdk/google": "^4.0.108",
         "@ai-sdk/openai": "^4.0.105",
         "@ai-sdk/openai-compatible": "^3.0.81",
+        "@animae/i18n": "workspace:*",
         "@marcbachmann/cel-js": "^8.0.0",
         "ai": "^7.0.157",
         "ollama-ai-provider-v2": "^4.1.0",
@@ -43,6 +49,30 @@
       "devDependencies": {
         "@ai-sdk/provider": "4.0.34",
       },
+    },
+    "packages/host": {
+      "name": "@animae/host",
+      "version": "1.0.0",
+      "dependencies": {
+        "@animae/engine": "workspace:*",
+        "@animae/i18n": "workspace:*",
+      },
+      "devDependencies": {
+        "@animae/tui": "workspace:*",
+      },
+    },
+    "packages/i18n": {
+      "name": "@animae/i18n",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/react-dom": "19",
+      },
+      "peerDependencies": {
+        "react": ">=18",
+      },
+      "optionalPeers": [
+        "react",
+      ],
     },
     "packages/preset-base": {
       "name": "@animae/preset-base",
@@ -66,11 +96,28 @@
       "version": "1.0.0",
       "dependencies": {
         "@animae/engine": "workspace:*",
-        "ink": "^8.0.0",
-        "react": "^19.3.1",
+        "@animae/i18n": "workspace:*",
         "string-width": "^8.3.0",
         "yaml": "^2.9.1",
         "zod": "^4.6.7",
+      },
+      "devDependencies": {
+        "ink": "8.0.0",
+        "react": "19.3.1",
+      },
+      "peerDependencies": {
+        "ink": "^8.0.0",
+        "react": ">=19.3.0",
+      },
+    },
+    "packages/web": {
+      "name": "@animae/web",
+      "version": "1.0.0",
+      "dependencies": {
+        "@animae/engine": "workspace:*",
+        "@animae/host": "workspace:*",
+        "@animae/i18n": "workspace:*",
+        "zod": "^4.1.12",
       },
     },
   },
@@ -95,11 +142,17 @@
 
     "@animae/engine": ["@animae/engine@workspace:packages/engine"],
 
+    "@animae/host": ["@animae/host@workspace:packages/host"],
+
+    "@animae/i18n": ["@animae/i18n@workspace:packages/i18n"],
+
     "@animae/preset-base": ["@animae/preset-base@workspace:packages/preset-base"],
 
     "@animae/preset-dnd": ["@animae/preset-dnd@workspace:packages/preset-dnd"],
 
     "@animae/tui": ["@animae/tui@workspace:packages/tui"],
+
+    "@animae/web": ["@animae/web@workspace:packages/web"],
 
     "@marcbachmann/cel-js": ["@marcbachmann/cel-js@8.0.0", "", { "bin": { "cel-evaluate": "bin/cel-evaluate.js" } }, "sha512-oaTrAziGr3zDLFiMt/yLU3nZuRMawyWQB5X1a0I7s9eGy3JYzX9l8ZXXHyMd64nzbeVFZTewuUShwsZQdK6UCA=="],
 
@@ -110,6 +163,8 @@
     "@types/node": ["@types/node@26.6.6", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog=="],
 
     "@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
+
+    "@types/react-dom": ["@types/react-dom@19.3.0", "", { "peerDependencies": { "@types/react": "^19.3.0" } }, "sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q=="],
 
     "@typescript/typescript-aix-ppc64": ["@typescript/typescript-aix-ppc64@7.0.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ=="],
 
@@ -216,6 +271,8 @@
     "react": ["react@19.3.1", "", {}, "sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw=="],
 
     "react-devtools-core": ["react-devtools-core@8.0.0", "", { "dependencies": { "shell-quote": "^1.6.1", "ws": "^7" } }, "sha512-DGXJX+sCn2zC3ZalHoJhmZJsvP4QTpERlmCQAOgExc4Vp74ywB9ZnO8992cKw5ZcOS5u8GtpchTUPbjTiu5zaw=="],
+
+    "react-dom": ["react-dom@19.3.1", "", { "dependencies": { "scheduler": "^0.28.0" }, "peerDependencies": { "react": "^19.3.1" } }, "sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ=="],
 
     "react-reconciler": ["react-reconciler@0.34.0", "", { "dependencies": { "scheduler": "^0.28.0" }, "peerDependencies": { "react": "^19.3.0" } }, "sha512-eVibvB1fc9j5Qf1KRkiM3GzRPBdjg2P6G6QV2f3P6Eb3OGMxRBhdg2rrUwjbV5JrQaJj8nOa8uajmmJA5tJWjQ=="],
 

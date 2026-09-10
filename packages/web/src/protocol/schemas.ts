@@ -15,6 +15,15 @@ export const ClientHelloSchema = z.object({
   token: z.string().optional(),
   /** Stable browser tab identity — survives reconnect for controller seat. */
   clientId: z.string().min(8).max(128).optional(),
+  /** BCP-47 UI locale for localized snapshots and errors. */
+  locale: z.string().min(2).max(32).optional(),
+});
+
+export const ClientSetLocaleSchema = z.object({
+  ...envelope,
+  type: z.literal("set_locale"),
+  id: requestId,
+  locale: z.string().min(2).max(32),
 });
 
 export const ClientClaimControllerSchema = z.object({
@@ -195,7 +204,15 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientClaimControllerSchema,
   ClientReleaseControlSchema,
   ClientPingSchema,
+  ClientSetLocaleSchema,
 ]);
+
+export const ServerLocaleSchema = z.object({
+  ...envelope,
+  type: z.literal("locale"),
+  seq: z.number().int().nonnegative(),
+  locale: z.string(),
+});
 
 export const ServerHelloOkSchema = z.object({
   ...envelope,
@@ -206,6 +223,8 @@ export const ServerHelloOkSchema = z.object({
   controllerPresent: z.boolean(),
   protocolVersion: z.number().int(),
   clientId: z.string().optional(),
+  locale: z.string(),
+  locales: z.array(z.object({ tag: z.string(), name: z.string() })),
 });
 
 export const ServerRoleSchema = z.object({
@@ -263,6 +282,7 @@ export const ServerErrorSchema = z.object({
   id: requestId.optional(),
   code: z.string(),
   message: z.string(),
+  params: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const ServerToastSchema = z.object({
@@ -306,6 +326,7 @@ export const ServerPongSchema = z.object({
 
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   ServerHelloOkSchema,
+  ServerLocaleSchema,
   ServerRoleSchema,
   ServerSnapshotSchema,
   ServerPatchSchema,

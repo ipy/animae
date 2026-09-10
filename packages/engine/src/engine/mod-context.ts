@@ -23,11 +23,12 @@ export async function createEngineModContext(
   const configText = await baseStorage.readText("animae.yaml");
   const config = AnimaeConfigSchema.parse(parseYaml(configText ?? "{}"));
   const i18n = resolveEngineI18n(config.i18n, opts);
-  const localizedBase = createLocaleOverlayStorage({ base: baseStorage, localeChain: i18n.fallbackChain });
+  const localizedBase = createLocaleOverlayStorage({ base: baseStorage, localeChain: i18n.contentLocaleChain });
   const { readStorage, ...overlay } = await prepareModOverlay(localizedBase, config.mods ?? [], {
     selection: opts.mods,
     bundles: opts.modBundles,
     engineVersion: "1.0.0",
+    contentLocaleChain: i18n.contentLocaleChain,
   });
   return {
     overlay,

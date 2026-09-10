@@ -15,7 +15,14 @@ function stubEngine(): Engine {
 }
 
 type FakeWs = {
-  data: { id: string; clientId: string; role: "controller" | "spectator"; authenticated: boolean; messageTimes: number[] };
+  data: {
+    id: string;
+    clientId: string;
+    role: "controller" | "spectator";
+    authenticated: boolean;
+    messageTimes: number[];
+    locale: string;
+  };
   send: (s: string) => void;
   sent: unknown[];
 };
@@ -23,7 +30,7 @@ type FakeWs = {
 function fakeWs(id: string, clientId: string): FakeWs {
   const sent: unknown[] = [];
   return {
-    data: { id, clientId, role: "spectator", authenticated: false, messageTimes: [] },
+    data: { id, clientId, role: "spectator", authenticated: false, messageTimes: [], locale: "en" },
     sent,
     send(s: string) {
       sent.push(JSON.parse(s));

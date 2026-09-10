@@ -19,6 +19,7 @@ interface WsData {
   role: "controller" | "spectator";
   authenticated: boolean;
   messageTimes: number[];
+  locale: string;
 }
 
 export interface CreateWebServerOptions {
@@ -95,6 +96,7 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
             role: "spectator" as const,
             authenticated: false,
             messageTimes: [] as number[],
+            locale: "en",
           },
         });
         if (!upgraded) return new Response("WebSocket upgrade failed", { status: 500 });

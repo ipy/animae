@@ -21,7 +21,7 @@ import { parseKnowledgeMarkdown } from "./knowledge.ts";
 import { crossReferenceAuthored } from "./validate.ts";
 import type { ModProvenanceEntry, ResolvedMod } from "../mod.ts";
 import { modFingerprint } from "../mods/resolve.ts";
-import { loadStringTables, resolveStringRefs } from "../i18n/string-resolve.ts";
+import { liftStringRefs, loadStringTables, resolveStringRefs } from "../i18n/string-resolve.ts";
 
 export async function loadAuthored(
   storage: StoragePort,
@@ -30,6 +30,11 @@ export async function loadAuthored(
     extraKnowledge?: Record<string, string>;
     resolvedMods?: ResolvedMod[];
     modProvenance?: Map<string, ModProvenanceEntry>;
+    /** Lift `$t:` to `{ i18n }` for runtime late UI binding (engine load). */
+    liftDisplayStrings?: boolean;
+    /** Eager-resolve `$t:` against UI string tables (validate / doctor only). */
+    validateDisplayLocaleChain?: readonly string[];
+    /** @deprecated use `validateDisplayLocaleChain` */
     localeChain?: readonly string[];
   },
 ): Promise<Authored> {
@@ -229,11 +234,14 @@ export async function loadAuthored(
     characters,
     templates,
   };
-  if (opts?.localeChain?.length) {
-    const resolver = await loadStringTables(storage, opts.localeChain);
+  const validateChain = opts?.validateDisplayLocaleChain ?? opts?.localeChain;
+  if (validateChain?.length) {
+    const resolver = await loadStringTables(storage, validateChain);
+    resolveStringRefs(loadedContent, resolver);
     localeWarnings = [...resolver.warnings];
-    loadedContent = resolveStringRefs(loadedContent, resolver) as typeof loadedContent;
-    localeWarnings.push(...resolver.warnings);
+  }
+  if (opts?.liftDisplayStrings) {
+    loadedContent = liftStringRefs(loadedContent) as typeof loadedContent;
   }
 
   const authored: Authored = {

@@ -12,6 +12,8 @@ export interface ModStorageLayer {
 export interface LayeredStorageOptions {
   base: StoragePort;
   modLayers: ModStorageLayer[];
+  /** BCP-47 chain for `mods/<id>/locales/<locale>/…` overlays (after mod file merge). */
+  contentLocaleChain?: readonly string[];
   /** filled on read: logical path -> winning layer */
   provenance?: Map<string, ModProvenanceEntry>;
 }
@@ -51,7 +53,7 @@ function mergeMarkdownWithPatch(content: string, patchYaml: string): string {
  * Read-only view: base authored tree with mod overlays applied in order (full file replace, then patch, then card append).
  */
 export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
-  const { base, modLayers, provenance } = opts;
+  const { base, modLayers, provenance, contentLocaleChain = [] } = opts;
 
   function setProv(path: string, entry: ModProvenanceEntry): void {
     provenance?.set(path, entry);
@@ -73,18 +75,50 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
     return [...set].sort();
   }
 
+  async function readModLocaleFile(prefix: string, locale: string, logicalPath: string): Promise<string | undefined> {
+    return base.readText(`${prefix}/locales/${locale}/${logicalPath}`);
+  }
+
+  async function applyModLocaleOverlays(
+    prefix: string,
+    logicalPath: string,
+    content: string | undefined,
+  ): Promise<string | undefined> {
+    if (content === undefined) return undefined;
+    let out = content;
+    for (const locale of contentLocaleChain) {
+      const full = await readModLocaleFile(prefix, locale, logicalPath);
+      if (full !== undefined) out = full;
+      const patchText = await readModLocaleFile(prefix, locale, patchPathFor(logicalPath));
+      if (patchText !== undefined) {
+        if (logicalPath.endsWith(".md")) out = mergeMarkdownWithPatch(out, patchText);
+        else if (logicalPath.endsWith(".yaml")) {
+          out = stringifyYaml(applyPatchMerge(parseYaml(out), parseYaml(patchText)));
+        }
+      }
+      const appendRel = appendPathFor(logicalPath);
+      if (appendRel) {
+        const append = await readModLocaleFile(prefix, locale, appendRel);
+        if (append !== undefined) out = `${out.trimEnd()}\n\n${append.trim()}\n`;
+      }
+    }
+    return out;
+  }
+
   async function resolveLogicalText(logicalPath: string): Promise<string | undefined> {
     if (isOverlayMetaPath(logicalPath)) return undefined;
 
     let content = await base.readText(logicalPath);
     let layer: ModProvenanceEntry = { layer: "base" };
     const appends: string[] = [];
+    let winningModPrefix: string | undefined;
 
     for (const mod of modLayers) {
       const full = await readModFile(base, mod.prefix, logicalPath);
       if (full !== undefined) {
         content = full;
         layer = { layer: "mod", id: mod.modId };
+        winningModPrefix = mod.prefix;
         appends.length = 0;
       }
       const patchRel = patchPathFor(logicalPath);
@@ -97,6 +131,7 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
           content = stringifyYaml(applyPatchMerge(baseDoc, parseYaml(patchText)));
         }
         layer = { layer: "mod", id: mod.modId };
+        winningModPrefix = mod.prefix;
       }
       const appendRel = appendPathFor(logicalPath);
       if (appendRel) {
@@ -104,8 +139,13 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
         if (appendText !== undefined) {
           appends.push(appendText);
           layer = { layer: "mod", id: mod.modId };
+          winningModPrefix = mod.prefix;
         }
       }
+    }
+
+    if (winningModPrefix && content !== undefined) {
+      content = await applyModLocaleOverlays(winningModPrefix, logicalPath, content);
     }
 
     if (content === undefined) return undefined;

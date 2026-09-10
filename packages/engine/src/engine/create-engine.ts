@@ -30,6 +30,9 @@ import { createMutationGate } from "./mutation-gate.ts";
 import { replayChunks } from "../timeline/replay.ts";
 import type { EventId, TurnChunk } from "../types.ts";
 import type { ModelMode } from "../ports.ts";
+import { message as systemMessage } from "../i18n/system-message.ts";
+import { StringTableCache } from "../i18n/string-table-cache.ts";
+import { normalizeLocaleTag } from "@animae/i18n";
 
 function sessionId(opts: CreateEngineOptions): string {
   return opts.sessionId ?? `sess_${Date.now().toString(36)}`;
@@ -46,7 +49,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     presets,
     resolvedMods: modCtx.overlay.ordered,
     modProvenance: modCtx.overlay.provenance,
-    localeChain: modCtx.i18n.fallbackChain,
+    liftDisplayStrings: true,
   });
   await seedAuthoredStatFingerprint(modCtx.readStorage, authored, storage);
   const seed = opts.seed ?? authored.config.seed ?? 1;
@@ -119,8 +122,16 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     s2: withRecording(rawModels.s2, timeline.recordings),
   };
 
-  const warn = (code: string, message: string, extra?: Record<string, unknown>) => {
-    void kernel.emit([{ kind: "config.warning", code, message, ...extra }]);
+  const warn = (code: string, messageText: string, extra?: Record<string, unknown>) => {
+    void kernel.emit([
+      {
+        kind: "config.warning",
+        code,
+        message: messageText,
+        systemMessage: systemMessage("config.warning", { code, ...extra }, "diagnostics"),
+        ...extra,
+      },
+    ]);
   };
 
   const engineLocale = {
@@ -130,6 +141,8 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     contentLocale: modCtx.i18n.contentLocale,
     fallbackLocale: modCtx.i18n.fallbackLocale,
   };
+  const stringTables = new StringTableCache(storage, engineLocale.fallbackLocale);
+  await stringTables.warm(modCtx.i18n.fallbackChain);
 
   kernel = {
     storage,
@@ -315,13 +328,35 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     },
     mods: () => {
       const current = live.authored.mods ?? [];
-      const { drift, message } = modDrift(timeline.state().config.mods, current);
+      const { drift, message: driftMsg } = modDrift(timeline.state().config.mods, current);
       return {
         mods: current,
         drift,
-        driftMessage: drift ? message : undefined,
+        driftMessage: drift ? driftMsg : undefined,
         provenance: live.authored.modProvenance ?? {},
       };
+    },
+    setUiLocale(locale: string) {
+      const tag = normalizeLocaleTag(locale);
+      engineLocale.locale = tag;
+      kernel.i18n = { ...engineLocale };
+      void stringTables.warm([tag, engineLocale.fallbackLocale]);
+    },
+    display: {
+      resolve(value, opts) {
+        const loc = normalizeLocaleTag(opts?.locale ?? engineLocale.locale);
+        return stringTables.resolveValue(loc, value);
+      },
+      entityDisplayName(entityId, opts) {
+        const loc = normalizeLocaleTag(opts?.locale ?? engineLocale.locale);
+        return stringTables.entityDisplayName(
+          loc,
+          timeline.state(),
+          catalog,
+          entityId,
+          { viewer: opts?.viewer, speaker: opts?.speaker },
+        );
+      },
     },
     info: () => ({
       preset: live.authored.config.preset,

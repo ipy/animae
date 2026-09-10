@@ -15,6 +15,10 @@ export function createHostCommandApi(
   state: CommandApiState,
   notify: (text: string, level?: "info" | "warn" | "error") => void,
   ui: HostCommandUiBridge,
+  i18n?: {
+    locale: () => string;
+    t: (key: string, params?: Record<string, string | number | boolean | null | undefined>) => string;
+  },
 ): HostCommandApi {
   const api: HostCommandApi = {
     engine,
@@ -48,6 +52,12 @@ export function createHostCommandApi(
     },
     setMouseCapture(on) {
       ui.setMouseCapture(on);
+    },
+    locale() {
+      return i18n?.locale() ?? "en";
+    },
+    t(key, params) {
+      return i18n?.t(key, params) ?? key;
     },
   };
   return guardCommandApi(api);

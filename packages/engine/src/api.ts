@@ -38,7 +38,15 @@ export interface Engine {
   };
   scene: {
     start(s: { location: string; participants: string[]; fields?: string[] }): Promise<SceneId>;
-    turn(t: { sceneId: SceneId; actor: string; text: string; addressee?: string; choiceId?: string }): AsyncIterable<TurnChunk>;
+    turn(t: {
+      sceneId: SceneId;
+      actor: string;
+      text: string;
+      addressee?: string;
+      choiceId?: string;
+      /** Per-turn player-facing narration language (defaults to engine `outputLocale`). */
+      outputLocale?: string;
+    }): AsyncIterable<TurnChunk>;
     end(sceneId: SceneId): Promise<SceneReport>;
   };
   entities: {
@@ -109,6 +117,13 @@ export interface Engine {
   exportCard(id: string): Promise<string>;
   /** validates and (re)loads authored files; returns warnings */
   reload(): Promise<{ ok: boolean; errors: string[]; warnings: string[] }>;
+  /** Switch UI/display string locale at runtime (does not reload content overlays or prompt scaffolding). */
+  setUiLocale(locale: string): void;
+  /** Resolve authored `$t:` / `{ i18n }` and catalog keys at a viewer UI locale. */
+  display: {
+    resolve(value: unknown, opts?: { locale?: string }): unknown;
+    entityDisplayName(entityId: string, opts?: { viewer?: string; speaker?: string; locale?: string }): string;
+  };
   /** read-only info useful for UIs (not visibility filtered; contains no hidden state): engine/preset ids, language, models ids */
   info(): {
     preset?: string;

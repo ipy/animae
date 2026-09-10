@@ -98,6 +98,7 @@ export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Pr
     history: i.history,
     fieldEffects: i.fieldEffects,
     actorText: i.actorText,
+    outputLocale: t.outputLocale,
     extraDynamic: [appraiseInstructions(k), hint && `Choice hint: type=${hint.expected_event_type} tags=${hint.tags.join(",")}`]
       .filter(Boolean)
       .join("\n\n"),
@@ -113,6 +114,11 @@ export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Pr
       maxOutputTokens: routerBudgetK(k).maxOutputTokens.s1,
       temperature: k.policy.render.temperature,
       seed: k.authored.config.seed,
+      recordingLocales: {
+        promptLocale: k.i18n.promptLocale,
+        outputLocale: t.outputLocale ?? k.i18n.outputLocale,
+        contentLocale: k.i18n.contentLocale,
+      },
     })) as Record<string, unknown>;
   } catch (err) {
     throw new AnimaeError("APPRAISE_FAILED", "Appraise model call failed", err);

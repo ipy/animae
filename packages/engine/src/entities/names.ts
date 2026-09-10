@@ -26,6 +26,17 @@ export function validateAliasLabel(label: string): void {
   }
 }
 
+/** Plain string for matching when authored fields use `$t:` / `{ i18n: { key } }` (late UI binding). */
+export function authoredFieldPlain(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const o = value as { i18n?: { key?: string }; $t?: string };
+    if (typeof o.$t === "string") return o.$t;
+    if (typeof o.i18n?.key === "string") return o.i18n.key;
+  }
+  return "";
+}
+
 export interface DisplayNameOptions {
   /** Viewer/context entity (for address-as overrides). */
   viewer?: CharacterId;
@@ -43,7 +54,8 @@ export function entityDisplayName(
   const def = catalog.character(entityId);
   const st = state.characters[entityId];
   if (state.retired?.[entityId]) {
-    return def?.card.identity.name ?? st?.name ?? entityId;
+    const n = def?.card.identity.name;
+    return authoredFieldPlain(n) || st?.name || entityId;
   }
   const alias = state.aliases?.[entityId] ?? emptyAliasState();
   if (opts?.speaker && opts.viewer) {
@@ -51,7 +63,11 @@ export function entityDisplayName(
     if (entry?.label) return entry.label;
   }
   if (alias.nickname?.label) return alias.nickname.label;
-  if (def?.card?.identity) return def.card.identity.nickname ?? def.card.identity.name;
+  if (def?.card?.identity) {
+    const nick = authoredFieldPlain(def.card.identity.nickname);
+    const name = authoredFieldPlain(def.card.identity.name);
+    return nick || name || entityId;
+  }
   return st?.name ?? entityId;
 }
 
@@ -95,10 +111,11 @@ export function resolveEntityRef(
     if (state.retired?.[def.id]) continue;
     if (opts?.scope && !opts.scope.includes(def.id)) continue;
     if (def.id === needle) consider(def.id, "id");
-    if (def.card.identity.name === needle || def.card.identity.name.toLowerCase() === needle.toLowerCase()) {
+    const canonical = authoredFieldPlain(def.card.identity.name);
+    if (canonical && (canonical === needle || canonical.toLowerCase() === needle.toLowerCase())) {
       consider(def.id, "canonical_name");
     }
-    const nick = def.card.identity.nickname;
+    const nick = authoredFieldPlain(def.card.identity.nickname);
     if (nick && (nick === needle || nick.toLowerCase() === needle.toLowerCase())) {
       consider(def.id, "card_nickname");
     }

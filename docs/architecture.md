@@ -71,7 +71,7 @@
 * **UI locale** (`i18n.locale`): all engine-produced system/UI strings (errors, CLI/TUI, validate/doctor, introspection labels). Resolved: explicit config / `createEngine` / CLI `--lang` → `ANIMAE_LOCALE` → `LC_*` / `LANG` → default `en`.
 * **Prompt locale** (`i18n.promptLocale`): static LLM scaffolding in `engine/src/prompts/<locale>/`; default `zh-CN` in config resolver (product tuning — not referenced in code strings). English set must stay in parity (`animae i18n check`).
 * **Output locale** (`i18n.outputLocale`, default UI locale): player-facing model text; render prompts append output-language directive from catalogs + `Intl.DisplayNames`.
-* **Content locale** (`i18n.contentLocale`, default output locale): `locales/<locale>/` overlays + `strings/<locale>.yaml` with `$t:` in authored YAML.
+* **Content locale** (`i18n.contentLocale`, default **prompt locale**): LLM-facing `locales/<locale>/` overlays (persona, knowledge, templates). Display `$t:` string tables resolve at **UI locale** via late binding (`liftStringRefs` → `{ i18n: { key } }` → `localize*` at presentation).
 * **No natural-language literals in TS** under `animae/` (CJK scan in CI); catalogs use neutral English keys (`error.config.invalid`). Full design: [`i18n.md`](./i18n.md).
 
 ### 4.1 Ids, time, RNG
@@ -174,3 +174,6 @@ Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/R
 * **Entity aliases:** `entity.alias_set` → `EngineState.aliases`; `Engine.entities.setAlias` / `Engine.setAlias`, `Engine.resolveEntity`; prompt `{{ name }}` / nickname-aware `entityDisplayName`.
 * **Dynamic entities:** `entity.spawned` (full validated spec + `data`), `entity.retired`; `Engine.spawnEntity`, `Engine.entities.generateFromBrief` (S2 + seeded procedural fallback); `EngineState.entitySeq` for `dyn-####` ids; hot reload preserves `generated` from timeline.
 * **Event decks:** authored `world/decks/*.yaml`; daily draw emits `deck.drawn` (+ optional `emit` drafts); state in `EngineState.decks`; deterministic weighted draw via `timeline.rng`.
+* **i18n:** `Engine.setUiLocale(locale)` — runtime UI/display locale only (content overlays + prompt scaffolding unchanged). `SystemMessage` + `message()` / `formatSystemMessage()` for language-neutral timeline copy; `config.warning` events add optional `systemMessage` alongside legacy `message`.
+* **Web protocol:** server → client `locale { locale }` after negotiated `hello` / successful `set_locale` (additive to `hello_ok` / `result`).
+* **i18n (display API):** `Engine.display.resolve(value, { locale? })`, `Engine.display.entityDisplayName(id, { locale?, viewer?, speaker? })`; `LocalizedMessage` + `renderMessage()`; `scene.turn({ outputLocale? })` per-turn narration language; model `recordingLocales` in recording keys; `validateContentLocalePresence` for the content lane when `locales/` exists.

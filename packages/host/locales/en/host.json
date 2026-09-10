@@ -1,0 +1,37 @@
+{
+  "command": {
+    "desc": {
+      "help": "Show command list",
+      "save": "Save timeline slot",
+      "load": "Load save slot",
+      "rewind": "Rewind to event",
+      "branches": "List branches",
+      "explain": "Explain a turn",
+      "query": "Query engine path",
+      "advance": "Advance world time"
+    },
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help",
+    "saved": "Saved {label} @ {eventId}",
+    "loaded": "Loaded {slot}",
+    "load_ui_hint": "Open load UI or pass slot name",
+    "rewind_usage": "Usage: :rewind <eventId>",
+    "rewound": "Rewound to {eventId}",
+    "branches_none": "(none)",
+    "explain_hint": "Pass turnId to explain",
+    "query_usage": "Usage: :query <viewer> <path>",
+    "advance_usage": "Usage: :advance <duration>",
+    "advanced": "Advanced {duration}",
+    "unknown": "Unknown command: {name}"
+  },
+  "error": {
+    "no_scene": "No active scene",
+    "turn_in_progress": "A turn is already in progress",
+    "no_focus": "Select an entity first",
+    "unknown_action": "Unknown action: {id}",
+    "unknown_entity_action": "Unknown entity action: {id}"
+  },
+  "header": {
+    "time_label": "Day {day} {time}",
+    "speaker_busy": "…"
+  }
+}

@@ -15,10 +15,20 @@ export interface ModOverlayContext {
 export async function prepareModOverlay(
   base: StoragePort,
   configMods: string[],
-  opts?: { selection?: ModSelection; bundles?: ModBundle[]; engineVersion?: string },
+  opts?: {
+    selection?: ModSelection;
+    bundles?: ModBundle[];
+    engineVersion?: string;
+    contentLocaleChain?: readonly string[];
+  },
 ): Promise<ModOverlayContext & { readStorage: StoragePort }> {
   const provenance = new Map<string, ModProvenanceEntry>();
   const { ordered, layers, bundles, warnings } = await resolveMods(base, configMods, opts);
-  const readStorage = createLayeredStorage({ base, modLayers: layers, provenance });
+  const readStorage = createLayeredStorage({
+    base,
+    modLayers: layers,
+    provenance,
+    contentLocaleChain: opts?.contentLocaleChain,
+  });
   return { ordered, bundles, layers, provenance, warnings, readStorage };
 }

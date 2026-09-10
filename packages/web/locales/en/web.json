@@ -1,0 +1,25 @@
+{
+  "error": {
+    "rate_limit": "Too many messages",
+    "parse": "Invalid JSON",
+    "invalid_message": "Invalid message",
+    "auth": "Invalid token",
+    "hello_required": "Send hello first",
+    "controller_taken": "Another controller is active; use force to take over",
+    "read_only": "Spectators cannot control the session",
+    "invalid": "Invalid request",
+    "unsupported": "Not available",
+    "unknown": "Unhandled message type",
+    "request_failed": "Request failed",
+    "branch_name_required": "branch requires name"
+  },
+  "role": {
+    "controller_lost": "Another client took control of this session."
+  },
+  "config": {
+    "reload_recommended": "Configuration saved; reload recommended."
+  },
+  "locale": {
+    "unsupported": "Unsupported locale: {locale}"
+  }
+}

@@ -44,7 +44,8 @@ function templatePartialGuidance(k: Kernel): string {
   return parts.length ? parts.join("\n\n") : "";
 }
 
-function outputLanguage(k: Kernel, speaker: CharacterId): string {
+function outputLanguage(k: Kernel, speaker: CharacterId, override?: string): string {
+  if (override) return override;
   const def = k.catalog.character(speaker);
   return def?.card.identity?.language ?? k.i18n.outputLocale ?? k.authored.world.language ?? "en";
 }
@@ -191,7 +192,7 @@ function joinStaticSections(sectionTexts: (string | false | undefined)[], maxCha
 
 function staticSegment(k: Kernel, i: PromptInput): string {
   const def = k.catalog.character(i.speaker);
-  const lang = outputLanguage(k, i.speaker);
+  const lang = outputLanguage(k, i.speaker, i.outputLocale);
   const rules = k.authored.world.rules_text?.trim() ?? "";
   const identity = def?.card.identity;
   const constraints = def?.card.constraints;

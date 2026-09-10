@@ -22,6 +22,7 @@ export interface RunTurnInput {
   text: string;
   choiceId?: string;
   autonomous?: boolean;
+  outputLocale?: string;
 }
 
 function rulesDeps(k: Kernel, p: Parameters<Kernel["celContext"]>[0]): RD {
@@ -96,6 +97,7 @@ async function* runTurnPipeline(
     text: input.text,
     choiceId: input.choiceId,
     autonomous: input.autonomous ?? false,
+    outputLocale: input.outputLocale,
   };
 
   const eventIds: EventId[] = [];

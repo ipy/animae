@@ -79,6 +79,7 @@ export async function checkHotReload(
       presets,
       resolvedMods: modCtx.overlay.ordered,
       modProvenance: modCtx.overlay.provenance,
+      liftDisplayStrings: true,
     });
     (nextAuthored as Authored & { _statFp?: string })._statFp = await statFingerprint(
       modCtx.readStorage,

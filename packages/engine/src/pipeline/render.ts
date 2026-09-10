@@ -198,6 +198,7 @@ async function runRenderStream(
     tracks: i.tracks,
     tiers: i.tiers,
     extraDynamic: i.extraDynamic,
+    outputLocale: t.outputLocale,
   });
 
   const schema = buildRenderSchema(k.policy);
@@ -219,6 +220,11 @@ async function runRenderStream(
       maxOutputTokens: routerBudgetK(k).maxOutputTokens[i.tier],
       temperature: k.policy.render.temperature,
       seed: k.authored.config.seed,
+      recordingLocales: {
+        promptLocale: k.i18n.promptLocale,
+        outputLocale: t.outputLocale ?? k.i18n.outputLocale,
+        contentLocale: k.i18n.contentLocale,
+      },
     })) {
       if (chunk.type === "tool") {
         parts.push({ type: "tool", name: chunk.name, input: chunk.input, output: chunk.output });

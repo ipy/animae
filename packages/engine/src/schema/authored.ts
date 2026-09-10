@@ -31,7 +31,7 @@ export const I18nConfigSchema = z.strictObject({
   promptLocale: z.string().default("zh-CN"),
   /** player-facing generated text locale; defaults to `locale` */
   outputLocale: z.string().optional(),
-  /** authored content overlay locale; defaults to `locale` */
+  /** LLM-facing authored overlay locale; defaults to `promptLocale` at resolve time */
   contentLocale: z.string().optional(),
   /** last-resort catalog locale */
   fallbackLocale: z.string().default("en"),

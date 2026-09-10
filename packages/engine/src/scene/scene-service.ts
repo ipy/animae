@@ -16,6 +16,7 @@ export interface SceneService {
     text: string;
     addressee?: string;
     choiceId?: string;
+    outputLocale?: string;
   }): AsyncIterable<TurnChunk>;
   end(sceneId: SceneId): Promise<SceneReport>;
 }
@@ -140,6 +141,7 @@ export function createSceneService(
           text: t.text,
           choiceId: t.choiceId,
           autonomous: false,
+          outputLocale: t.outputLocale,
         });
         await opts?.afterTurn?.();
 

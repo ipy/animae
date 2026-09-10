@@ -42,6 +42,8 @@ export interface PromptInput {
   actorText?: string;
   /** Extra dynamic instructions (e.g. mismatch retry). */
   extraDynamic?: string;
+  /** Per-turn player-facing generation language (defaults to engine `outputLocale`). */
+  outputLocale?: string;
 }
 
 /** Appraise stage input beyond `Kernel` + `TurnCtx`. */

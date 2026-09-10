@@ -17,7 +17,8 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 
 | `type` | Purpose |
 |--------|---------|
-| `hello` | `{ role?: "controller" \| "spectator", resumeSeq?, token?, clientId? }` |
+| `hello` | `{ role?: "controller" \| "spectator", resumeSeq?, token?, clientId?, locale? }` — optional BCP-47 UI locale (e.g. `"en"`, `"zh-CN"`) |
+| `set_locale` | `{ id, locale }` — switch this client's UI locale; server responds with `result` + fresh localized `snapshot` |
 | `claim_controller` | `{ id, force? }` — take the controller seat |
 | `release_control` | `{ id }` — voluntary spectator mode |
 | `input` | `{ id, text, choiceId? }` — player turn (controller) |
@@ -44,13 +45,15 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 
 | `type` | Purpose |
 |--------|---------|
-| `hello_ok` | `{ sessionId, role, controllerPresent, protocolVersion, seq }` |
+| `hello_ok` | `{ sessionId, role, controllerPresent, protocolVersion, seq, clientId?, locale, locales }` — `locale` is negotiated tag; `locales` is `{ tag, name }[]` supported list with native names (`Intl.DisplayNames`) |
+| `locale` | `{ locale }` — negotiated UI locale for this client (after `hello` or `set_locale`) |
 | `snapshot` | Full UI state (see below) |
 | `patch` | `{ ops: [{ op, path, value? }] }` — incremental snapshot updates when diff is small |
 | `stream` | Token-level narration/dialogue |
 | `event` | `{ kind, payload }` — engine timeline events |
-| `error` | `{ code, message, id? }` |
-| `toast` | `{ level, text }` |
+| `error` | `{ code, message, id?, params? }` — `message` localized per client; `code`/`params` stable for clients |
+| `toast` | `{ level, text }` — `text` localized per client |
+| `role` | `{ role, message? }` — optional localized `message` (e.g. controller lost) |
 | `busy` | `{ active, requestId?, progress? }` |
 | `result` | Request acknowledgement |
 | `pong` | Ping reply |
@@ -66,12 +69,12 @@ Core keys emitted by `@animae/host` `SessionHost.buildSnapshot()`:
   "scene": { "id", "active", "location", "speaker?", "participants?" },
   "header": { "time": { "day", "minute", "label" }, "location?", "chapter?", "branch?" },
   "footer": { "beat?", "budget?", "hints?" },
-  "transcript": [{ "id", "kind", "speaker?", "text", "complete", "turnId?" }],
+  "transcript": [{ "id", "kind", "speaker?", "text", "i18n?", "complete", "turnId?" }],
   "choices": { "choices": [{ "id", "text" }], "selected" },
   "focusTarget": "entity-id?",
   "pending": false,
   "turnError": "string?",
-  "actions": [{ "id", "label", "args?", "entityScoped?", "toolbar?" }],
+  "actions": [{ "id", "label", "i18n?", "args?", "entityScoped?", "toolbar?" }],
   "panels": { "<panelId>": { ... } },
   "roster": {},
   "jobs": {},
@@ -108,6 +111,43 @@ Core keys emitted by `@animae/host` `SessionHost.buildSnapshot()`:
   "kind": "game.achievement.unlocked",
   "payload": { "...": "EngineEvent envelope" }
 }
+```
+
+## Locale (additive, v1-compatible)
+
+1. Client sends `hello` with optional `locale` (BCP-47).
+2. Server negotiates against supported tags (`en`, `zh-CN`, …), stores locale per WebSocket client, and includes negotiated `locale` plus `locales: [{ tag, name }]` on `hello_ok`.
+3. Initial `snapshot` (and subsequent `patch` / per-client `get_state`) is localized for that client: header/footer labels, system transcript lines, action labels, panel display strings, `turnError`, etc.
+4. Client may send `set_locale { id, locale }` → `{ type: "locale", locale }`, `{ type: "result", id, ok: true, data: { locale } }`, plus a full localized `snapshot` for that client only.
+5. Machine fields stay neutral (`id`, `code`, `params`, entity ids, event kinds). Human-readable server fields (`error.message`, `toast.text`, snapshot display copy) are localized per client; broadcast paths (events, toasts) send **different JSON per client** when locales differ.
+6. When game/host state carries deferred copy, wire payloads include both resolved `text`/`label` and optional `i18n: { key, params? }` so the frontend can re-localize history after `set_locale` without rewriting the timeline. Server helper: `localizeSnapshot(state, t)` from `@animae/host`.
+
+Example messages:
+
+```json
+{ "v": 1, "type": "hello", "role": "controller", "clientId": "tab-abc12345", "locale": "zh-CN" }
+```
+
+```json
+{
+  "v": 1,
+  "type": "hello_ok",
+  "seq": 1,
+  "sessionId": "…",
+  "role": "controller",
+  "controllerPresent": true,
+  "protocolVersion": 1,
+  "locale": "zh-CN",
+  "locales": [{ "tag": "en", "name": "英语" }, { "tag": "zh-CN", "name": "中文（简体）" }]
+}
+```
+
+```json
+{ "v": 1, "type": "set_locale", "id": "loc1", "locale": "en" }
+```
+
+```json
+{ "v": 1, "type": "error", "code": "NO_SCENE", "message": "No active scene", "params": {} }
 ```
 
 ## Roles

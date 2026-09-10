@@ -1,0 +1,37 @@
+{
+  "command": {
+    "desc": {
+      "help": "显示命令列表",
+      "save": "保存时间线槽位",
+      "load": "加载存档",
+      "rewind": "回溯到事件",
+      "branches": "列出分支",
+      "explain": "解释某一回合",
+      "query": "查询引擎路径",
+      "advance": "推进世界时间"
+    },
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help",
+    "saved": "已保存 {label} @ {eventId}",
+    "loaded": "已加载 {slot}",
+    "load_ui_hint": "打开加载界面或传入存档名",
+    "rewind_usage": "用法：:rewind <eventId>",
+    "rewound": "已回溯至 {eventId}",
+    "branches_none": "（无）",
+    "explain_hint": "请传入 turnId 以查看说明",
+    "query_usage": "用法：:query <viewer> <path>",
+    "advance_usage": "用法：:advance <duration>",
+    "advanced": "时间推进 {duration}",
+    "unknown": "未知命令：{name}"
+  },
+  "error": {
+    "no_scene": "当前没有进行中的场景",
+    "turn_in_progress": "已有回合正在进行",
+    "no_focus": "请先选择一个实体",
+    "unknown_action": "未知操作：{id}",
+    "unknown_entity_action": "未知实体操作：{id}"
+  },
+  "header": {
+    "time_label": "第 {day} 天 {time}",
+    "speaker_busy": "…"
+  }
+}

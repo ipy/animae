@@ -2,6 +2,8 @@ import { join } from "node:path";
 import { engineCatalogs, promptLocaleParityKeys } from "@animae/engine";
 import { runI18nCheck, applyPseudoLocale, createI18n } from "@animae/i18n";
 import { tuiCatalogs } from "@animae/tui";
+import { hostPackageCatalogs } from "@animae/host";
+import { webPackageCatalogs } from "@animae/web";
 
 const ANIMae_ROOT = join(import.meta.dir, "../../..");
 
@@ -25,7 +27,7 @@ export async function runI18n(sub: string, rest: string[]): Promise<number> {
 }
 
 async function runI18nCheckCmd(): Promise<number> {
-  const catalogs = { ...engineCatalogs, ...tuiCatalogs };
+  const catalogs = { ...engineCatalogs, ...tuiCatalogs, ...hostPackageCatalogs, ...webPackageCatalogs };
   const result = await runI18nCheck({
     referenceLocale: "en",
     locales: ["zh-CN"],
@@ -34,6 +36,8 @@ async function runI18nCheckCmd(): Promise<number> {
       join(ANIMae_ROOT, "packages/engine/src"),
       join(ANIMae_ROOT, "packages/tui/src"),
       join(ANIMae_ROOT, "packages/cli/src"),
+      join(ANIMae_ROOT, "packages/host/src"),
+      join(ANIMae_ROOT, "packages/web/src"),
       join(ANIMae_ROOT, "packages/i18n/src"),
     ],
   });

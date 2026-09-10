@@ -1,7 +1,10 @@
 import type { Engine, Viewer } from "@animae/engine";
 import { AnimaeError } from "@animae/engine";
+import type { FormatParams, I18nInstance, LocalizableValue } from "@animae/i18n";
+import { localizeError } from "@animae/i18n";
 import { runHostCommandLine } from "./builtin-commands.ts";
 import { createHostCommandApi, setHostSceneId, type CommandApiState } from "./command-api.ts";
+import { createHostI18n } from "./i18n/host-i18n.ts";
 import { consumeTurnStream } from "./turn-consumer.ts";
 import type {
   HostAction,
@@ -17,6 +20,9 @@ import type {
 
 export interface SessionHostOptions {
   engine: Engine;
+  /** Default UI locale for host chrome (per-client web servers may localize snapshots separately). */
+  uiLocale?: string;
+  i18n?: I18nInstance;
   viewer?: Viewer;
   actor?: string;
   commands?: Record<string, HostCommand>;
@@ -63,6 +69,7 @@ export class SessionHost {
   private readonly footerFn?: SessionHostOptions["footerState"];
   private readonly sidePanelTabForCommand: Record<string, string>;
   private readonly resolveFreeInput?: import("./types.ts").HostResolveFreeInputFn;
+  private i18n: I18nInstance;
 
   private activeTurnAbort?: AbortController;
   private activeRequestId?: string;
@@ -70,6 +77,7 @@ export class SessionHost {
 
   constructor(opts: SessionHostOptions) {
     this.engine = opts.engine;
+    this.i18n = opts.i18n ?? createHostI18n(opts.uiLocale);
     this.viewer = opts.viewer ?? "player";
     this.actor = opts.actor ?? "player";
     this.commands = opts.commands ?? {};
@@ -115,6 +123,10 @@ export class SessionHost {
       },
     };
 
+    const i18nBridge = {
+      locale: () => this.i18n.locale,
+      t: (key: string, params?: FormatParams) => this.i18n.t(key, params),
+    };
     this.commandApi = createHostCommandApi(
       this.engine,
       this.viewer,
@@ -125,6 +137,7 @@ export class SessionHost {
         this.streamCallbacks.onToast?.(level ?? "info", text);
       },
       uiBridge,
+      i18nBridge,
     );
 
     if (opts.initialMessage) {
@@ -149,7 +162,15 @@ export class SessionHost {
     this.ui.hasScene = Boolean(sid);
   }
 
-  private appendSystemLine(text: string, _level?: "info" | "warn" | "error"): void {
+  setUiLocale(locale: string): void {
+    this.i18n = createHostI18n(locale);
+  }
+
+  uiLocale(): string {
+    return this.i18n.locale;
+  }
+
+  private appendSystemLine(text: LocalizableValue, _level?: "info" | "warn" | "error"): void {
     this.ui.transcript.push({
       id: `sys_${++systemLineSeq}`,
       kind: "system",
@@ -200,7 +221,8 @@ export class SessionHost {
     return out;
   }
 
-  async buildSnapshot(): Promise<Record<string, unknown>> {
+  async buildSnapshot(opts?: { locale?: string }): Promise<Record<string, unknown>> {
+    if (opts?.locale) this.setUiLocale(opts.locale);
     this.syncSceneFlag();
     const header = this.headerFn
       ? await this.headerFn({ engine: this.engine, viewer: this.viewer })
@@ -226,7 +248,7 @@ export class SessionHost {
         id: this.ui.sceneId,
         active: this.ui.hasScene,
         location: this.engine.query(this.viewer, "world.location"),
-        speaker: this.ui.speaking ? "…" : undefined,
+        speaker: this.ui.speaking ? ({ i18n: { key: "header.speaker_busy" } } satisfies LocalizableValue) : undefined,
         participants,
       },
       header,
@@ -306,21 +328,43 @@ export class SessionHost {
     const ctx = this.actionContext(entityId ?? this.ui.focusTarget);
     if (actionId.startsWith("entity:")) {
       const eid = entityId ?? this.ui.focusTarget;
-      if (!eid) throw new AnimaeError("NO_FOCUS", "Select an entity first");
+      if (!eid) {
+        throw new AnimaeError("NO_FOCUS", "NO_FOCUS", undefined, {
+          messageKey: "error.no_focus",
+          namespace: "host",
+        });
+      }
       const rawId = actionId.slice("entity:".length);
       const act = this.entityActions.find((a) => a.id === rawId);
-      if (!act) throw new AnimaeError("UNKNOWN_ACTION", `Unknown entity action: ${rawId}`);
+      if (!act) {
+        throw new AnimaeError("UNKNOWN_ACTION", "UNKNOWN_ACTION", undefined, {
+          messageKey: "error.unknown_entity_action",
+          namespace: "host",
+          params: { id: rawId },
+        });
+      }
       await act.run(ctx, eid, args);
     } else {
       const act = this.actions.find((a) => a.id === actionId);
-      if (!act) throw new AnimaeError("UNKNOWN_ACTION", `Unknown action: ${actionId}`);
+      if (!act) {
+        throw new AnimaeError("UNKNOWN_ACTION", "UNKNOWN_ACTION", undefined, {
+          messageKey: "error.unknown_action",
+          namespace: "host",
+          params: { id: actionId },
+        });
+      }
       await act.run(ctx, args);
     }
     this.syncSceneFlag();
     this.streamCallbacks.onStateChange?.();
   }
 
-  async submitInput(text: string, choiceId?: string, requestId?: string): Promise<void> {
+  async submitInput(
+    text: string,
+    choiceId?: string,
+    requestId?: string,
+    opts?: { outputLocale?: string },
+  ): Promise<void> {
     let sceneId = this.apiState.sceneId;
     if (!sceneId && this.resolveFreeInput) {
       const pick = choiceId && !text.trim() ? choiceId : text;
@@ -333,10 +377,16 @@ export class SessionHost {
       sceneId = this.apiState.sceneId;
     }
     if (!sceneId) {
-      throw new AnimaeError("NO_SCENE", "No active scene");
+      throw new AnimaeError("NO_SCENE", "NO_SCENE", undefined, {
+        messageKey: "error.no_scene",
+        namespace: "host",
+      });
     }
     if (this.ui.pending) {
-      throw new AnimaeError("TURN_IN_PROGRESS", "A turn is already in progress");
+      throw new AnimaeError("TURN_IN_PROGRESS", "TURN_IN_PROGRESS", undefined, {
+        messageKey: "error.turn_in_progress",
+        namespace: "host",
+      });
     }
 
     this.ui.pending = true;
@@ -352,6 +402,7 @@ export class SessionHost {
         actor: this.actor,
         text,
         choiceId,
+        outputLocale: opts?.outputLocale ?? this.i18n.locale,
       });
       await consumeTurnStream(stream, this.ui, {
         requestId,
@@ -359,9 +410,14 @@ export class SessionHost {
         abortSignal: this.activeTurnAbort?.signal,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.ui.turnError = msg;
-      this.appendSystemLine(msg, "error");
+      const localized = localizeError(err, this.i18n.t.bind(this.i18n));
+      let neutral: LocalizableValue = localized;
+      if (err instanceof AnimaeError && err.messageKey) {
+        const key = err.messageNamespace ? `${err.messageNamespace}:${err.messageKey}` : err.messageKey;
+        neutral = { i18n: { key, params: err.params } };
+      }
+      this.ui.turnError = neutral;
+      this.appendSystemLine(neutral, "error");
       throw err;
     } finally {
       this.ui.pending = false;
@@ -382,8 +438,13 @@ function defaultHeader(engine: Engine, viewer: Viewer): HostHeaderState {
   const t = engine.world.now();
   const h = Math.floor(t.minute / 60);
   const m = t.minute % 60;
+  const clock = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   return {
-    time: { day: t.day, minute: t.minute, label: `Day ${t.day} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}` },
+    time: {
+      day: t.day,
+      minute: t.minute,
+      label: { i18n: { key: "header.time_label", params: { day: t.day, time: clock } } },
+    },
     location: engine.query(viewer, "world.location") as string | undefined,
     branch: engine.timeline.current().name,
   };

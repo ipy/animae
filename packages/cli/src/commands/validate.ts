@@ -1,9 +1,11 @@
 import { validateDataRoot } from "../engine-open.ts";
 import { validateWithMods } from "./mods.ts";
 
-export async function runValidate(root: string, modIds?: string[]): Promise<number> {
+export async function runValidate(root: string, modIds?: string[], uiLocale?: string): Promise<number> {
   const result =
-    modIds !== undefined ? await validateWithMods(root, modIds) : await validateWithMods(root, undefined);
+    modIds !== undefined
+      ? await validateWithMods(root, modIds, uiLocale)
+      : await validateWithMods(root, undefined, uiLocale);
   for (const issue of result.issues) {
     process.stdout.write(`${issue.file}:${issue.path}: ${issue.message}\n`);
   }

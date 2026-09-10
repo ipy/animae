@@ -4,6 +4,6 @@ export const defaultEngineLocale: EngineLocaleConfig = {
   locale: "en",
   promptLocale: "zh-CN",
   outputLocale: "en",
-  contentLocale: "en",
+  contentLocale: "zh-CN",
   fallbackLocale: "en",
 };

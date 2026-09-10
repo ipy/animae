@@ -3,267 +3,145 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Animae Web Reference Client</title>
+    <title>Animae ref client</title>
     <style>
       :root {
         font-family: system-ui, sans-serif;
-        color-scheme: dark;
-        --bg: #0f1115;
-        --panel: #1a1d24;
-        --text: #e8eaed;
-        --muted: #9aa0a6;
-        --accent: #7cacf8;
-        --border: #2a2f3a;
-      }
-      * {
-        box-sizing: border-box;
+        line-height: 1.4;
       }
       body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        height: 100vh;
-        display: grid;
-        grid-template-rows: auto 1fr auto;
+        margin: 1rem;
+        max-width: 52rem;
       }
-      header,
-      footer {
-        padding: 0.5rem 1rem;
-        background: var(--panel);
-        border-bottom: 1px solid var(--border);
-        font-size: 0.85rem;
-      }
-      footer {
-        border-top: 1px solid var(--border);
-        border-bottom: none;
-      }
-      main {
-        display: grid;
-        grid-template-columns: 1fr 280px;
-        min-height: 0;
-      }
-      #transcript {
-        padding: 1rem;
-        overflow: auto;
-        line-height: 1.5;
-      }
-      .line {
-        margin: 0.35rem 0;
-      }
-      .line.system {
-        color: var(--muted);
-        font-style: italic;
-      }
-      .speaker {
-        color: var(--accent);
-        font-weight: 600;
-      }
-      aside {
-        border-left: 1px solid var(--border);
-        background: var(--panel);
-        padding: 0.75rem;
-        overflow: auto;
-        font-size: 0.85rem;
-      }
-      aside h2 {
-        margin: 0.5rem 0 0.25rem;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-      ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-      }
-      button.action {
-        width: 100%;
-        text-align: left;
-        margin: 0.15rem 0;
-        padding: 0.35rem 0.5rem;
-        background: #252932;
-        border: 1px solid var(--border);
-        color: var(--text);
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      button.action:hover {
-        border-color: var(--accent);
-      }
-      #input-row {
-        display: flex;
-        gap: 0.5rem;
-        padding: 0.75rem 1rem;
-        background: var(--panel);
-        border-top: 1px solid var(--border);
-      }
-      #text {
-        flex: 1;
+      #log {
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        border: 1px solid #ccc;
         padding: 0.5rem;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        background: #12151a;
-        color: var(--text);
+        min-height: 8rem;
+        max-height: 40vh;
+        overflow: auto;
       }
-      #send {
-        padding: 0.5rem 1rem;
-        border-radius: 4px;
-        border: none;
-        background: var(--accent);
-        color: #0f1115;
-        font-weight: 600;
-        cursor: pointer;
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
       }
-      .status-err {
-        color: #f28b82;
+      input[type="text"] {
+        flex: 1;
+        min-width: 12rem;
       }
     </style>
   </head>
   <body>
-    <header id="status">Connecting…</header>
-    <main>
-      <div id="transcript"></div>
-      <aside>
-        <h2>Roster</h2>
-        <ul id="roster"></ul>
-        <h2>Actions</h2>
-        <ul id="actions"></ul>
-      </aside>
-    </main>
-    <div id="input-row">
-      <input id="text" type="text" placeholder="Player line…" autocomplete="off" />
-      <button id="send" type="button">Send</button>
+    <h1>Animae ref client</h1>
+    <p>Minimal WebSocket UI for protocol smoke tests (locale + snapshot).</p>
+    <div class="row">
+      <label>UI locale
+        <select id="locale">
+          <option value="en">en</option>
+          <option value="zh-CN">zh-CN</option>
+        </select>
+      </label>
+      <button type="button" id="connect">Connect</button>
+      <span id="status">disconnected</span>
     </div>
-    <footer id="meta"></footer>
-    <script type="module">
-      const params = new URLSearchParams(location.search);
-      const token = params.get("token") ?? "";
-      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${wsProto}//${location.host}/ws`;
+    <div class="row">
+      <input id="input" type="text" placeholder="Player input (controller)" />
+      <button type="button" id="send">Send input</button>
+    </div>
+    <pre id="header">—</pre>
+    <div id="log"></div>
+    <script>
+      const qs = new URLSearchParams(location.search);
+      const wsUrl = qs.get("ws") || `ws://${location.host}/ws`;
+      const token = qs.get("token") || "";
+      const clientId = localStorage.getItem("animae.clientId") || `ref-${crypto.randomUUID().slice(0, 8)}`;
+      localStorage.setItem("animae.clientId", clientId);
 
+      let ws;
       let seq = 0;
       let req = 0;
-      const pending = new Map();
-      const transcriptEl = document.getElementById("transcript");
+
+      const logEl = document.getElementById("log");
       const statusEl = document.getElementById("status");
-      const rosterEl = document.getElementById("roster");
-      const actionsEl = document.getElementById("actions");
-      const metaEl = document.getElementById("meta");
-      const textEl = document.getElementById("text");
-      const sendBtn = document.getElementById("send");
+      const headerEl = document.getElementById("header");
+      const localeEl = document.getElementById("locale");
+
+      function log(line) {
+        logEl.textContent = `${logEl.textContent}${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
 
       function nextId() {
-        return `r${++req}`;
+        req += 1;
+        return `r${req}`;
       }
 
-      function appendLine(text, cls = "", speaker = "") {
-        const div = document.createElement("div");
-        div.className = `line ${cls}`;
-        if (speaker) {
-          const sp = document.createElement("span");
-          sp.className = "speaker";
-          sp.textContent = speaker + ": ";
-          div.appendChild(sp);
-        }
-        div.appendChild(document.createTextNode(text));
-        transcriptEl.appendChild(div);
-        transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      function send(msg) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify(msg));
       }
 
-      function renderSnapshot(state) {
-        metaEl.textContent = state.header?.time?.label ?? "";
-        rosterEl.innerHTML = "";
-        const roster = state.panels?.base?.roster ?? [];
-        for (const m of roster) {
-          const li = document.createElement("li");
-          li.textContent = `${m.displayName} · ${m.job}`;
-          rosterEl.appendChild(li);
-        }
-        actionsEl.innerHTML = "";
-        for (const a of state.actions ?? []) {
-          const li = document.createElement("li");
-          const btn = document.createElement("button");
-          btn.className = "action";
-          btn.type = "button";
-          btn.textContent = a.label;
-          btn.onclick = () => {
-            const id = nextId();
-            ws.send(
-              JSON.stringify({
-                v: 1,
-                type: "action",
-                id,
-                actionId: a.id,
-                args: {},
-              }),
-            );
-          };
-          li.appendChild(btn);
-          actionsEl.appendChild(li);
-        }
-        transcriptEl.innerHTML = "";
-        for (const t of state.transcript ?? []) {
-          appendLine(t.text, t.kind === "system" ? "system" : "", t.speaker ?? "");
-        }
+      function hello() {
+        send({
+          v: 1,
+          type: "hello",
+          role: "controller",
+          clientId,
+          locale: localeEl.value,
+          token: token || undefined,
+        });
       }
 
-      const ws = new WebSocket(wsUrl);
-      ws.onopen = () => {
-        ws.send(
-          JSON.stringify({
-            v: 1,
-            type: "hello",
-            role: "controller",
-            resumeSeq: seq,
-            token: token || undefined,
-          }),
-        );
-      };
+      localeEl.addEventListener("change", () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        send({ v: 1, type: "set_locale", id: nextId(), locale: localeEl.value });
+      });
 
-      ws.onmessage = (ev) => {
-        const msg = JSON.parse(ev.data);
-        if (msg.seq) seq = Math.max(seq, msg.seq);
-        switch (msg.type) {
-          case "hello_ok":
-            statusEl.textContent = `Connected · ${msg.role} · session ${msg.sessionId.slice(0, 8)}`;
-            break;
-          case "snapshot":
-            renderSnapshot(msg.state);
-            break;
-          case "stream":
-            if (msg.phase === "delta" && msg.text) appendLine(msg.text, "", msg.speaker ?? "");
-            break;
-          case "toast":
-            appendLine(msg.text, "system");
-            break;
-          case "error":
-            statusEl.innerHTML = `<span class="status-err">${msg.code}: ${msg.message}</span>`;
-            break;
-          case "result":
-            pending.delete(msg.id);
-            break;
-          default:
-            break;
-        }
-      };
+      document.getElementById("connect").addEventListener("click", () => {
+        if (ws) ws.close();
+        logEl.textContent = "";
+        ws = new WebSocket(wsUrl);
+        statusEl.textContent = "connecting…";
+        ws.onopen = () => {
+          statusEl.textContent = "connected";
+          hello();
+        };
+        ws.onclose = () => {
+          statusEl.textContent = "disconnected";
+        };
+        ws.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (typeof m.seq === "number" && m.seq > seq) seq = m.seq;
+          if (m.type === "hello_ok") {
+            localeEl.value = m.locale || localeEl.value;
+            log(`hello_ok locale=${m.locale}`);
+          }
+          if (m.type === "locale") {
+            localeEl.value = m.locale;
+            log(`locale ack ${m.locale}`);
+          }
+          if (m.type === "snapshot" && m.state?.header?.time?.label) {
+            headerEl.textContent = m.state.header.time.label;
+          }
+          if (m.type === "error") {
+            log(`error ${m.code}: ${m.message}`);
+          }
+          if (m.type === "result") {
+            log(`result ${m.id} ok=${m.ok}`);
+          }
+        };
+      });
 
-      ws.onclose = () => {
-        statusEl.textContent = "Disconnected";
-      };
-
-      function sendInput() {
-        const text = textEl.value.trim();
+      document.getElementById("send").addEventListener("click", () => {
+        const text = document.getElementById("input").value.trim();
         if (!text) return;
-        const id = nextId();
-        ws.send(JSON.stringify({ v: 1, type: "input", id, text }));
-        textEl.value = "";
-        appendLine(text, "", "player");
-      }
-
-      sendBtn.onclick = sendInput;
-      textEl.onkeydown = (e) => {
-        if (e.key === "Enter") sendInput();
-      };
+        send({ v: 1, type: "input", id: nextId(), text });
+      });
     </script>
   </body>
 </html>

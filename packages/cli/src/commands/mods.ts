@@ -2,6 +2,7 @@ import {
   AnimaeConfigSchema,
   FsStorage,
   createLayeredStorage,
+  createLocaleOverlayStorage,
   explainAuthoredPath,
   formatExplainLine,
   loadAuthored,
@@ -9,7 +10,9 @@ import {
   loadPolicy,
   parseYaml,
   prepareModOverlay,
+  resolveEngineI18n,
   resolveMods,
+  validateContentLocalePresence,
 } from "@animae/engine";
 import { fullPresetRegistry } from "../engine-open.ts";
 
@@ -64,14 +67,20 @@ export async function runModsExplain(root: string, path: string, modIds?: string
   return 0;
 }
 
-export async function validateWithMods(root: string, modIds?: string[]): Promise<{ ok: boolean; issues: { file: string; path: string; message: string }[] }> {
+export async function validateWithMods(
+  root: string,
+  modIds?: string[],
+  uiLocale?: string,
+): Promise<{ ok: boolean; issues: { file: string; path: string; message: string }[] }> {
   const storage = FsStorage(root);
   const registry = await fullPresetRegistry();
   const configText = await storage.readText("animae.yaml");
   const config = AnimaeConfigSchema.parse(parseYaml(configText ?? "{}"));
   const selection = modIds ?? config.mods;
+  const i18n = resolveEngineI18n(config.i18n, uiLocale ? { root, i18n: { locale: uiLocale } } : { root });
+  const localizedBase = createLocaleOverlayStorage({ base: storage, localeChain: i18n.contentLocaleChain });
   try {
-    const { readStorage, ordered, provenance } = await prepareModOverlay(storage, config.mods ?? [], {
+    const { readStorage, ordered, provenance } = await prepareModOverlay(localizedBase, config.mods ?? [], {
       selection,
       engineVersion: "1.0.0",
     });
@@ -79,7 +88,20 @@ export async function validateWithMods(root: string, modIds?: string[]): Promise
       presets: registry,
       resolvedMods: ordered,
       modProvenance: provenance,
+      validateDisplayLocaleChain: i18n.fallbackChain,
     });
+    const localeIssues = (authored.localeWarnings ?? []).map((message) => ({
+      file: "locales",
+      path: "(strings)",
+      message,
+    }));
+    const contentIssues = (await validateContentLocalePresence(storage, i18n.contentLocale)).map((message) => ({
+      file: "locales",
+      path: `(content:${i18n.contentLocale})`,
+      message,
+    }));
+    const allLocale = [...localeIssues, ...contentIssues];
+    if (allLocale.length) return { ok: false, issues: allLocale };
     await loadPolicy(readStorage, authored.config, registry, {
       authoredFields: Object.fromEntries(Object.entries(authored.fields).map(([id, f]) => [id, { level: f.level }])),
     });

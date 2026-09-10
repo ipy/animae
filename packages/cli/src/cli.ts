@@ -34,7 +34,7 @@ export async function runCli(argv: string[], _env: Record<string, string | undef
       case "init":
         return runInit({ dir: parsed.dir, preset: parsed.preset });
       case "validate":
-        return runValidate(parsed.global.root, parsed.mods);
+        return runValidate(parsed.global.root, parsed.mods, parsed.locale);
       case "mods":
         if (parsed.sub === "list") return runModsList(parsed.global.root);
         if (parsed.sub === "validate") return runModsValidate(parsed.global.root, parsed.mods);

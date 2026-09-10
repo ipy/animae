@@ -147,6 +147,8 @@ export interface CommandApi {
   setMouseCapture(on: boolean): void;
   /** @internal TUI i18n — set UI catalog locale (`:lang`). */
   setUiLocale?(locale: string): void;
+  /** Current UI locale tag (BCP-47). */
+  locale?(): string;
   /** @internal TUI i18n — translate built-in chrome strings. */
   t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
 }

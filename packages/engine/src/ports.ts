@@ -64,6 +64,8 @@ export interface ModelRequestBase {
   temperature?: number;
   /** deterministic seed forwarded to providers that support it; part of the recording key */
   seed?: number;
+  /** locale tags affecting prompt text; included in recording keys for determinism audits */
+  recordingLocales?: { promptLocale: string; outputLocale: string; contentLocale: string };
 }
 
 export type StreamPart =
