@@ -8,9 +8,12 @@ import {
   createModelPort,
   createModelsFromConfig,
   createScriptedModel,
+  normalizeAnthropicBaseURL,
   recordingKey,
+  resolveAnthropicBaseURL,
   resolveApiKey,
   resolveOllamaProviderOptions,
+  resolveOpenAICompatibleProviderOptions,
   DEFAULT_OLLAMA_NUM_CTX,
   segmentsToMessages,
   streamFromObject,
@@ -64,6 +67,47 @@ describe("resolveOllamaProviderOptions", () => {
     expect(opts.num_ctx).toBe(DEFAULT_OLLAMA_NUM_CTX);
     const custom = resolveOllamaProviderOptions({ provider: "ollama", model: "x", options: { num_ctx: 16384 } });
     expect(custom.num_ctx).toBe(16384);
+  });
+});
+
+describe("resolveOpenAICompatibleProviderOptions", () => {
+  test("defaults reasoning_effort to none", () => {
+    expect(resolveOpenAICompatibleProviderOptions({ provider: "openai-compatible", model: "x" }).reasoning_effort).toBe(
+      "none",
+    );
+    expect(
+      resolveOpenAICompatibleProviderOptions({
+        provider: "openai-compatible",
+        model: "x",
+        options: { reasoning_effort: "medium" },
+      }).reasoning_effort,
+    ).toBe("medium");
+  });
+});
+
+describe("normalizeAnthropicBaseURL", () => {
+  test("appends /v1 for origin/prefix style URLs and keeps versioned URLs", () => {
+    expect(normalizeAnthropicBaseURL("http://localhost:8080/anthropic")).toBe("http://localhost:8080/anthropic/v1");
+    expect(normalizeAnthropicBaseURL("http://localhost:8080/anthropic/")).toBe("http://localhost:8080/anthropic/v1");
+    expect(normalizeAnthropicBaseURL("https://api.anthropic.com")).toBe("https://api.anthropic.com/v1");
+    expect(normalizeAnthropicBaseURL("https://api.anthropic.com/v1")).toBe("https://api.anthropic.com/v1");
+    expect(normalizeAnthropicBaseURL("https://gw.example/anthropic/v1/")).toBe("https://gw.example/anthropic/v1");
+    expect(normalizeAnthropicBaseURL("https://gw.example/anthropic/v1/messages")).toBe("https://gw.example/anthropic/v1");
+    expect(normalizeAnthropicBaseURL("  ")).toBeUndefined();
+    expect(normalizeAnthropicBaseURL(undefined)).toBeUndefined();
+  });
+
+  test("resolveAnthropicBaseURL normalises spec.baseURL and ANTHROPIC_BASE_URL", () => {
+    expect(resolveAnthropicBaseURL({ baseURL: "http://127.0.0.1:8080/anthropic" }, {})).toBe(
+      "http://127.0.0.1:8080/anthropic/v1",
+    );
+    expect(resolveAnthropicBaseURL({}, { ANTHROPIC_BASE_URL: "http://127.0.0.1:8080/anthropic" })).toBe(
+      "http://127.0.0.1:8080/anthropic/v1",
+    );
+    expect(resolveAnthropicBaseURL({ baseURL: "http://a/anthropic" }, { ANTHROPIC_BASE_URL: "http://b" })).toBe(
+      "http://a/anthropic/v1",
+    );
+    expect(resolveAnthropicBaseURL({}, {})).toBeUndefined();
   });
 });
 

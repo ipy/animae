@@ -85,10 +85,21 @@ export function createPreparsedStdin(underlying: NodeJS.ReadableStream): {
     if (parser.hasPendingEscape()) scheduleEscFlush();
   };
 
+  const onTerminalInputClosed = () => {
+    if (disposed) return;
+    onReadable();
+    dispose();
+    stream.end();
+  };
+
   const onReadable = () => {
+    if (disposed) return;
     clearTimer();
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     while (true) {
+      if ((underlying as NodeJS.ReadableStream & { readableEnded?: boolean }).readableEnded === true) {
+        break;
+      }
       const raw = underlying.read();
       if (raw === null) break;
       const chunk =
@@ -103,6 +114,9 @@ export function createPreparsedStdin(underlying: NodeJS.ReadableStream): {
   };
 
   underlying.on("readable", onReadable);
+  underlying.on("end", onTerminalInputClosed);
+  underlying.on("close", onTerminalInputClosed);
+  underlying.on("error", onTerminalInputClosed);
   if (underlying.readable) onReadable();
 
   const dispose = () => {
@@ -110,6 +124,9 @@ export function createPreparsedStdin(underlying: NodeJS.ReadableStream): {
     disposed = true;
     clearTimer();
     underlying.removeListener("readable", onReadable);
+    underlying.removeListener("end", onTerminalInputClosed);
+    underlying.removeListener("close", onTerminalInputClosed);
+    underlying.removeListener("error", onTerminalInputClosed);
     const tail = utf8Decoder.decode();
     if (tail) {
       const mouseParsed = parseSgrMouseChunk(mousePending, tail);

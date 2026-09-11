@@ -344,6 +344,7 @@ export function AppStateProvider({
         await config.onSceneEnd?.(report, commandApi);
         dispatch({ type: "setScene", sceneId: undefined });
         dispatch({ type: "setChoices", choices: undefined });
+        dispatch({ type: "setFocus", focus: "input" });
       },
       attachScene: (id) => {
         dispatch({ type: "setScene", sceneId: id });

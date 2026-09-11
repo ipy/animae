@@ -31,6 +31,19 @@ AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `ge
 
 Order: **static** (system, Anthropic cache bp 1) → **semiStatic** (system, bp 2) → **dynamic** (system, uncached) → **history** → **user**. OpenAI/Google rely on stable prefix ordering for automatic prefix caching; Anthropic uses `providerOptions.anthropic.cacheControl: { type: 'ephemeral' }` on the first two system blocks.
 
+## Anthropic base URL
+
+`baseURL` (or `ANTHROPIC_BASE_URL`) may be written the way the official SDKs expect — an origin or gateway prefix **without** `/v1` (e.g. `http://localhost:8080/anthropic`). The AI SDK provider only appends `/messages`, so the engine normalises the URL through `normalizeAnthropicBaseURL`: a missing `/v1` segment is added, an already-versioned URL (`https://api.anthropic.com/v1`) is kept, and a pasted full endpoint (`…/v1/messages`) is trimmed back to `…/v1`.
+
+## OpenAI-compatible gateways with split `reasoning` / `content`
+
+Some local proxies return `message.reasoning` with empty `content`, or stream deltas only on `reasoning`. The engine wraps `fetch` via `createReasoningAwareFetch` / `chainReasoningFetch`:
+
+- Injects `reasoning_effort: none` on outbound `/v1/chat/completions` JSON bodies when unset.
+- Promotes JSON from `reasoning` into `content` when `content` is empty; strips reasoning fields before the AI SDK parses responses.
+
+Defaults: `resolveOpenAICompatibleProviderOptions` sets `reasoning_effort: "none"` in `providerOptions.openaiCompatible` (SDK may not map it; fetch injection is authoritative).
+
 ## Recording
 
 Key: `sha256(stableJson({ model: port.id, label, segments, schema JSON Schema fingerprint, tool names, maxOutputTokens, maxSteps, temperature, seed }))`.

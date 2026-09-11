@@ -9,6 +9,7 @@ import { AnimaeError } from "../types.ts";
 import type { ModelSpec } from "../schema/authored.ts";
 import type { ModelWarningSink } from "./warnings.ts";
 import { warnMissingApiKey } from "./warnings.ts";
+import { chainReasoningFetch } from "./reasoning-fetch.ts";
 
 const DEFAULT_KEY_ENV: Record<ModelSpec["provider"], string | undefined> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -66,6 +67,16 @@ export function resolveOllamaProviderOptions(spec: ModelSpec): Record<string, un
   return opts;
 }
 
+/**
+ * OpenAI-compatible gateways that emit a separate `reasoning` field can exhaust `max_tokens` on thinking
+ * and return empty structured `content`. Default `reasoning_effort: none` unless the host opts in.
+ */
+export function resolveOpenAICompatibleProviderOptions(spec: ModelSpec): Record<string, unknown> {
+  const opts = { ...(spec.options ?? {}) };
+  if (opts.reasoning_effort == null && opts.reasoning == null) opts.reasoning_effort = "none";
+  return opts;
+}
+
 function mergeHeaders(spec: ModelSpec, apiKey?: string): Record<string, string> | undefined {
   const headers = { ...spec.headers };
   if (apiKey && !headers.Authorization && !headers.authorization) {
@@ -74,11 +85,37 @@ function mergeHeaders(spec: ModelSpec, apiKey?: string): Record<string, string> 
   return Object.keys(headers).length ? headers : undefined;
 }
 
+/**
+ * Anthropic gateways are conventionally configured with the *origin or prefix without `/v1`* (that is how the
+ * official SDKs and `ANTHROPIC_BASE_URL` behave: they append `/v1/messages` themselves), but the AI SDK provider
+ * appends only `/messages` to its `baseURL`. Normalise so both spellings work:
+ *
+ * - `https://gw.example/anthropic`        → `https://gw.example/anthropic/v1`
+ * - `https://gw.example/anthropic/v1`     → unchanged
+ * - `https://gw.example/anthropic/v1/messages` (pasted endpoint) → `https://gw.example/anthropic/v1`
+ */
+export function normalizeAnthropicBaseURL(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return trimmed.replace(/\/+$/, "");
+  }
+  let pathname = url.pathname.replace(/\/+$/, "");
+  if (/\/messages$/i.test(pathname)) pathname = pathname.replace(/\/messages$/i, "");
+  if (!/\/v\d+$/i.test(pathname)) pathname = `${pathname}/v1`;
+  url.pathname = pathname;
+  url.hash = "";
+  return url.toString();
+}
+
 export function resolveAnthropicBaseURL(
   spec: Pick<ModelSpec, "baseURL">,
   env: Record<string, string | undefined>,
 ): string | undefined {
-  return spec.baseURL?.trim() || env.ANTHROPIC_BASE_URL?.trim() || undefined;
+  return normalizeAnthropicBaseURL(spec.baseURL?.trim() || env.ANTHROPIC_BASE_URL?.trim() || undefined);
 }
 
 export function createLanguageModel(
@@ -87,7 +124,9 @@ export function createLanguageModel(
 ): LanguageModel {
   const apiKey = resolveApiKey(spec, opts.env, { warningSink: opts.warningSink });
   const headers = mergeHeaders(spec, apiKey);
-  const fetchFn = opts.fetch;
+  const needsReasoningFetch =
+    spec.provider === "openai-compatible" || spec.provider === "deepseek" || spec.provider === "openai";
+  const fetchFn = needsReasoningFetch ? chainReasoningFetch(opts.fetch) : opts.fetch;
 
   switch (spec.provider) {
     case "anthropic": {

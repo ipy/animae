@@ -56,6 +56,7 @@ export function installGlobalMouseCleanup(stdout: NodeJS.WritableStream): () => 
   const onSignal = () => disable();
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
+  process.once("SIGHUP", onSignal);
   process.once("exit", disable);
   process.once("uncaughtException", disable);
   process.once("unhandledRejection", disable);
@@ -63,6 +64,7 @@ export function installGlobalMouseCleanup(stdout: NodeJS.WritableStream): () => 
   return () => {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
+    process.off("SIGHUP", onSignal);
     process.off("exit", disable);
     disable();
   };

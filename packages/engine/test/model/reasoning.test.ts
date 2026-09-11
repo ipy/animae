@@ -8,7 +8,8 @@ describe("stripThinkingArtifacts", () => {
     const obj = sanitizeStructuredOutput<{ text: string }>({
       text: ["<think>", "x", "</think>", "visible"].join(""),
       reasoning_content: "secret",
-    } as { text: string; reasoning_content: string });
+      reasoning: "also secret",
+    } as { text: string; reasoning_content: string; reasoning: string });
     expect(obj).toEqual({ text: "visible" });
   });
 });

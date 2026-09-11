@@ -1,6 +1,6 @@
 # Animae
 
-Gameplay-agnostic character and world runtime for interactive narrative (TypeScript). Games such as [example-game](../games/<host>) ship as separate workspace packages that depend only on the public `@animae/*` packages.
+Gameplay-agnostic character and world runtime for interactive narrative (TypeScript). Games ship as separate workspace packages (see the host monorepo `games/` tree) that depend only on the public `@animae/*` packages.
 
 ## Packages
 

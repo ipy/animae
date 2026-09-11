@@ -4,21 +4,69 @@ import type { Kernel } from "../contracts.ts";
 import { stringifyYaml } from "../store/util.ts";
 import { summaryMdPath } from "./util.ts";
 
+const goalChangeSchema = z.strictObject({
+  id: z.string().optional(),
+  action: z.enum(["add", "remove", "update"]),
+  text: z.string(),
+  tags: z.array(z.string()).default([]),
+  priority: z.number().optional(),
+});
+
 export const ReflectionOutputSchema = z.strictObject({
   summaries: z.array(z.string()),
-  goal_changes: z.array(
-    z.strictObject({
-      id: z.string().optional(),
-      action: z.enum(["add", "remove", "update"]),
-      text: z.string(),
-      tags: z.array(z.string()).default([]),
-      priority: z.number().optional(),
-    }),
-  ),
+  goal_changes: z.array(goalChangeSchema),
   new_claims: z.array(z.strictObject({ s: z.string(), p: z.string(), o: z.string() })),
 });
 
 export type ReflectionOutput = z.infer<typeof ReflectionOutputSchema>;
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  if (v == null || typeof v !== "object" || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
+}
+
+/** Map common provider drift (`reflection`/`memories`/`emotions`) into the strict reflection shape. */
+export function coerceReflectionRaw(raw: Record<string, unknown>): Record<string, unknown> {
+  if (Array.isArray(raw.summaries) && Array.isArray(raw.goal_changes) && Array.isArray(raw.new_claims)) {
+    return raw;
+  }
+  const summaries: string[] = [];
+  if (Array.isArray(raw.summaries)) summaries.push(...raw.summaries.map(String));
+  if (typeof raw.reflection === "string" && raw.reflection.trim()) summaries.push(raw.reflection.trim());
+  if (typeof raw.summary === "string" && raw.summary.trim()) summaries.push(raw.summary.trim());
+  if (Array.isArray(raw.memories)) {
+    for (const m of raw.memories) {
+      if (typeof m === "string") summaries.push(m);
+      else if (m && typeof m === "object" && "text" in m) summaries.push(String((m as { text: unknown }).text));
+    }
+  }
+  if (typeof raw.emotions === "string" && raw.emotions.trim()) summaries.push(raw.emotions.trim());
+
+  let goal_changes = Array.isArray(raw.goal_changes) ? raw.goal_changes : [];
+  if (!goal_changes.length && Array.isArray(raw.goals)) {
+    goal_changes = raw.goals.map((g) =>
+      typeof g === "string"
+        ? { action: "update", text: g, tags: [] }
+        : { action: "update", text: String(g), tags: [] },
+    );
+  }
+
+  let new_claims = Array.isArray(raw.new_claims) ? raw.new_claims : [];
+  if (!new_claims.length && Array.isArray(raw.claims)) {
+    new_claims = raw.claims.filter((c) => c && typeof c === "object");
+  }
+
+  return {
+    summaries: summaries.length ? summaries : ["(no summary)"],
+    goal_changes,
+    new_claims,
+  };
+}
+
+export const ReflectionResponseSchema = z.preprocess(
+  (v) => coerceReflectionRaw(asRecord(v) ?? {}),
+  ReflectionOutputSchema,
+);
 
 export function goalConflict(card: { constraints: { taboos: string[]; bottom_lines: { tags: string[] }[] } }, goalTags: string[]): boolean {
   const forbidden = new Set<string>([...card.constraints.taboos]);
@@ -51,7 +99,7 @@ export async function runReflectionForOwner(
   const proposal = await k.models.s2.object({
     label: "reflect",
     segments: { static: "", semiStatic: "", dynamic: prompt, user: "Produce reflection JSON." },
-    schema: ReflectionOutputSchema,
+    schema: ReflectionResponseSchema,
     maxOutputTokens: k.policy.router.budget?.maxOutputTokens.s2 ?? 800,
   });
 

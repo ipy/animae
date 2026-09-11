@@ -18,11 +18,11 @@ export function sanitizeStructuredOutput<T>(value: T): T {
   const rec = value as Record<string, unknown>;
   const out: Record<string, unknown> = { ...rec };
   for (const [k, v] of Object.entries(out)) {
-    if (typeof v === "string" && (k === "text" || k === "content" || k === "reasoning_content")) {
-      if (k === "reasoning_content") {
-        delete out[k];
-        continue;
-      }
+    if (k === "reasoning" || k === "reasoning_details" || k === "reasoning_content") {
+      delete out[k];
+      continue;
+    }
+    if (typeof v === "string" && (k === "text" || k === "content")) {
       out[k] = stripThinkingArtifacts(v);
     } else if (v != null && typeof v === "object") {
       out[k] = sanitizeStructuredOutput(v);

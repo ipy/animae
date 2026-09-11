@@ -14,16 +14,18 @@ import { AnimaeError } from "../types.ts";
 import type { ModelRequestBase, StreamPart, ToolDef } from "../ports.ts";
 import type { ModelSpec } from "../schema/authored.ts";
 import { promptSegmentCharCount, segmentsToMessages } from "./messages.ts";
-import { resolveOllamaProviderOptions } from "./provider.ts";
+import { resolveOllamaProviderOptions, resolveOpenAICompatibleProviderOptions } from "./provider.ts";
 import { estimatePromptTokensFromChars, warnOllamaContextBudget } from "./warnings.ts";
 import { isOutputValidationError, isTransientError, withTransientRetries } from "./retry.ts";
 import type { ModelPortOptions } from "./types.ts";
 import { sanitizeStructuredOutput } from "./reasoning.ts";
+import { salvageStructuredFromValidationError } from "./salvage-output.ts";
 import { mapUsage, type UsageTracker } from "./usage.ts";
 
 const REPAIR_HINT: ModelMessage = {
   role: "system",
-  content: "Your previous response did not match the required JSON schema. Reply with valid JSON only, matching the schema exactly.",
+  content:
+    "Your previous response did not match the required JSON schema. Reply with a single JSON object only (no markdown fences, no prose outside JSON).",
 };
 
 function buildTools(defs: ToolDef[] | undefined): ToolSet | undefined {
@@ -52,8 +54,12 @@ function providerOptionsFromSpec(
     }
     return { ollama };
   }
+  if (spec.provider === "openai-compatible") {
+    return { openaiCompatible: resolveOpenAICompatibleProviderOptions(spec) };
+  }
   if (!spec.options || !Object.keys(spec.options).length) return undefined;
-  return { [spec.provider]: spec.options };
+  const key = spec.provider === "openai" ? "openai" : spec.provider;
+  return { [key]: spec.options };
 }
 
 function callSettings(
@@ -119,6 +125,8 @@ export async function runObjectWithRepair<T>(
     try {
       return finishGenerate(await call([REPAIR_HINT]), tracker, opts);
     } catch (second) {
+      const salvaged = salvageStructuredFromValidationError(second, req.schema);
+      if (salvaged !== undefined) return sanitizeStructuredOutput(salvaged);
       throw new AnimaeError("MODEL_OUTPUT_INVALID", "Model output failed schema validation after repair", second);
     }
   }
@@ -199,7 +207,11 @@ async function* streamOnce(
   try {
     value = await result.output;
   } catch (e) {
-    throw e;
+    const salvaged = isOutputValidationError(e)
+      ? salvageStructuredFromValidationError(e, req.schema)
+      : undefined;
+    if (salvaged === undefined) throw e;
+    value = salvaged;
   }
 
   const usage = mapUsage(await result.usage);
@@ -228,6 +240,11 @@ export async function* runStream(
         const validation = isOutputValidationError(e);
         if (validation && repair === 0) break;
         if (validation && repair === 1) {
+          const salvaged = salvageStructuredFromValidationError(e, req.schema);
+          if (salvaged !== undefined) {
+            yield { type: "final", value: sanitizeStructuredOutput(salvaged) };
+            return;
+          }
           throw new AnimaeError("MODEL_OUTPUT_INVALID", "Model stream output failed schema validation after repair", e);
         }
         if (isTransientError(e) && attempt < maxTransient) {

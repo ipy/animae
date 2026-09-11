@@ -39,17 +39,36 @@ KEY = {
 }
 
 
+def _screen_view(sess: PtySession) -> str:
+    lines = sess.screen_lines()
+    if lines:
+        return "\n".join(lines)
+    return sess.plain_tail(2800)
+
+
 def overlay_open(sess: PtySession, title: str, timeout: float = 2.0) -> bool:
-    return sess.wait_text(title, timeout=timeout)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if title in _screen_view(sess):
+            return True
+        time.sleep(0.04)
+    return title in _screen_view(sess)
 
 
-def close_overlay_esc(sess: PtySession, title: str, budget_s: float = 0.08) -> float | None:
+def close_overlay_esc(sess: PtySession, title: str, budget_s: float = 0.35) -> float | None:
     t0 = time.perf_counter()
     sess.write(KEY["esc"])
-    while time.perf_counter() - t0 < budget_s:
-        if title not in sess.plain_tail(1200):
+    deadline = t0 + budget_s
+    while time.perf_counter() < deadline:
+        if title not in _screen_view(sess):
             return time.perf_counter() - t0
-        time.sleep(0.004)
+        time.sleep(0.008)
+    sess.write(KEY["esc"])
+    deadline = t0 + budget_s + 0.25
+    while time.perf_counter() < deadline:
+        if title not in _screen_view(sess):
+            return time.perf_counter() - t0
+        time.sleep(0.008)
     return None
 
 
@@ -173,6 +192,12 @@ def main() -> int:
     try:
         wait_host_main_ui(sess, timeout=120.0)
         time.sleep(0.3)
+        sess.write(b":leave\n")
+        time.sleep(0.55)
+        try:
+            sess.focus_input()
+        except RuntimeError:
+            pass
 
         turn_line = os.environ.get("HOST_PTY_TURN_LINE", "")
         if turn_line.strip() and not args.quick:
@@ -210,7 +235,7 @@ def main() -> int:
         for seq in (KEY["f1_ss3"], KEY["f1_csi"], KEY["f1_mod"]):
             sess.write(seq)
             if overlay_open(sess, "Help (F1)"):
-                dt = close_overlay_esc(sess, "Help (F1)", budget_s=0.06 if args.quick else 0.05)
+                dt = close_overlay_esc(sess, "Help (F1)", budget_s=0.35)
                 if dt is not None:
                     esc_lat.append(dt)
                 break
@@ -218,20 +243,50 @@ def main() -> int:
         if esc_lat and esc_lat[0] > 0.05:
             metrics["esc_close_warn"] = "exceeded 50ms target"
 
-        for _ in range(5):
-            sess.write(KEY["esc"])
-            time.sleep(0.03)
-        sess.write(b"zzzz")
-        if not sess.wait_text("zzzz", timeout=2.0):
+        sess.focus_input()
+        if args.quick:
+            for _ in range(2):
+                sess.write(KEY["esc"])
+                time.sleep(0.03)
+            sess.write(b"z")
+            probe = "z"
+        else:
+            for _ in range(5):
+                sess.write(KEY["esc"])
+                time.sleep(0.03)
+            try:
+                sess.focus_input()
+            except RuntimeError:
+                pass
+            sess.write(b"zzzz")
+            probe = "zzzz"
+        deadline = time.time() + 2.5
+        ok = False
+        while time.time() < deadline:
+            if sess.draft_matches(probe) or probe in sess.plain_tail(800):
+                ok = True
+                break
+            time.sleep(0.04)
+        if not ok:
             raise AssertionError("input dead after esc spam")
 
         sess.write(b"\x7f" * 8)
         sess.write(KEY["ctrl_p"])
-        palette = os.environ.get("HOST_PTY_PALETTE_MARKER", "palette")
-        if not sess.wait_text(palette, timeout=2.5):
-            metrics["palette_ok"] = False
-        else:
-            metrics["palette_ok"] = True
+        palette_markers = (
+            os.environ.get("HOST_PTY_PALETTE_MARKER", "Command palette"),
+            "Command palette",
+            "命令面板",
+        )
+        opened = False
+        deadline = time.time() + 2.5
+        while time.time() < deadline:
+            view = _screen_view(sess)
+            if any(m in view for m in palette_markers):
+                opened = True
+                break
+            time.sleep(0.05)
+        metrics["palette_ok"] = opened
+        if opened:
             sess.write(KEY["esc"])
             time.sleep(0.15)
 

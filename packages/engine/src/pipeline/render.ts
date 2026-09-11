@@ -207,6 +207,7 @@ async function runRenderStream(
 
   const parts: RenderPart[] = [];
   let prevText = "";
+  let longestPartialText = "";
   let finalValue: Record<string, unknown> | undefined;
   let usage: import("../types.ts").Usage | undefined;
 
@@ -231,6 +232,7 @@ async function runRenderStream(
       } else if (chunk.type === "partial") {
         const v = chunk.value as { text?: string };
         const next = v.text ?? "";
+        if (next.length > longestPartialText.length) longestPartialText = next;
         const delta = textDelta(prevText, next);
         if (delta && !bufferText) parts.push({ type: "text", text: delta });
         prevText = next;
@@ -245,7 +247,7 @@ async function runRenderStream(
 
   if (!finalValue) throw new AnimaeError("RENDER_FAILED", "Render stream ended without final value");
 
-  const text = String(finalValue.text ?? "");
+  const text = String(finalValue.text ?? "").trim() || longestPartialText.trim();
   const intent_realized = String(finalValue.intent_realized ?? "");
   const cues = (finalValue.cues as { type: string; args: Record<string, unknown>; at?: number }[]) ?? [];
   const choices = finalValue.choices as { text: string; expected_event_type: string; tags: string[] }[] | undefined;

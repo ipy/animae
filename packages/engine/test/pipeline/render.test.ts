@@ -140,4 +140,37 @@ describe("renderStage", () => {
 
     expect(result.cues).toEqual([{ type: "emote", args: { who: "npc1" }, at: 2 }]);
   });
+
+  test("uses streamed partial text when final structured text is empty", async () => {
+    const { k } = createPipelineKernel({
+      policy: {
+        events: { types: { chat: { positive: true } } },
+        cues: { types: {} },
+        choices: { enabled: false, count: 3, filter: "true" },
+        render: { retryOnMismatch: 0, recentTurns: 4 },
+      },
+      s1Handler: async function* () {
+        yield { text: "Partial" };
+        yield { text: "", cues: [], intent_realized: "respond" };
+      },
+    });
+
+    const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
+    const { result } = await collectRender(
+      renderStage(k, turn, {
+        tier: "s1",
+        speaker: "npc1",
+        addressee: "player",
+        intent: { intent: "respond", scores: { respond: 1 } },
+        appraisal: { type: "chat", intensity: 0.5, sincerity: 1, claims: [], search_terms: [], tags: [], input_class: "normal" },
+        fieldEffects: {},
+        scene: { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false },
+        history: [],
+        sidenotes: [],
+        hits: [],
+      }),
+    );
+
+    expect(result.text).toBe("Partial");
+  });
 });

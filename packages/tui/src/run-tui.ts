@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { TuiApp } from "./app/TuiApp.tsx";
 import type { RunTuiOptions } from "./types.ts";
 import { createPreparsedStdin } from "./input/preparsed-stdin.ts";
+import { installTerminalShutdown } from "./terminal/shutdown.ts";
 
 function isRealTty(stream: NodeJS.ReadableStream): boolean {
   return typeof stream === "object" && stream !== null && "isTTY" in stream && Boolean(stream.isTTY);
@@ -30,9 +31,42 @@ export async function runTui(opts: RunTuiOptions): Promise<void> {
     maxFps: 30,
   });
 
+  const realStdin = opts.stdin ?? process.stdin;
+  let terminalLost = false;
+  const uninstallShutdown = installTerminalShutdown({
+    stdin: realStdin,
+    stdout,
+    stderr,
+    onShutdown: () => {
+      terminalLost = true;
+      try {
+        instance.unmount();
+      } catch {
+        /* ignore */
+      }
+    },
+  });
+
+  let terminalLostPoll: ReturnType<typeof setInterval> | undefined;
+  const waitTerminalLost = new Promise<void>((resolve) => {
+    if (terminalLost) {
+      resolve();
+      return;
+    }
+    terminalLostPoll = setInterval(() => {
+      if (terminalLost) {
+        if (terminalLostPoll !== undefined) clearInterval(terminalLostPoll);
+        resolve();
+      }
+    }, 25);
+    terminalLostPoll.unref?.();
+  });
+
   try {
-    await instance.waitUntilExit();
+    await Promise.race([instance.waitUntilExit(), waitTerminalLost]);
   } finally {
+    if (terminalLostPoll !== undefined) clearInterval(terminalLostPoll);
+    uninstallShutdown();
     disposePreparsed?.();
     try {
       await opts.engine.close();

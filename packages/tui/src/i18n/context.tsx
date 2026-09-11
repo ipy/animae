@@ -1,6 +1,12 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { I18nInstance } from "@animae/i18n";
+import type { FormatParams, I18nInstance } from "@animae/i18n";
 import { createTuiI18n } from "./tui-i18n.ts";
+
+const TUI_NS = "tui";
+
+function bindTuiT(i18n: I18nInstance): I18nInstance["t"] {
+  return (key: string, params?: FormatParams) => i18n.t(key, params, { ns: TUI_NS });
+}
 
 const I18nContext = createContext<{ i18n: I18nInstance; setLocale: (locale: string) => void } | null>(null);
 
@@ -17,7 +23,7 @@ export function useTuiI18n(): { t: I18nInstance["t"]; locale: string; setLocale:
   const ctx = useContext(I18nContext);
   if (!ctx) {
     const fallback = createTuiI18n();
-    return { t: fallback.t.bind(fallback), locale: fallback.locale, setLocale: () => {} };
+    return { t: bindTuiT(fallback), locale: fallback.locale, setLocale: () => {} };
   }
-  return { t: ctx.i18n.t.bind(ctx.i18n), locale: ctx.i18n.locale, setLocale: ctx.setLocale };
+  return { t: bindTuiT(ctx.i18n), locale: ctx.i18n.locale, setLocale: ctx.setLocale };
 }

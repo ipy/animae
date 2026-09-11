@@ -4,6 +4,7 @@ from __future__ import annotations
 import fcntl
 import os
 import pty
+import signal
 import re
 import select
 import struct
@@ -56,6 +57,13 @@ class PtySession:
     rows: int = 40
     screen: object | None = None
     _stream: Callable[..., object] | None = None
+
+    def __enter__(self) -> PtySession:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.close()
+        return False
 
     def start_reader(self, *, use_pyte: bool = True) -> None:
         if use_pyte:
@@ -149,6 +157,11 @@ class PtySession:
         self.cols = cols
         self.rows = rows
         set_winsize(self.master, rows, cols)
+        if self.proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(self.proc.pid), signal.SIGWINCH)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         if self.screen is not None:
             try:
                 import pyte
@@ -233,24 +246,60 @@ class PtySession:
             return True
         return True
 
-    def focus_input(self, *, tries: int = 5) -> None:
-        """Esc or Tab from choice menu / transcript focus back to the input line."""
+    def focus_input(self, *, tries: int = 10) -> None:
+        """Esc / Tab from choice menu or side panel back to the input line."""
         for _ in range(tries):
             if self.input_focused():
                 return
             self.write(b"\x1b")
-            time.sleep(0.06)
+            time.sleep(0.08)
+        for _ in range(tries):
             if self.input_focused():
                 return
-            self.write(b"\t")
-            time.sleep(0.1)
+            tail = self.plain_tail(700)
+            if "(Tab to focus)" in tail:
+                self.write(b"\t")
+                time.sleep(0.1)
+            else:
+                self.write(b"\x1b")
+                time.sleep(0.08)
         if not self.input_focused():
             raise RuntimeError(
                 "input line not focused after Esc/Tab\n" + self.plain_tail(800)
             )
 
+    def kill_process_group(self, sig: int = signal.SIGTERM) -> None:
+        if self.proc.poll() is not None:
+            return
+        try:
+            pgid = os.getpgid(self.proc.pid)
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                self.proc.send_signal(sig)
+            except OSError:
+                pass
+
+    def detach_master(self) -> None:
+        """Close PTY master only (SIGHUP to session); for hangup regression tests."""
+        self.stop()
+        try:
+            os.close(self.master)
+        except OSError:
+            pass
+
     def close(self) -> None:
         self.stop()
+        if self.proc.poll() is None:
+            self.kill_process_group(signal.SIGTERM)
+            try:
+                self.proc.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                self.kill_process_group(signal.SIGKILL)
+                try:
+                    self.proc.wait(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    pass
         try:
             os.close(self.master)
         except OSError:
@@ -320,14 +369,67 @@ def spawn_host_dist(
     env[home_var] = home
     env[cfg_var] = cfg
     env["TERM"] = "xterm-256color"
+    env["HOST_PTY_WIZARD_ANSWER"] = "Test\n"
+    env["HOST_PTY_WIZARD_PROMPT"] = "Protagonist display name"
     sess = spawn_pty([str(binary), "new"], env=env, cwd=str(repo_root), cols=cols, rows=rows)
     return sess, stub_proc, home, cfg
 
 
+def _protagonist_name_wizard_active(plain: str) -> bool:
+    """True only while the readline name prompt is waiting (not after answer scrolled away)."""
+    tail = plain[-500:]
+    if _shell_ui_markers(tail):
+        return False
+    custom = os.environ.get("HOST_PTY_WIZARD_PROMPT", "").strip()
+    for line in reversed(plain.splitlines()[-10:]):
+        s = line.strip()
+        if not s:
+            continue
+        if custom and custom in s:
+            return True
+        if any(
+            m in s
+            for m in (
+                "Protagonist display name",
+                "主角显示名",
+                "主角姓名",
+                "Warden]:",
+            )
+        ):
+            return True
+        break
+    return False
+
+
+def _shell_ui_markers(plain: str) -> bool:
+    return any(
+        m in plain
+        for m in (
+            "F1/",
+            "Side panel",
+            ">",
+            "输入 :help",
+            "Lilium · Base",
+            "百合园 · 基地",
+            "温室",
+        )
+    )
+
+
+def wizard_answer_bytes() -> bytes:
+    raw = os.environ.get("HOST_PTY_WIZARD_ANSWER", "Test\n")
+    if not isinstance(raw, str) or not raw.strip():
+        raw = "Test\n"
+    if raw.endswith("\\n") or ("\\n" in raw and "\n" not in raw):
+        raw = raw.replace("\\n", "\n")
+    if not raw.endswith("\n"):
+        raw = f"{raw}\n"
+    return raw.encode("utf-8")
+
+
 def wait_host_main_ui(sess: PtySession, timeout: float = 120.0) -> None:
     """Wait for optional name wizard + intro skip, then TUI shell markers."""
-    wizard_prompt = os.environ.get("HOST_PTY_WIZARD_PROMPT", "主角姓名")
-    wizard_answer = os.environ.get("HOST_PTY_WIZARD_ANSWER", "测试\n")
+    wizard_answer = wizard_answer_bytes()
     deadline = time.time() + timeout
     name_done = False
     skipped = False
@@ -344,14 +446,19 @@ def wait_host_main_ui(sess: PtySession, timeout: float = 120.0) -> None:
                 f"check env {os.environ.get('HOST_PTY_CONFIG_VAR', 'HOST_CONFIG')} "
                 f"and file at {plain[:200]!r}"
             )
-        if not name_done and wizard_prompt in plain:
+        if not name_done and _protagonist_name_wizard_active(plain):
             if time.time() - last_name_send > 0.8:
-                sess.write(wizard_answer.encode("utf-8"))
+                sess.write(wizard_answer)
                 last_name_send = time.time()
-            if "温室" in plain or "F1/" in plain or "输入" in plain:
-                name_done = True
-                intro_at = time.time()
-            continue
+            if last_name_send > 0 and time.time() - last_name_send < 0.4:
+                time.sleep(0.06)
+                continue
+        if not name_done and last_name_send > 0 and time.time() - last_name_send > 0.35:
+            name_done = True
+            intro_at = time.time()
+        if not name_done and _shell_ui_markers(plain):
+            name_done = True
+            intro_at = time.time()
         if not name_done and any(m in plain for m in shell_markers):
             name_done = True
             skipped = True

@@ -12,8 +12,10 @@ export {
   normalizeOllamaBaseURL,
   ollamaOrigin,
   resolveAnthropicBaseURL,
+  normalizeAnthropicBaseURL,
   createLanguageModel,
   resolveOllamaProviderOptions,
+  resolveOpenAICompatibleProviderOptions,
   DEFAULT_OLLAMA_NUM_CTX,
 } from "./provider.ts";
 export {
@@ -29,4 +31,11 @@ export {
   type ModelWarningEntry,
 } from "./warnings.ts";
 export { stripThinkingArtifacts, sanitizeStructuredOutput } from "./reasoning.ts";
+export {
+  createReasoningAwareFetch,
+  chainReasoningFetch,
+  normalizeChatCompletionBody,
+  normalizeAssistantMessage,
+  extractJsonObjectFromText,
+} from "./reasoning-fetch.ts";
 export type { ModelPortOptions, RecordedObjectResponse, RecordedStreamResponse } from "./types.ts";

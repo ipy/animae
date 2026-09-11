@@ -7,3 +7,7 @@ dist
 **/timelines
 **/derived
 *.cache.generated
+
+__pycache__/
+*.pyc
+

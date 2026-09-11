@@ -49,7 +49,8 @@ export function DefaultLayout(props: LayoutProps) {
       ? Math.max(20, Math.floor((columns * theme.sidePanel.widthPercent) / 100))
       : columns;
   const transcriptW = mode === "two-column" ? columns - sideW - 1 : columns;
-  const inputActive = props.focus === "input" && !props.overlay && !state.choices;
+  // Choices can stay visible while the player types free text (focus === "input").
+  const inputActive = props.focus === "input" && !props.overlay;
 
   return (
     <Box flexDirection="column" height={rows}>

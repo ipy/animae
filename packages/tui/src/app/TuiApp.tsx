@@ -225,6 +225,12 @@ function TuiShellInner({
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  useEffect(() => {
+    const s = stateRef.current;
+    if (s.overlay || s.paletteOpen || s.prompt || s.choices) return;
+    dispatch({ type: "setFocus", focus: "input" });
+  }, [columns, rows, dispatch]);
+
   const patchInputDraft = (value: string, cursor: number) => {
     setInputDraft(value, cursor);
   };
@@ -266,9 +272,11 @@ function TuiShellInner({
     };
     process.on("SIGINT", onSignal);
     process.on("SIGTERM", onSignal);
+    process.on("SIGHUP", onSignal);
     return () => {
       process.off("SIGINT", onSignal);
       process.off("SIGTERM", onSignal);
+      process.off("SIGHUP", onSignal);
     };
   }, [onQuit]);
 
@@ -356,8 +364,14 @@ function TuiShellInner({
 
       if (s.typewriterActive && !s.overlay && !ev.ctrl) {
         dispatch({ type: "skipTypewriter" });
-        // Input line must stay usable while intro typewriter runs (PTY `:help` / `:quit`).
-        if (s.focus !== "input" || s.choices) {
+        // Let Esc/Tab/arrows reach overlay, choice menu, and input handlers while text catches up.
+        const navThrough =
+          ev.key.escape ||
+          ev.key.tab ||
+          ev.key.upArrow ||
+          ev.key.downArrow ||
+          ev.key.return;
+        if ((s.focus !== "input" || s.choices) && !navThrough) {
           return;
         }
       }
@@ -367,11 +381,31 @@ function TuiShellInner({
         return;
       }
 
+      if (
+        !s.overlay &&
+        !s.paletteOpen &&
+        ev.key.escape &&
+        s.focus !== "input"
+      ) {
+        dispatch({ type: "setFocus", focus: "input" });
+        return;
+      }
+
       const action = matchKeyAction(keymap, ev.name, ev.input, {
         ctrl: ev.ctrl,
         shift: ev.shift,
         meta: ev.key.meta,
       });
+
+      if (action === "commandPalette") {
+        if (s.overlay) {
+          dispatch({ type: "setOverlay", overlay: undefined });
+          dispatch({ type: "setPendingRewind", eventId: undefined });
+        }
+        dispatch({ type: "setPalette", open: true, query: "", index: 0 });
+        dispatch({ type: "setFocus", focus: "input" });
+        return;
+      }
 
       if (s.overlay) {
         if (action === "closeOverlay" || ev.key.escape) {
@@ -414,6 +448,14 @@ function TuiShellInner({
 
       if (s.choices) {
         if (ev.key.escape) {
+          if (s.focus === "input") {
+            dispatch({ type: "setChoices", choices: undefined });
+            return;
+          }
+          dispatch({ type: "setFocus", focus: "input" });
+          return;
+        }
+        if (ev.key.tab && !ev.shift && s.focus !== "input") {
           dispatch({ type: "setFocus", focus: "input" });
           return;
         }
@@ -451,10 +493,6 @@ function TuiShellInner({
         }
       }
 
-      if (action === "commandPalette") {
-        dispatch({ type: "setPalette", open: true, query: "", index: 0 });
-        return;
-      }
       if (action === "toggleMouse") {
         const next = !s.mouseCapture;
         commandApi.setMouseCapture(next);
@@ -462,8 +500,16 @@ function TuiShellInner({
         return;
       }
 
-      const inputFocused = s.focus === "input" && !s.choices;
+      const inputFocused = s.focus === "input" && !s.overlay;
       if (inputFocused) {
+        if (ev.key.escape) {
+          if (s.autocompleteOpen) {
+            dispatch({ type: "setAutocomplete", open: false });
+            return;
+          }
+          dispatch({ type: "setFocus", focus: "input" });
+          return;
+        }
         if (ev.key.tab && !ev.shift) {
           if (
             applyTabAutocomplete(
@@ -590,7 +636,7 @@ function TuiShellInner({
       onPaste: (text) => {
         const s = stateRef.current;
         if (s.prompt || s.paletteOpen || s.overlay) return;
-        if (s.focus !== "input" || s.choices) return;
+        if (s.focus !== "input") return;
         insertInputText(text.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
       },
     },

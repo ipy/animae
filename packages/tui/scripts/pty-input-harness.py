@@ -156,14 +156,30 @@ def _exercise(sess: PtySession, quick: bool) -> dict:
             wait_overlay_closed(sess, title)
             time.sleep(0.06)
 
+        palette_marker = os.environ.get("HOST_PTY_PALETTE_MARKER", "Command palette")
+        palette_markers = (palette_marker, "命令面板", "Command palette", "palette:title", "palette.title")
+        sess.focus_input()
+        time.sleep(0.08)
         sess.write(KEY["ctrl_p"])
-        if not sess.wait_text("命令面板", timeout=2.5):
+        opened = False
+        deadline = time.time() + 2.5
+        while time.time() < deadline:
+            tail = _screen_view(sess)
+            if any(m in tail for m in palette_markers):
+                opened = True
+                break
+            time.sleep(0.05)
+        if not opened:
             raise AssertionError("Ctrl+P did not open command palette")
         close_deadline = time.time() + 2.0
-        while time.time() < close_deadline and "命令面板" in sess.plain_tail(1500):
+        while time.time() < close_deadline:
+            tail = _screen_view(sess)
+            if not any(m in tail for m in palette_markers):
+                break
             sess.write(KEY["esc"])
             time.sleep(0.08)
-        if "命令面板" in sess.plain_tail(1500):
+        tail = _screen_view(sess)
+        if any(m in tail for m in palette_markers):
             raise AssertionError("command palette did not close after Esc")
         sess.focus_input()
 
