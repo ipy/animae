@@ -184,10 +184,10 @@ export class SessionRoom {
   }
 
   async pushSnapshot(forceFull = false): Promise<void> {
-    const neutral = await this.host.buildSnapshot();
     for (const ws of this.clients.values()) {
       if (!ws.data.authenticated) continue;
       const i18n = this.i18nFor(ws);
+      const neutral = await this.host.buildSnapshot({ locale: ws.data.locale });
       const state = this.localizeState(neutral, i18n);
       const prev = this.lastLocalizedSnapshot.get(ws.data.id);
       if (!forceFull && prev) {
@@ -485,7 +485,7 @@ export class SessionRoom {
             this.send(ws, { v: WEB_PROTOCOL_VERSION, type: "pong", seq: this.nextSeq(), id: m.id });
             break;
           case "get_state": {
-            const neutral = await this.host.buildSnapshot();
+            const neutral = await this.host.buildSnapshot({ locale: ws.data.locale });
             const state = this.localizeState(neutral, this.i18nFor(ws));
             this.ok(ws, m.id, { state });
             break;

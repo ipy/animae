@@ -14,11 +14,25 @@ export function createHostI18n(
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): I18nInstance {
   const resolved = locale ?? negotiateLocale({ env, defaultLocale: "en" });
-  return createI18n({
+  const base = createI18n({
     locale: resolved,
     defaultNamespace: "host",
     catalogs: hostPackageCatalogs,
   });
+  // Keys like `command.saved` must stay in the `host` catalog; splitKey would treat `command` as a namespace.
+  const hostNs = { ns: "host" as const };
+  return {
+    ...base,
+    t(key, params) {
+      return base.t(key, params, hostNs);
+    },
+    has(key) {
+      return base.has(key, hostNs);
+    },
+    tPseudo(key, params) {
+      return base.tPseudo(key, params, hostNs);
+    },
+  };
 }
 
 export { hostCatalogs };

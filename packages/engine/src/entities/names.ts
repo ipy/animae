@@ -11,8 +11,8 @@ export function emptyAliasState(): EntityAliasState {
   return { aliases: {}, addressAs: {} };
 }
 
-export function normalizeAliasKey(label: string): string {
-  return label.trim().toLowerCase();
+export function normalizeAliasKey(label: string | undefined | null): string {
+  return (label ?? "").trim().toLowerCase();
 }
 
 export function validateAliasLabel(label: string): void {
@@ -129,7 +129,9 @@ export function resolveEntityRef(
       consider(entityId, "runtime_nickname");
     }
     for (const [key, entry] of Object.entries(alias.aliases)) {
-      if (key === norm || normalizeAliasKey(entry.label) === norm) {
+      const aliasLabel = entry?.label;
+      if (!aliasLabel?.trim()) continue;
+      if (key === norm || normalizeAliasKey(aliasLabel) === norm) {
         consider(entityId, `alias:${key}`);
       }
     }

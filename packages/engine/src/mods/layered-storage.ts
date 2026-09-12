@@ -196,7 +196,9 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
     async listFiles(dir) {
       const d = dir ?? "";
       const prefix = d ? `${d}/` : "";
-      return (await allLogicalPaths()).filter((p) => d === "" || p.startsWith(prefix));
+      const fromLogical = (await allLogicalPaths()).filter((p) => d === "" || p.startsWith(prefix));
+      const fromBase = await base.listFiles(dir);
+      return [...new Set([...fromLogical, ...fromBase])].sort();
     },
     mkdir() {
       return Promise.reject(new Error("LayeredStorage is read-only"));

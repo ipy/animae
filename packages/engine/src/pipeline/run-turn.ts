@@ -97,7 +97,7 @@ async function* runTurnPipeline(
     text: input.text,
     choiceId: input.choiceId,
     autonomous: input.autonomous ?? false,
-    outputLocale: input.outputLocale,
+    outputLocale: input.outputLocale ?? k.i18n.outputLocale,
   };
 
   const eventIds: EventId[] = [];

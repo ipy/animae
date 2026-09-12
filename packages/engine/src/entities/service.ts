@@ -76,7 +76,7 @@ async function generateEntity(
 function outputLanguage(k: Kernel, hints?: Record<string, unknown>): string {
   const hintLang = hints?.language;
   if (typeof hintLang === "string") return hintLang;
-  return k.authored.world.language;
+  return k.i18n.outputLocale ?? k.authored.world.language;
 }
 
 function buildGeneratePrompt(
@@ -140,7 +140,7 @@ async function promoteCharacter(
   if (!tpl) throw new AnimaeError("NOT_FOUND", `no character template for LOD ${to}`);
 
   const schema = templateFieldsSchema(tpl.fields);
-  const language = def.card.identity.language ?? k.authored.world.language;
+  const language = k.i18n.outputLocale ?? def.card.identity.language ?? k.authored.world.language;
   const segments: import("../ports.ts").PromptSegments = {
     static: [
       k.authored.world.rules_text && `World rules:\n${k.authored.world.rules_text}`,

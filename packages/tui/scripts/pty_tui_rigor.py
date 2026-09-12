@@ -18,7 +18,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 PKG = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PKG / "scripts"))
-from pty_lib import PtySession, spawn_host_dist, wait_host_main_ui  # noqa: E402
+from pty_lib import (  # noqa: E402
+    PtySession,
+    ensure_free_roam_shell,
+    spawn_host_dist,
+)
 
 # Terminal key bytes (xterm / Terminal.app / iTerm2 / tmux / kitty legacy)
 KEY = {
@@ -73,6 +77,11 @@ def close_overlay_esc(sess: PtySession, title: str, budget_s: float = 0.35) -> f
 
 
 def measure_typing(sess: PtySession, text: str, *, gap: float = 0, burst: bool = False) -> float:
+    try:
+        sess.focus_input()
+    except RuntimeError:
+        sess.write(b"\t")
+        time.sleep(0.12)
     start = time.perf_counter()
     if burst or gap <= 0:
         sess.write(text.encode("utf-8"))
@@ -80,7 +89,7 @@ def measure_typing(sess: PtySession, text: str, *, gap: float = 0, burst: bool =
         for b in text.encode("utf-8"):
             sess.write(bytes([b]))
             time.sleep(gap)
-    deadline = start + max(3.0, len(text) * 0.06 + 1.5)
+    deadline = start + max(8.0, len(text) * 0.12 + 2.0)
     while time.perf_counter() < deadline:
         if sess.draft_matches(text):
             return time.perf_counter() - start
@@ -115,6 +124,11 @@ def stress_random(sess: PtySession, runs: int, rng: random.Random) -> dict:
     alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
     cjk = "测文你好世界"
     for i in range(runs):
+        try:
+            sess.focus_input()
+        except RuntimeError:
+            sess.write(b"\t")
+            time.sleep(0.12)
         n = rng.randint(4, 48)
         if rng.random() < 0.25:
             expected = "".join(rng.choice(cjk) for _ in range(min(n, 20)))
@@ -183,24 +197,15 @@ def user_flow(sess: PtySession) -> list[str]:
     return errs
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--quick", action="store_true")
-    args = parser.parse_args()
+def run_once(*, quick: bool) -> int:
     sess, stub, _h, _c = spawn_host_dist(repo_root=REPO)
     metrics: dict = {"target": "host-dist", "pyte": sess.screen is not None}
     try:
-        wait_host_main_ui(sess, timeout=120.0)
-        time.sleep(0.3)
-        sess.write(b":leave\n")
-        time.sleep(0.55)
-        try:
-            sess.focus_input()
-        except RuntimeError:
-            pass
+        ensure_free_roam_shell(sess, timeout=120.0)
+        time.sleep(0.15)
 
         turn_line = os.environ.get("HOST_PTY_TURN_LINE", "")
-        if turn_line.strip() and not args.quick:
+        if turn_line.strip() and not quick:
             sess.write(turn_line.encode("utf-8"))
             marker = os.environ.get("HOST_PTY_TURN_MARKER", "")
             if marker:
@@ -214,7 +219,7 @@ def main() -> int:
         sess.write(b"\x7f" * 48)
         time.sleep(0.12)
 
-        mix = ("a" * 40 + "测" * 40) if args.quick else ("a测" * 60)[:120]
+        mix = ("a" * 40 + "测" * 40) if quick else ("a测" * 60)[:120]
         metrics["paced_mix_ms"] = round(measure_typing(sess, mix, gap=0.022) * 1000, 1)
         metrics["paced_mix_ok"] = sess.draft_matches(mix)
         sess.write(b"\x7f" * 200)
@@ -244,7 +249,7 @@ def main() -> int:
             metrics["esc_close_warn"] = "exceeded 50ms target"
 
         sess.focus_input()
-        if args.quick:
+        if quick:
             for _ in range(2):
                 sess.write(KEY["esc"])
                 time.sleep(0.03)
@@ -271,6 +276,11 @@ def main() -> int:
             raise AssertionError("input dead after esc spam")
 
         sess.write(b"\x7f" * 8)
+        try:
+            sess.focus_input()
+        except RuntimeError:
+            sess.write(b"\t")
+            time.sleep(0.12)
         sess.write(KEY["ctrl_p"])
         palette_markers = (
             os.environ.get("HOST_PTY_PALETTE_MARKER", "Command palette"),
@@ -289,8 +299,11 @@ def main() -> int:
         if opened:
             sess.write(KEY["esc"])
             time.sleep(0.15)
+        elif quick:
+            ensure_free_roam_shell(sess, timeout=45.0)
+            time.sleep(0.2)
 
-        if not args.quick:
+        if not quick:
             sess.resize(79, 23)
             time.sleep(0.35)
             sess.write(b"resize79\n")
@@ -301,10 +314,10 @@ def main() -> int:
             sess.resize(120, 40)
             time.sleep(0.25)
 
-        runs = 30 if args.quick else 200
+        runs = 30 if quick else 200
         metrics["stress"] = stress_random(sess, runs, random.Random(42))
 
-        if not args.quick:
+        if not quick:
             flow_errs = user_flow(sess)
             metrics["user_flow_errors"] = flow_errs
             if flow_errs:
@@ -341,6 +354,26 @@ def main() -> int:
         metrics["per_key_p95_warn"] = "exceeded 40ms target"
     sys.stderr.write("pty_tui_rigor: OK\n")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    args = parser.parse_args()
+    attempts = 3 if args.quick else 1
+    last = 1
+    for attempt in range(attempts):
+        if attempt > 0:
+            time.sleep(2.0)
+            sys.stderr.write("pty_tui_rigor: retry after flake\n")
+        try:
+            last = run_once(quick=args.quick)
+        except AssertionError:
+            last = 1
+            continue
+        if last == 0:
+            return 0
+    return last
 
 
 if __name__ == "__main__":

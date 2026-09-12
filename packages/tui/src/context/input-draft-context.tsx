@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { mirrorPtyInputDraft } from "../input/pty-draft-mirror.ts";
 
 export interface InputDraftActions {
   setDraft: (value: string, cursor: number) => void;
@@ -28,10 +29,12 @@ function createDraftStore() {
     },
     setDraft(value: string, cursor: number) {
       snapshot = { draft: value, cursor };
+      mirrorPtyInputDraft(value, cursor);
       for (const l of listeners) l();
     },
     clearDraft() {
       snapshot = { draft: "", cursor: 0 };
+      mirrorPtyInputDraft("", 0);
       for (const l of listeners) l();
     },
     readDraft() {

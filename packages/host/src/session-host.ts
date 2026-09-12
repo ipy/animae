@@ -32,7 +32,7 @@ export interface SessionHostOptions {
   initialMessage?: string;
   transcriptLimit?: number;
   onSceneEnd?: (api: ReturnType<typeof createHostCommandApi>) => void | Promise<void>;
-  headerState?: (ctx: { engine: Engine; viewer: Viewer }) => HostHeaderState | Promise<HostHeaderState>;
+  headerState?: (ctx: { engine: Engine; viewer: Viewer; locale: string }) => HostHeaderState | Promise<HostHeaderState>;
   footerState?: (ctx: { engine: Engine; viewer: Viewer }) => HostFooterState | Promise<HostFooterState>;
   /** When a colon command runs, open the side panel on this tab (game-specific map). */
   sidePanelTabForCommand?: Record<string, string>;
@@ -225,7 +225,7 @@ export class SessionHost {
     if (opts?.locale) this.setUiLocale(opts.locale);
     this.syncSceneFlag();
     const header = this.headerFn
-      ? await this.headerFn({ engine: this.engine, viewer: this.viewer })
+      ? await this.headerFn({ engine: this.engine, viewer: this.viewer, locale: this.i18n.locale })
       : defaultHeader(this.engine, this.viewer);
     const footer = this.footerFn
       ? await this.footerFn({ engine: this.engine, viewer: this.viewer })
@@ -233,7 +233,7 @@ export class SessionHost {
 
     const panelData: Record<string, unknown> = {};
     for (const p of this.panels) {
-      panelData[p.id] = await p.data({ engine: this.engine, viewer: this.viewer });
+      panelData[p.id] = await p.data({ engine: this.engine, viewer: this.viewer, locale: this.i18n.locale });
     }
 
     const liveScene = this.engine.query(this.viewer, "scene") as { participants?: string[] } | null | undefined;
@@ -365,6 +365,13 @@ export class SessionHost {
     requestId?: string,
     opts?: { outputLocale?: string },
   ): Promise<void> {
+    const trimmed = text.trim();
+    if (trimmed.startsWith(":")) {
+      await runHostCommandLine(trimmed, this.commandApi, this.commands);
+      this.syncSceneFlag();
+      this.streamCallbacks.onStateChange?.();
+      return;
+    }
     let sceneId = this.apiState.sceneId;
     if (!sceneId && this.resolveFreeInput) {
       const pick = choiceId && !text.trim() ? choiceId : text;

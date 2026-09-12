@@ -57,6 +57,7 @@ class PtySession:
     rows: int = 40
     screen: object | None = None
     _stream: Callable[..., object] | None = None
+    draft_file: str | None = None
 
     def __enter__(self) -> PtySession:
         return self
@@ -141,7 +142,8 @@ class PtySession:
 
     def input_line_from_screen(self) -> str:
         lines = self.screen_lines()
-        for line in reversed(lines):
+        for i in range(len(lines) - 1, -1, -1):
+            line = lines[i]
             s = line.strip()
             if not s.startswith(">"):
                 continue
@@ -150,7 +152,23 @@ class PtySession:
                 body = body[: -len("(Tab to focus)")].strip()
             if "╭" in body or "┌" in body or "─" in body:
                 continue
-            return body
+            parts: list[str] = []
+            if body:
+                parts.append(body)
+            j = i + 1
+            while j < len(lines):
+                raw = lines[j]
+                cont = raw.strip()
+                if not cont or "╭" in cont or cont.startswith(">"):
+                    break
+                if "F1/" in cont or "输入" in cont or "Side panel" in cont:
+                    break
+                # Transcript wraps use wide space padding; input continuations do not.
+                if re.search(r"  {4,}", raw):
+                    break
+                parts.append(cont)
+                j += 1
+            return "".join(parts)
         return ""
 
     def resize(self, cols: int, rows: int) -> None:
@@ -174,8 +192,24 @@ class PtySession:
             except Exception:
                 pass
 
+    def _read_draft_file(self) -> str:
+        path = self.draft_file
+        if not path:
+            return ""
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+        except OSError:
+            return ""
+        lines = text.splitlines()
+        return lines[0] if lines else ""
+
     def find_input_draft(self, expected_substr: str | None = None) -> str:
+        mirrored = self._read_draft_file()
+        if mirrored != "" or (self.draft_file and Path(self.draft_file).is_file()):
+            return mirrored
         draft = self.input_line_from_screen()
+        if expected_substr and draft and len(draft) > len(expected_substr) + 24:
+            draft = ""
         if draft:
             return draft
         draft = self._draft_from_plain(expected_substr)
@@ -226,10 +260,11 @@ class PtySession:
             return len(draft) >= min(24, len(expected) // 2)
         if expected and draft and expected in draft:
             return True
-        compact = re.sub(r"\s+", "", self.plain_tail(3200))
-        want = re.sub(r"\s+", "", expected)
-        if want and len(want) >= 4 and want in compact:
-            return True
+        if not self.draft_file:
+            compact = re.sub(r"\s+", "", self.plain_tail(3200))
+            want = re.sub(r"\s+", "", expected)
+            if want and len(want) >= 4 and len(want) <= 32 and want in compact:
+                return True
         return False
 
     def input_focused(self) -> bool:
@@ -371,7 +406,9 @@ def spawn_host_dist(
     env["TERM"] = "xterm-256color"
     env["HOST_PTY_WIZARD_ANSWER"] = "Test\n"
     env["HOST_PTY_WIZARD_PROMPT"] = "Protagonist display name"
+    env, draft_path = attach_pty_draft_mirror(env)
     sess = spawn_pty([str(binary), "new"], env=env, cwd=str(repo_root), cols=cols, rows=rows)
+    sess.draft_file = draft_path
     return sess, stub_proc, home, cfg
 
 
@@ -474,6 +511,50 @@ def wait_host_main_ui(sess: PtySession, timeout: float = 120.0) -> None:
         time.sleep(0.06)
     if not any(m in sess.plain() for m in shell_markers):
         raise TimeoutError(f"Host main UI not ready: {sess.plain_tail(600)!r}")
+
+
+def attach_pty_draft_mirror(env: dict[str, str]) -> tuple[dict[str, str], str]:
+    """Expose input draft on disk — Ink absolute layout breaks pyte line parsing."""
+    import tempfile
+
+    fd, path = tempfile.mkstemp(prefix="lilium-pty-draft-", text=True)
+    os.close(fd)
+    out = dict(env)
+    out["TUI_PTY_DRAFT_FILE"] = path
+    out.setdefault("TUI_PTY_DRIVER", "1")
+    return out, path
+
+
+def choice_menu_visible(sess: PtySession) -> bool:
+    view = "\n".join(sess.screen_lines()) if sess.screen else sess.plain_tail(2400)
+    return "▸" in view or "└▸" in view
+
+
+def ensure_free_roam_shell(sess: PtySession, *, timeout: float = 45.0) -> None:
+    """Leave opening scene / choice menu and focus the command input line."""
+    wait_host_main_ui(sess, timeout=timeout)
+    time.sleep(0.25)
+    sess.write(b" ")
+    time.sleep(0.2)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if choice_menu_visible(sess):
+            for _ in range(3):
+                sess.write(b"\x1b")
+                time.sleep(0.1)
+        sess.write(b":leave\n")
+        time.sleep(0.7)
+        if choice_menu_visible(sess):
+            continue
+        if not choice_menu_visible(sess):
+            try:
+                sess.focus_input()
+                return
+            except RuntimeError:
+                sess.write(b"\t")
+                time.sleep(0.15)
+        time.sleep(0.08)
+    sess.focus_input()
 
 
 def spawn_pty(

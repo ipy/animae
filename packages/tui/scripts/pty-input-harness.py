@@ -14,9 +14,9 @@ REPO = PKG.parents[2]
 sys.path.insert(0, str(PKG / "scripts"))
 from pty_lib import (  # noqa: E402
     PtySession,
+    ensure_free_roam_shell,
     spawn_host_dist,
     spawn_pty,
-    wait_host_main_ui,
 )
 
 KEY = {
@@ -245,8 +245,8 @@ def run_dev(quick: bool) -> dict:
 def run_dist(quick: bool) -> dict:
     sess, stub, _home, _cfg = spawn_host_dist(repo_root=REPO)
     try:
-        wait_host_main_ui(sess, timeout=120.0)
-        time.sleep(0.35)
+        ensure_free_roam_shell(sess, timeout=120.0)
+        time.sleep(0.2)
         return _exercise(sess, quick)
     finally:
         try:

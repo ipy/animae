@@ -78,10 +78,14 @@ export function createLocaleOverlayStorage(opts: LocaleStorageLayerOptions): Sto
       return resolveLogicalText(path).then((t) => t !== undefined);
     },
     async list(dir) {
+      const d = dir ?? "";
+      if (d === "locales" || d.startsWith("locales/")) return base.list(dir);
       const raw = await base.list(dir);
       return raw.filter((p) => !p.startsWith("locales/"));
     },
     async listFiles(dir) {
+      const d = dir ?? "";
+      if (d === "locales" || d.startsWith("locales/")) return base.listFiles(dir);
       const raw = await base.listFiles(dir);
       return raw.filter((p) => !p.startsWith("locales/"));
     },

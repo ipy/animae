@@ -46,8 +46,9 @@ function templatePartialGuidance(k: Kernel): string {
 
 function outputLanguage(k: Kernel, speaker: CharacterId, override?: string): string {
   if (override) return override;
+  if (k.i18n.outputLocale) return k.i18n.outputLocale;
   const def = k.catalog.character(speaker);
-  return def?.card.identity?.language ?? k.i18n.outputLocale ?? k.authored.world.language ?? "en";
+  return def?.card.identity?.language ?? k.authored.world.language ?? "en";
 }
 
 function promptLocale(k: Kernel): string {
@@ -427,7 +428,12 @@ function userMessage(k: Kernel, i: PromptInput): string {
   if (i.purpose === "appraise") {
     return formatDelimitedActorText(k, i.actorText ?? "");
   }
-  return lines(getPromptSection(promptLocale(k), "render_user"), i.appraisal?.type && `Event context: ${i.appraisal.type}`);
+  const lang = outputLanguage(k, i.speaker, i.outputLocale);
+  return lines(
+    getPromptSection(promptLocale(k), "render_user"),
+    getPromptSection(promptLocale(k), "render_output_reminder", { tag: lang }),
+    i.appraisal?.type && `Event context: ${i.appraisal.type}`,
+  );
 }
 
 /** Build §17.4 prompt segments (deterministic ordering). */

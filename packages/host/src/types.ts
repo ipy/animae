@@ -104,7 +104,7 @@ export interface HostPanelSection {
   id: string;
   title: string;
   order?: number;
-  data(ctx: { viewer: Viewer; engine: Engine }): unknown | Promise<unknown>;
+  data(ctx: { viewer: Viewer; engine: Engine; locale: string }): unknown | Promise<unknown>;
 }
 
 export interface TranscriptEntry {
