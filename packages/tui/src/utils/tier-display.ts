@@ -7,12 +7,9 @@ export function formatTierLabel(tierName: string, uiLocale?: string): string {
   return tierName.replace(/_/g, " ");
 }
 
-export function formatTrackLabel(trackKey: string, _language?: string): string {
+export function formatTrackLabel(trackKey: string, uiLocale?: string): string {
+  const i18n = createTuiI18n(uiLocale);
+  const key = `tracks.${trackKey}`;
+  if (i18n.has(key, { ns: "tui" })) return i18n.t(key, undefined, { ns: "tui" });
   return trackKey;
-}
-
-/** Heuristic: treat chapter titles with CJK as zh display context. */
-export function inferZhLanguage(chapter: unknown): boolean {
-  if (typeof chapter !== "string") return false;
-  return /[\u4e00-\u9fff]/.test(chapter);
 }

@@ -5,6 +5,8 @@ export interface EngineContextValue {
   engine: Engine;
   viewer: Viewer;
   actor: string;
+  /** Host-provided display name for a character id (transcript speaker labels, participant tracks). */
+  displayName?: (id: string) => string | undefined;
 }
 
 const EngineContext = createContext<EngineContextValue | undefined>(undefined);

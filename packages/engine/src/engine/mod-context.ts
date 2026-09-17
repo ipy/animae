@@ -44,10 +44,14 @@ export async function refreshEngineModContext(
   baseStorage: StoragePort,
   ctx: EngineModContext,
 ): Promise<EngineModContext> {
-  const { readStorage, ...overlay } = await prepareModOverlay(baseStorage, ctx.configMods, {
+  // Same layering as `createEngineModContext`: a refreshed view that skipped the locale overlay would read the
+  // unlocalized base files, so the first hot-reload check would silently swap the content the session started with.
+  const localizedBase = createLocaleOverlayStorage({ base: baseStorage, localeChain: ctx.i18n.contentLocaleChain });
+  const { readStorage, ...overlay } = await prepareModOverlay(localizedBase, ctx.configMods, {
     selection: ctx.selection,
     bundles: ctx.bundles,
     engineVersion: "1.0.0",
+    contentLocaleChain: ctx.i18n.contentLocaleChain,
   });
   return { ...ctx, overlay, readStorage };
 }

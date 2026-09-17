@@ -20,7 +20,16 @@ function resolveKey(
   return undefined;
 }
 
-function splitKey(key: string, defaultNs: string): { ns: string; path: string } {
+/**
+ * `ns:path` selects a namespace explicitly. A dotted key is read as `ns.path` only when its first segment
+ * names a registered namespace; otherwise the whole key is a path inside the default namespace
+ * (so nested catalog groups such as `role.controller_lost` never get mistaken for a namespace).
+ */
+function splitKey(
+  key: string,
+  defaultNs: string,
+  isNamespace: (ns: string) => boolean,
+): { ns: string; path: string } {
   if (key.includes(":")) {
     const [ns, ...rest] = key.split(":");
     return { ns: ns!, path: rest.join(":") };
@@ -28,7 +37,7 @@ function splitKey(key: string, defaultNs: string): { ns: string; path: string } 
   if (key.includes(".") && !key.startsWith("error.")) {
     const dot = key.indexOf(".");
     const maybeNs = key.slice(0, dot);
-    if (maybeNs.length <= 24 && /^[a-z][a-z0-9_-]*$/.test(maybeNs)) {
+    if (maybeNs.length <= 24 && /^[a-z][a-z0-9_-]*$/.test(maybeNs) && isNamespace(maybeNs)) {
       return { ns: maybeNs, path: key.slice(dot + 1) };
     }
   }
@@ -50,9 +59,11 @@ export function createI18n(opts: CreateI18nOptions): I18nInstance {
     }
   }
 
+  const isNamespace = (ns: string): boolean => Object.prototype.hasOwnProperty.call(flatByNs, ns);
+
   function makeInstance(activeLocale: string, chain: readonly string[]): I18nInstance {
     const translate = (key: string, params?: FormatParams, o?: { ns?: string }): string => {
-      const { ns, path } = o?.ns ? { ns: o.ns, path: key } : splitKey(key, defaultNamespace);
+      const { ns, path } = o?.ns ? { ns: o.ns, path: key } : splitKey(key, defaultNamespace, isNamespace);
       let msg = resolveKey(flatByNs, chain, ns, path);
       if (msg === undefined) {
         const warnId = `${ns}:${path}@${activeLocale}`;
@@ -74,7 +85,7 @@ export function createI18n(opts: CreateI18nOptions): I18nInstance {
       fallbackChain: chain,
       t: translate,
       has(key, o) {
-        const { ns, path } = o?.ns ? { ns: o.ns, path: key } : splitKey(key, defaultNamespace);
+        const { ns, path } = o?.ns ? { ns: o.ns, path: key } : splitKey(key, defaultNamespace, isNamespace);
         return resolveKey(flatByNs, chain, ns, path) !== undefined;
       },
       dir: () => textDirection(activeLocale),

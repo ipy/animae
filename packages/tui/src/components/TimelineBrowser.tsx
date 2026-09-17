@@ -4,8 +4,10 @@ import { useEngineContext } from "../context/engine-context.tsx";
 import { useQuery } from "../hooks/use-query.ts";
 import { useAppState } from "../context/app-state-context.tsx";
 import { Overlay } from "./Overlay.tsx";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function TimelineBrowser({ selectedBranch }: { selectedBranch: number }) {
+  const { t } = useTuiI18n();
   const { engine } = useEngineContext();
   const { state } = useAppState();
   const timeline = useQuery("timeline") as {
@@ -26,12 +28,13 @@ export function TimelineBrowser({ selectedBranch }: { selectedBranch: number }) 
   const confirmRewind = state.pendingRewindEventId;
 
   return (
-    <Overlay title="Timeline (F3)" width={76} height={22}>
+    <Overlay title={t("timeline.title")} width={76} height={22}>
       <Text>
-        Current branch: <Text color="cyan">{timeline?.branch ?? engine.info().branch}</Text>
+        {t("timeline.current_branch")}{" "}
+        <Text color="cyan">{timeline?.branch ?? engine.info().branch}</Text>
       </Text>
       <Box flexDirection="column" marginTop={1}>
-        <Text bold>Branches (↑/↓ · Enter switch)</Text>
+        <Text bold>{t("timeline.branches_heading")}</Text>
         {branchNames.map((name, i) => (
           <Text key={name} color={i === selectedBranch ? "green" : undefined}>
             {i === selectedBranch ? "▸ " : "  "}
@@ -40,17 +43,17 @@ export function TimelineBrowser({ selectedBranch }: { selectedBranch: number }) 
         ))}
       </Box>
       <Box flexDirection="column" marginTop={1}>
-        <Text bold>Saves (Ctrl+L from game)</Text>
+        <Text bold>{t("timeline.saves_heading")}</Text>
         {(saves.length ? saves : timeline?.saves ?? []).slice(0, 8).map((s) => (
           <Text key={`${s.label}-${s.eventId}`} dimColor>
-            {s.label} @ {s.eventId} ({s.branch})
+            {t("timeline.save_row", { label: s.label, eventId: s.eventId, branch: s.branch })}
           </Text>
         ))}
       </Box>
       {confirmRewind ? (
         <Box marginTop={1}>
           <Text color="yellow">
-            Pending rewind to {confirmRewind} — confirm from main key handler (Enter)
+            {t("timeline.pending_rewind", { eventId: confirmRewind })}
           </Text>
         </Box>
       ) : null}

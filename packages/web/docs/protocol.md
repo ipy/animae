@@ -76,12 +76,7 @@ Core keys emitted by `@animae/host` `SessionHost.buildSnapshot()`:
   "turnError": "string?",
   "actions": [{ "id", "label", "i18n?", "args?", "entityScoped?", "toolbar?" }],
   "panels": { "<panelId>": { ... } },
-  "roster": {},
-  "jobs": {},
-  "resources": {},
-  "factions": {},
-  "calendar": {},
-  "achievements": {},
+  "roster": [{ "id", "name?", "lod?" }],
   "mods": {},
   "branch": {}
 }

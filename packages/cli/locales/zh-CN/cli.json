@@ -1,0 +1,16 @@
+{
+  "command": {
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
+    "saved": "已保存 {label} @ {eventId}",
+    "load_usage": "用法：:load <slot>",
+    "loaded": "已加载 {slot}",
+    "rewind_usage": "用法：:rewind <eventId>",
+    "rewound": "已回溯至 {eventId}",
+    "branches_none": "（无）",
+    "explain_usage": "用法：:explain <turnId>",
+    "query_usage": "用法：:query <viewer> <path>",
+    "advance_usage": "用法：:advance <duration>",
+    "advanced": "已推进 {duration}",
+    "unknown": "未知指令：{name}"
+  }
+}

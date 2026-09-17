@@ -12,6 +12,13 @@ export interface ClickableProps {
   disabled?: boolean;
   focused?: boolean;
   minWidth?: number;
+  /**
+   * Make the wrapper claim all the space its parent offers and clip what does not fit, so a large region
+   * (the transcript) keeps its bounds instead of growing with its content.
+   */
+  fill?: boolean;
+  /** Draw the hover/press frame (default). Large regions turn it off: a frame would resize their content. */
+  frame?: boolean;
 }
 
 export function Clickable({
@@ -22,6 +29,8 @@ export function Clickable({
   disabled,
   focused,
   minWidth,
+  fill,
+  frame = true,
 }: ClickableProps) {
   const theme = useTheme();
   const ref = useRef<DOMElement>(null);
@@ -30,6 +39,7 @@ export function Clickable({
   const { hover, pressed } = useMouseTarget(`click-${id}`, ref, {
     disabled,
     hint,
+    wheel: onWheel !== undefined,
     onEvent: (ev) => {
       if (disabled) return;
       if (ev.button === "wheelUp" || ev.button === "wheelDown") {
@@ -41,16 +51,24 @@ export function Clickable({
     },
   });
 
-  const borderColor = focused
-    ? theme.colors.player
-    : pressed
-      ? theme.colors.primary
-      : hover
-        ? theme.colors.dim
-        : undefined;
+  const borderColor = !frame
+    ? undefined
+    : focused
+      ? theme.colors.player
+      : pressed
+        ? theme.colors.primary
+        : hover
+          ? theme.colors.dim
+          : undefined;
 
   return (
-    <Box ref={ref} minWidth={minWidth} borderStyle={borderColor ? "single" : undefined} borderColor={borderColor}>
+    <Box
+      ref={ref}
+      minWidth={minWidth}
+      {...(fill ? { flexGrow: 1, flexDirection: "column" as const, overflow: "hidden" as const } : {})}
+      borderStyle={borderColor ? "single" : undefined}
+      borderColor={borderColor}
+    >
       {children}
     </Box>
   );

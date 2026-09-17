@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 import type { ReactNode } from "react";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
+import { Stack } from "./Viewport.tsx";
 
 export function Overlay({
   title,
@@ -14,6 +16,7 @@ export function Overlay({
   height?: number;
 }) {
   const theme = useTheme();
+  const { t } = useTuiI18n();
   return (
     <Box
       flexDirection="column"
@@ -22,12 +25,15 @@ export function Overlay({
       width={width}
       height={height}
       paddingX={1}
+      flexShrink={0}
+      overflow="hidden"
     >
       <Text bold color={theme.colors.warning}>
-        {title} (Esc to close)
+        {title} ({t("overlay.close_hint")})
       </Text>
-      <Box flexDirection="column" marginTop={1} flexGrow={1}>
-        {children}
+      {/* Rows keep their height: a long list is clipped at the frame, never printed over itself. */}
+      <Box flexDirection="column" marginTop={1} flexGrow={1} overflow="hidden">
+        <Stack>{children}</Stack>
       </Box>
     </Box>
   );

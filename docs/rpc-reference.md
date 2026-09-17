@@ -44,6 +44,7 @@ Params are objects unless noted. `scene.turn` and `timeline.replay` return `{ ev
 |--------|--------|
 | `scene.start` | `{ location, participants[], fields? }` → `SceneId` |
 | `scene.end` | `{ sceneId }` → `SceneReport` |
+| `scene.active` | `{}` → `{ id, location, participants[], turn }` of the open scene, or `null` (re-sync after `timeline.load` / `rewind` / `switch`) |
 | `scene.turn` | `{ sceneId, actor, text, addressee?, choiceId? }` → stream + summary |
 
 `scene.turn` is serialized (mutex); concurrent turns queue.

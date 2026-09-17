@@ -1,12 +1,19 @@
 import type { Engine, Viewer } from "@animae/engine";
+import { createCliI18n } from "../i18n/cli-i18n.ts";
 
 export interface PlainCommandApi {
   engine: Engine;
   viewer: Viewer;
   notify(msg: string): void;
+  /** BCP-47 UI locale for plain REPL messages (default: negotiate from env). */
+  locale?: string;
 }
 
 export async function runColonCommand(line: string, api: PlainCommandApi): Promise<"quit" | void> {
+  const i18n = createCliI18n(api.locale);
+  const t = (key: string, params?: Record<string, string | number>) =>
+    i18n.t(key, params, { ns: "cli" });
+
   const trimmed = line.trim();
   if (!trimmed.startsWith(":")) return;
   const body = trimmed.slice(1).trim();
@@ -18,46 +25,44 @@ export async function runColonCommand(line: string, api: PlainCommandApi): Promi
 
   switch (name) {
     case "help":
-      api.notify(
-        ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
-      );
+      api.notify(t("command.help_line"));
       return;
     case "quit":
       return "quit";
     case "save": {
       const slot = await api.engine.timeline.save();
-      api.notify(`Saved ${slot.label} @ ${slot.eventId}`);
+      api.notify(t("command.saved", { label: slot.label, eventId: slot.eventId }));
       return;
     }
     case "load": {
       const slot = args[0];
       if (!slot) {
-        api.notify("Usage: :load <slot>");
+        api.notify(t("command.load_usage"));
         return;
       }
       await api.engine.timeline.load(slot);
-      api.notify(`Loaded ${slot}`);
+      api.notify(t("command.loaded", { slot }));
       return;
     }
     case "rewind": {
       const id = args[0];
       if (!id) {
-        api.notify("Usage: :rewind <eventId>");
+        api.notify(t("command.rewind_usage"));
         return;
       }
       await api.engine.timeline.rewind(id);
-      api.notify(`Rewound to ${id}`);
+      api.notify(t("command.rewound", { eventId: id }));
       return;
     }
     case "branches": {
       const branches = await api.engine.timeline.branches();
-      api.notify(branches.map((b) => b.name).join(", ") || "(none)");
+      api.notify(branches.map((b) => b.name).join(", ") || t("command.branches_none"));
       return;
     }
     case "explain": {
       const turnId = args[0];
       if (!turnId) {
-        api.notify("Usage: :explain <turnId>");
+        api.notify(t("command.explain_usage"));
         return;
       }
       const ex = api.engine.explain(turnId, api.viewer);
@@ -68,7 +73,7 @@ export async function runColonCommand(line: string, api: PlainCommandApi): Promi
       const [viewer, ...rest] = args;
       const path = rest.join(" ");
       if (!viewer || !path) {
-        api.notify("Usage: :query <viewer> <path>");
+        api.notify(t("command.query_usage"));
         return;
       }
       api.notify(JSON.stringify(api.engine.query(viewer as Viewer, path), null, 2));
@@ -77,14 +82,14 @@ export async function runColonCommand(line: string, api: PlainCommandApi): Promi
     case "advance": {
       const dur = args.join(" ");
       if (!dur) {
-        api.notify("Usage: :advance <duration>");
+        api.notify(t("command.advance_usage"));
         return;
       }
       await api.engine.world.advance(dur);
-      api.notify(`Advanced ${dur}`);
+      api.notify(t("command.advanced", { duration: dur }));
       return;
     }
     default:
-      api.notify(`Unknown command: ${name}`);
+      api.notify(t("command.unknown", { name }));
   }
 }

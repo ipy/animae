@@ -49,7 +49,7 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
     const loc =
       opts.scene ??
       (() => {
-        const v = engine.query("author", "world.start_location");
+        const v = engine.query("debug", "world/location");
         return typeof v === "string" && v ? v : "home";
       })();
     const sceneId = await engine.scene.start({ location: loc, participants: participants(opts) });

@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import { localizeSnapshot, type SessionHost } from "@animae/host";
+import { localizeSnapshot, SessionHost } from "@animae/host";
 import { AnimaeError, type EngineEvent } from "@animae/engine";
 import { localizeDeep, localizeValue, matchAvailableLocale, runWithLocale, type FormatParams } from "@animae/i18n";
 import { ClientMessageSchema, type ServerMessage } from "../protocol/schemas.ts";
@@ -32,6 +32,16 @@ interface WsData {
 
 type WebI18n = ReturnType<typeof createWebI18n>;
 
+/**
+ * Localize the values inside an engine event while keeping the event's own shape: an event is a record, never a
+ * localizable leaf itself, so a root-level `i18n` field must not collapse the whole event into a string.
+ */
+function localizeEventFields(e: EngineEvent, t: (key: string, params?: FormatParams) => string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(e)) out[k] = localizeDeep(v, t);
+  return out;
+}
+
 export class SessionRoom {
   readonly sessionId: string;
   readonly host: SessionHost;
@@ -48,7 +58,13 @@ export class SessionRoom {
   private readonly patchBuffer: ServerMessage[] = [];
   private readonly patchBufferLimit = 500;
   private lastLocalizedSnapshot = new Map<string, Record<string, unknown>>();
+  /** Per-client inbound queue so overlapping WS frames cannot run host work concurrently. */
+  private readonly inboundChains = new Map<string, Promise<void>>();
   private engineUnsubs: Array<() => void> = [];
+  /** Single-flight snapshot pump: overlapping triggers coalesce into one follow-up run (see `pushSnapshot`). */
+  private snapshotRun?: Promise<void>;
+  private snapshotRerun = false;
+  private snapshotRerunFull = false;
 
   constructor(sessionId: string, host: SessionHost, security: WebSecurityConfig, hooks: WebSessionHooks = {}) {
     this.sessionId = sessionId;
@@ -88,7 +104,7 @@ export class SessionRoom {
           segment: "dialogue",
           turnId,
         });
-        void this.pushSnapshot();
+        this.schedulePush();
       },
       onToast: (level, text) => {
         this.broadcastLocalized((i18n) => ({
@@ -107,9 +123,10 @@ export class SessionRoom {
           active,
           requestId,
         });
+        if (!active) this.schedulePush();
       },
       onStateChange: () => {
-        void this.pushSnapshot();
+        this.schedulePush();
       },
     });
 
@@ -119,7 +136,7 @@ export class SessionRoom {
         type: "event",
         seq: this.nextSeq(),
         kind: e.kind,
-        payload: localizeDeep(e, i18n.t.bind(i18n)),
+        payload: localizeEventFields(e, i18n.t.bind(i18n)),
       }));
     });
     this.engineUnsubs.push(off);
@@ -183,11 +200,51 @@ export class SessionRoom {
     return localizeSnapshot(state, i18n.t.bind(i18n));
   }
 
-  async pushSnapshot(forceFull = false): Promise<void> {
+  /** Fire-and-forget trigger for engine callbacks: a failed build is logged instead of becoming an unhandled rejection. */
+  private schedulePush(): void {
+    this.pushSnapshot().catch((err) => {
+      console.error("[SessionRoom] snapshot push failed:", err);
+    });
+  }
+
+  /**
+   * Push the current state to every authenticated client.
+   *
+   * Snapshot builds are asynchronous and diff against the previously sent state, so overlapping runs could send
+   * patches computed against a stale baseline (or let an older build overwrite a newer one). Runs are therefore
+   * single-flight: a trigger that arrives mid-run schedules exactly one follow-up run, and every caller's promise
+   * settles only after a run that *started after the call* has finished, so awaiting callers observe fresh state.
+   */
+  pushSnapshot(forceFull = false): Promise<void> {
+    if (forceFull) this.snapshotRerunFull = true;
+    if (this.snapshotRun) {
+      this.snapshotRerun = true;
+      return this.snapshotRun;
+    }
+    this.snapshotRerun = true;
+    const run = (async () => {
+      try {
+        while (this.snapshotRerun) {
+          this.snapshotRerun = false;
+          const full = this.snapshotRerunFull;
+          this.snapshotRerunFull = false;
+          await this.pushSnapshotOnce(full);
+        }
+      } finally {
+        this.snapshotRun = undefined;
+      }
+    })();
+    this.snapshotRun = run;
+    return run;
+  }
+
+  private async pushSnapshotOnce(forceFull: boolean): Promise<void> {
     for (const ws of this.clients.values()) {
       if (!ws.data.authenticated) continue;
       const i18n = this.i18nFor(ws);
-      const neutral = await this.host.buildSnapshot({ locale: ws.data.locale });
+      // Build inside the client's locale scope: panels translate with the process-wide game translator, and the
+      // run may have been triggered by a request from a client with a different locale.
+      const neutral = await runWithLocale(i18n, () => this.host.buildSnapshot({ locale: ws.data.locale }));
       const state = this.localizeState(neutral, i18n);
       const prev = this.lastLocalizedSnapshot.get(ws.data.id);
       if (!forceFull && prev) {
@@ -227,13 +284,16 @@ export class SessionRoom {
   }
 
   removeClient(id: string): void {
-    if (this.controllerId === id) {
+    const wasController = this.controllerId === id;
+    if (wasController) {
       this.releasedControllerClientId = this.controllerClientId;
       this.releasedUntil = Date.now() + this.controllerReclaimGraceMs;
       this.controllerId = undefined;
+      this.host.cancelActive();
     }
     this.clients.delete(id);
     this.lastLocalizedSnapshot.delete(id);
+    this.inboundChains.delete(id);
   }
 
   private assignController(ws: ServerWebSocket<WsData>, clientId: string): void {
@@ -305,6 +365,7 @@ export class SessionRoom {
       seq: this.nextSeq(),
       code,
       message: i18n.t(messageKey, params as FormatParams | undefined),
+      localized: true,
       params,
       id,
     });
@@ -321,7 +382,40 @@ export class SessionRoom {
     });
   }
 
-  async handleMessage(ws: ServerWebSocket<WsData>, raw: string | Buffer): Promise<void> {
+  /**
+   * Queue an inbound frame behind earlier frames from the same client (so overlapping WS frames never
+   * run host work concurrently). The returned promise settles once *this* frame has been processed.
+   */
+  handleMessage(ws: ServerWebSocket<WsData>, raw: string | Buffer): Promise<void> {
+    const key = ws.data.id;
+    // `cancel` must overtake the turn it is meant to stop, so it bypasses the per-client queue.
+    if (SessionRoom.peekFrameType(raw) === "cancel") {
+      return this.handleMessageImpl(ws, raw).catch((err) => {
+        console.error("[SessionRoom] inbound handler failed:", err);
+      });
+    }
+    const prev = this.inboundChains.get(key) ?? Promise.resolve();
+    const next = prev
+      .then(() => this.handleMessageImpl(ws, raw))
+      .catch((err) => {
+        console.error("[SessionRoom] inbound handler failed:", err);
+      });
+    this.inboundChains.set(key, next);
+    return next;
+  }
+
+  /** Best-effort frame type sniffing for queue routing; validation still happens in the handler. */
+  private static peekFrameType(raw: string | Buffer): string | undefined {
+    try {
+      const parsed: unknown = JSON.parse(typeof raw === "string" ? raw : raw.toString("utf8"));
+      const type = (parsed as { type?: unknown } | null)?.type;
+      return typeof type === "string" ? type : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async handleMessageImpl(ws: ServerWebSocket<WsData>, raw: string | Buffer): Promise<void> {
     const data = ws.data;
     if (!this.rateLimit(data)) {
       this.err(ws, "RATE_LIMIT", "error.rate_limit");
@@ -480,7 +574,9 @@ export class SessionRoom {
     }
 
     try {
-      switch (m.type) {
+      // Game and host strings produced while handling this frame follow the requesting client's locale.
+      await runWithLocale(this.i18nFor(ws), async () => {
+        switch (m.type) {
           case "ping":
             this.send(ws, { v: WEB_PROTOCOL_VERSION, type: "pong", seq: this.nextSeq(), id: m.id });
             break;
@@ -496,15 +592,16 @@ export class SessionRoom {
             if (m.id) this.ok(ws, m.id);
             break;
           case "input":
-            await runWithLocale(this.i18nFor(ws), () =>
-              this.host.submitInput(m.text, m.choiceId, m.id, { outputLocale: ws.data.locale }),
-            );
+            if (m.text.length > SessionHost.maxPlayerInputChars && !m.text.trim().startsWith(":")) {
+              this.err(ws, "INPUT_TOO_LONG", "error.input_too_long", undefined, m.id);
+              break;
+            }
+            await this.host.submitInput(m.text, m.choiceId, m.id, { outputLocale: ws.data.locale });
             this.ok(ws, m.id);
+            await this.pushSnapshot();
             break;
           case "choose":
-            await runWithLocale(this.i18nFor(ws), () =>
-              this.host.submitInput("", m.choiceId, m.id, { outputLocale: ws.data.locale }),
-            );
+            await this.host.submitInput("", m.choiceId, m.id, { outputLocale: ws.data.locale });
             this.ok(ws, m.id);
             break;
           case "command":
@@ -609,7 +706,8 @@ export class SessionRoom {
             break;
           default:
             this.err(ws, "UNKNOWN", "error.unknown");
-      }
+        }
+      });
     } catch (err) {
       const i18n = this.i18nFor(ws);
       const code = err instanceof AnimaeError ? err.code : "REQUEST_FAILED";
@@ -622,6 +720,7 @@ export class SessionRoom {
         seq: this.nextSeq(),
         code,
         message,
+        localized: err instanceof AnimaeError && Boolean(err.messageKey),
         params,
         id: "id" in m ? m.id : undefined,
       });

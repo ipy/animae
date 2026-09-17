@@ -1,7 +1,7 @@
 import type { Engine, Viewer } from "@animae/engine";
 import { AnimaeError } from "@animae/engine";
 import type { FormatParams, I18nInstance, LocalizableValue } from "@animae/i18n";
-import { localizeError } from "@animae/i18n";
+import { localizeError, scopedI18n } from "@animae/i18n";
 import { runHostCommandLine } from "./builtin-commands.ts";
 import { createHostCommandApi, setHostSceneId, type CommandApiState } from "./command-api.ts";
 import { createHostI18n } from "./i18n/host-i18n.ts";
@@ -73,7 +73,10 @@ export class SessionHost {
 
   private activeTurnAbort?: AbortController;
   private activeRequestId?: string;
+  private endDayInFlight = false;
   private streamCallbacks: StreamCallbacks = {};
+  /** Player free-text cap (colon commands exempt). */
+  static readonly maxPlayerInputChars = 4096;
 
   constructor(opts: SessionHostOptions) {
     this.engine = opts.engine;
@@ -124,8 +127,8 @@ export class SessionHost {
     };
 
     const i18nBridge = {
-      locale: () => this.i18n.locale,
-      t: (key: string, params?: FormatParams) => this.i18n.t(key, params),
+      locale: () => this.activeI18n.locale,
+      t: (key: string, params?: FormatParams) => this.activeI18n.t(key, params),
     };
     this.commandApi = createHostCommandApi(
       this.engine,
@@ -156,8 +159,9 @@ export class SessionHost {
     this.syncSceneFlag();
   }
 
+  /** Mirror the engine's open scene into the host state (the engine is the source of truth). */
   private syncSceneFlag(): void {
-    const sid = this.apiState.sceneId;
+    const sid = this.commandApi.sceneId();
     this.ui.sceneId = sid;
     this.ui.hasScene = Boolean(sid);
   }
@@ -168,6 +172,11 @@ export class SessionHost {
 
   uiLocale(): string {
     return this.i18n.locale;
+  }
+
+  /** Host translator bound to the locale of the request being handled (see `runWithLocale`), else the process locale. */
+  private get activeI18n(): I18nInstance {
+    return scopedI18n(this.i18n);
   }
 
   private appendSystemLine(text: LocalizableValue, _level?: "info" | "warn" | "error"): void {
@@ -185,7 +194,7 @@ export class SessionHost {
       engine: this.engine,
       viewer: this.viewer,
       actor: this.actor,
-      sceneId: () => this.apiState.sceneId,
+      sceneId: () => this.commandApi.sceneId(),
       focusTarget,
       commandApi: this.commandApi,
     };
@@ -247,7 +256,7 @@ export class SessionHost {
       scene: {
         id: this.ui.sceneId,
         active: this.ui.hasScene,
-        location: this.engine.query(this.viewer, "world.location"),
+        location: this.engine.query(this.viewer, "world/location"),
         speaker: this.ui.speaking ? ({ i18n: { key: "header.speaker_busy" } } satisfies LocalizableValue) : undefined,
         participants,
       },
@@ -261,11 +270,6 @@ export class SessionHost {
       actions: this.listActions(this.ui.focusTarget),
       panels: panelData,
       roster: this.engine.query(this.viewer, "characters"),
-      jobs: this.engine.query(this.viewer, "world.vars"),
-      resources: this.engine.query(this.viewer, "world.vars"),
-      factions: this.engine.query(this.viewer, "world.vars"),
-      calendar: this.engine.query(this.viewer, "world.calendar"),
-      achievements: this.engine.query(this.viewer, "world.vars"),
       mods: this.engine.mods?.() ?? null,
       branch: this.engine.timeline.current().name,
       ui: {
@@ -295,33 +299,60 @@ export class SessionHost {
   }
 
   cancelActive(requestId?: string): boolean {
+    let cancelled = false;
     if (this.activeTurnAbort && (!requestId || requestId === this.activeRequestId)) {
       this.activeTurnAbort.abort();
       this.activeTurnAbort = undefined;
-      this.ui.pending = false;
-      this.streamCallbacks.onBusy?.(false, this.activeRequestId);
-      return true;
+      cancelled = true;
     }
-    return false;
+    if (this.ui.pending || this.endDayInFlight) {
+      this.ui.pending = false;
+      this.endDayInFlight = false;
+      cancelled = true;
+    }
+    if (cancelled) {
+      this.streamCallbacks.onBusy?.(false, this.activeRequestId ?? requestId);
+      this.streamCallbacks.onStateChange?.();
+    }
+    return cancelled;
+  }
+
+  /** Serialize colon commands, palette commands, and player turns (prevents overlapping engine work). */
+  private async withExclusiveControl<T>(requestId: string | undefined, fn: () => Promise<T>): Promise<T> {
+    if (this.ui.pending) {
+      throw new AnimaeError("TURN_IN_PROGRESS", "TURN_IN_PROGRESS", undefined, {
+        messageKey: "error.turn_in_progress",
+        namespace: "host",
+      });
+    }
+    this.ui.pending = true;
+    this.streamCallbacks.onBusy?.(true, requestId);
+    try {
+      return await fn();
+    } finally {
+      this.ui.pending = false;
+      this.streamCallbacks.onBusy?.(false, requestId);
+    }
   }
 
   async runCommand(name: string, args: string[], requestId?: string): Promise<void> {
-    const tabHint = this.sidePanelTabForCommand[name];
-    if (tabHint) {
-      this.ui.sidePanelTab = tabHint;
-      this.ui.overlay = "sidePanel";
-    }
-    const cmd = this.commands[name];
-    if (cmd) {
-      const out = await cmd.run(args, this.commandApi);
-      if (typeof out === "string" && out.length) this.commandApi.notify(out);
-    } else {
-      const argPart = args.length ? ` ${args.join(" ")}` : "";
-      await runHostCommandLine(`:${name}${argPart}`, this.commandApi, this.commands);
-    }
-    this.syncSceneFlag();
-    this.streamCallbacks.onStateChange?.();
-    void requestId;
+    await this.withExclusiveControl(requestId, async () => {
+      const tabHint = this.sidePanelTabForCommand[name];
+      if (tabHint) {
+        this.ui.sidePanelTab = tabHint;
+        this.ui.overlay = "sidePanel";
+      }
+      const cmd = this.commands[name];
+      if (cmd) {
+        const out = await cmd.run(args, this.commandApi);
+        if (typeof out === "string" && out.length) this.commandApi.notify(out);
+      } else {
+        const argPart = args.length ? ` ${args.join(" ")}` : "";
+        await runHostCommandLine(`:${name}${argPart}`, this.commandApi, this.commands);
+      }
+      this.syncSceneFlag();
+      this.streamCallbacks.onStateChange?.();
+    });
   }
 
   async runAction(actionId: string, args: Record<string, string>, entityId?: string): Promise<void> {
@@ -353,7 +384,22 @@ export class SessionHost {
           params: { id: actionId },
         });
       }
-      await act.run(ctx, args);
+      if (actionId === "endday") {
+        if (this.endDayInFlight) {
+          this.commandApi.notify(this.activeI18n.t("error.endday_in_progress", { ns: "host" }), "warn");
+          return;
+        }
+        this.endDayInFlight = true;
+        try {
+          await this.withExclusiveControl(undefined, async () => {
+            await act.run(ctx, args);
+          });
+        } finally {
+          this.endDayInFlight = false;
+        }
+      } else {
+        await act.run(ctx, args);
+      }
     }
     this.syncSceneFlag();
     this.streamCallbacks.onStateChange?.();
@@ -366,13 +412,21 @@ export class SessionHost {
     opts?: { outputLocale?: string },
   ): Promise<void> {
     const trimmed = text.trim();
+    if (!trimmed.startsWith(":") && trimmed.length > SessionHost.maxPlayerInputChars) {
+      throw new AnimaeError("INPUT_TOO_LONG", "INPUT_TOO_LONG", undefined, {
+        messageKey: "error.input_too_long",
+        namespace: "host",
+      });
+    }
     if (trimmed.startsWith(":")) {
-      await runHostCommandLine(trimmed, this.commandApi, this.commands);
+      await this.withExclusiveControl(requestId, async () => {
+        await runHostCommandLine(trimmed, this.commandApi, this.commands);
+      });
       this.syncSceneFlag();
       this.streamCallbacks.onStateChange?.();
       return;
     }
-    let sceneId = this.apiState.sceneId;
+    let sceneId = this.commandApi.sceneId();
     if (!sceneId && this.resolveFreeInput) {
       const pick = choiceId && !text.trim() ? choiceId : text;
       const routed = await this.resolveFreeInput(pick, this.commandApi, this.ui.focusTarget);
@@ -381,7 +435,7 @@ export class SessionHost {
         this.streamCallbacks.onStateChange?.();
         return;
       }
-      sceneId = this.apiState.sceneId;
+      sceneId = this.commandApi.sceneId();
     }
     if (!sceneId) {
       throw new AnimaeError("NO_SCENE", "NO_SCENE", undefined, {
@@ -417,7 +471,8 @@ export class SessionHost {
         abortSignal: this.activeTurnAbort?.signal,
       });
     } catch (err) {
-      const localized = localizeError(err, this.i18n.t.bind(this.i18n));
+      const i18n = this.activeI18n;
+      const localized = localizeError(err, i18n.t.bind(i18n));
       let neutral: LocalizableValue = localized;
       if (err instanceof AnimaeError && err.messageKey) {
         const key = err.messageNamespace ? `${err.messageNamespace}:${err.messageKey}` : err.messageKey;
@@ -452,7 +507,7 @@ function defaultHeader(engine: Engine, viewer: Viewer): HostHeaderState {
       minute: t.minute,
       label: { i18n: { key: "header.time_label", params: { day: t.day, time: clock } } },
     },
-    location: engine.query(viewer, "world.location") as string | undefined,
+    location: engine.query(viewer, "world/location") as string | undefined,
     branch: engine.timeline.current().name,
   };
 }

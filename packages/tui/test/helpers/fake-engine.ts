@@ -1,5 +1,5 @@
 import type { Engine } from "@animae/engine";
-import type { EngineEvent, TurnChunk, TurnId } from "@animae/engine";
+import type { ActiveScene, EngineEvent, TurnChunk, TurnId } from "@animae/engine";
 
 export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
   const listeners = new Map<string, Set<(e: EngineEvent) => void>>();
@@ -21,11 +21,13 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
   const queryData: Record<string, unknown> = {
     "world/time": { day: 1, minute: 480, hhmm: "08:00" },
     "world/location": "café",
-    "world/chapter": "Prologue",
+    "world/chapter": { id: "prologue", title: "Prologue" },
     scene: { id: "scn_0001", location: "café", participants: ["player", "mira"] },
     timeline: { branch: "main", branches: ["main"], saves: [] },
-    "director/beat/budget": { turns: 3, s2Turns: 1 },
+    budget: { turns: 3, s2Turns: 1 },
   };
+
+  let openScene: ActiveScene | null = { id: "scn_0001", location: "café", participants: ["player", "mira"], turn: 0 };
 
   const base: Engine = {
     world: {
@@ -38,7 +40,11 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
       move: async () => emit("world.moved") as EngineEvent,
     },
     scene: {
-      start: async () => "scn_0001",
+      start: async (s) => {
+        openScene = { id: "scn_0001", location: s.location, participants: [...s.participants], turn: 0 };
+        return "scn_0001";
+      },
+      active: () => openScene,
       turn: async function* (): AsyncGenerator<TurnChunk> {
         yield { type: "text", text: "你好，世界。", speaker: "mira" };
         yield {
@@ -49,13 +55,16 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
         };
         yield { type: "done", turnId: "turn_0001" as TurnId, events: ["evt_1"] };
       },
-      end: async () => ({
-        sceneId: "scn_0001",
-        turns: 1,
-        events: 1,
-        reflections: [],
-        anchors: [],
-      }),
+      end: async () => {
+        openScene = null;
+        return {
+          sceneId: "scn_0001",
+          turns: 1,
+          events: 1,
+          reflections: [],
+          anchors: [],
+        };
+      },
     },
     entities: {
       generate: async () => ({ kind: "character", id: "gen_1" }),

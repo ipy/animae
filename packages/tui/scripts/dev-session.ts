@@ -14,10 +14,13 @@ import type { CustomCommand } from "../src/types.ts";
 import type { ThemePatch } from "../src/theme/schema.ts";
 import qaKeys from "./qa-scenario-keys.json";
 
+/** The appraise user message wraps the actor's text in locale-independent `<<<ACTOR_INPUT>>>` markers. */
 function actorTextFromSegments(segments: PromptSegments | undefined): string {
   const user = segments?.user ?? "";
-  const m = /Actor text:\n([\s\S]*)/.exec(user);
-  return m?.[1]?.trim() ?? "";
+  const delimited = /<<<ACTOR_INPUT>>>\n([\s\S]*?)\n<<<END_ACTOR_INPUT>>>/.exec(user);
+  if (delimited) return delimited[1]!.trim();
+  const legacy = /Actor text:\n([\s\S]*)/.exec(user);
+  return legacy?.[1]?.trim() ?? "";
 }
 
 function injectMidStreamErrors(port: ModelPort): ModelPort {
@@ -181,11 +184,14 @@ async function main() {
     process.env.LINES = String(rows);
   }
 
+  const uiLocale = process.env.ANIMAE_LOCALE?.trim() || undefined;
+
   const runOpts = {
     engine,
     viewer: "player" as const,
     actor: "player",
     layout: defaultLayout,
+    uiLocale,
     theme: scenario?.theme,
     commands: devCommands,
     panels: [

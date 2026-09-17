@@ -2,11 +2,13 @@ import { useCallback, useRef } from "react";
 import type { TurnChunk } from "@animae/engine";
 import { useEngineContext } from "../context/engine-context.tsx";
 import { useAppState } from "../context/app-state-context.tsx";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 let entrySeq = 0;
 
 export function useTurn() {
   const { engine, actor } = useEngineContext();
+  const { t } = useTuiI18n();
   const { state, dispatch, commandApi, config } = useAppState();
   const streamRef = useRef<AsyncIterable<TurnChunk> | undefined>(undefined);
 
@@ -38,8 +40,8 @@ export function useTurn() {
         dispatch({
           type: "systemLine",
           text: config.resolveFreeInput
-            ? "No active scene — type a name to talk or use :help."
-            : "No active scene — use :commands or start a scene.",
+            ? t("turn.no_scene_free_roam")
+            : t("turn.no_scene_default"),
         });
         return;
       }
@@ -65,7 +67,7 @@ export function useTurn() {
         streamRef.current = undefined;
       }
     },
-    [engine, actor, commandApi, dispatch, config, state.focusTarget],
+    [engine, actor, commandApi, dispatch, config, state.focusTarget, t],
   );
 
   return {

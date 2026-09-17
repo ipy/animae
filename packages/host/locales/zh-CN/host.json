@@ -25,7 +25,9 @@
   },
   "error": {
     "no_scene": "当前没有进行中的场景",
-    "turn_in_progress": "已有回合正在进行",
+    "turn_in_progress": "请等待当前回复结束。",
+    "input_too_long": "内容过长，请缩短后再试。",
+    "endday_in_progress": "正在结束今日，请稍候",
     "no_focus": "请先选择一个实体",
     "unknown_action": "未知操作：{id}",
     "unknown_entity_action": "未知实体操作：{id}"

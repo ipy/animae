@@ -1,10 +1,12 @@
 import { z } from "zod";
-import type { CharacterId, EventDraft, SceneId } from "../types.ts";
+import { AnimaeError, type CharacterId, type EventDraft, type SceneId } from "../types.ts";
 import type { Kernel } from "../contracts.ts";
 import { stringifyYaml } from "../store/util.ts";
 import { summaryMdPath } from "./util.ts";
 
-const goalChangeSchema = z.strictObject({
+// Model output, not authored data: keys a model adds on its own (`confidence`, `reason`, `mood`) are dropped instead of
+// failing the reflection, so these are plain (stripping) objects rather than strict ones.
+const goalChangeSchema = z.object({
   id: z.string().optional(),
   action: z.enum(["add", "remove", "update"]),
   text: z.string(),
@@ -12,10 +14,10 @@ const goalChangeSchema = z.strictObject({
   priority: z.number().optional(),
 });
 
-export const ReflectionOutputSchema = z.strictObject({
+export const ReflectionOutputSchema = z.object({
   summaries: z.array(z.string()),
   goal_changes: z.array(goalChangeSchema),
-  new_claims: z.array(z.strictObject({ s: z.string(), p: z.string(), o: z.string() })),
+  new_claims: z.array(z.object({ s: z.string(), p: z.string(), o: z.string() })),
 });
 
 export type ReflectionOutput = z.infer<typeof ReflectionOutputSchema>;
@@ -57,7 +59,7 @@ export function coerceReflectionRaw(raw: Record<string, unknown>): Record<string
   }
 
   return {
-    summaries: summaries.length ? summaries : ["(no summary)"],
+    summaries,
     goal_changes,
     new_claims,
   };
@@ -96,12 +98,21 @@ export async function runReflectionForOwner(
     memLines,
   ].join("\n");
 
-  const proposal = await k.models.s2.object({
-    label: "reflect",
-    segments: { static: "", semiStatic: "", dynamic: prompt, user: "Produce reflection JSON." },
-    schema: ReflectionResponseSchema,
-    maxOutputTokens: k.policy.router.budget?.maxOutputTokens.s2 ?? 800,
-  });
+  let proposal: ReflectionOutput;
+  try {
+    proposal = await k.models.s2.object({
+      label: "reflect",
+      segments: { static: "", semiStatic: "", dynamic: prompt, user: "Produce reflection JSON." },
+      schema: ReflectionResponseSchema,
+      maxOutputTokens: k.policy.router.budget?.maxOutputTokens.s2 ?? 800,
+    });
+  } catch (err) {
+    // Reflection is a background nicety: an unusable answer or a provider hiccup must not fail the end of the scene.
+    // A replay miss is still an error, because it means the recording does not match the run.
+    if (err instanceof AnimaeError && err.code === "RECORDING_MISSING") throw err;
+    k.warn("REFLECTION_FAILED", err instanceof Error ? err.message : String(err), { owner, sceneId });
+    return { owner, accepted: false };
+  }
 
   await k.emit([
     {

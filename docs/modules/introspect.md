@@ -17,7 +17,13 @@ Synchronous read-only views over engine state for TUI/RPC (§15): path catalogue
 | `registerViewer(v)` | Custom viewer defs (reserved for extensions). |
 
 ## Paths
-See `contracts.ts` query catalogue. Also supported: `characters/<id>` (summary), `world/location`, `world/time`, `world/chapter`, `world/fields`, `budget`, `director/*`, `events` (last 200, kind-filtered), `timeline`.
+Paths are **slash-separated** (`world/vars`, `world/vars/<key>`, `characters/<id>/tracks`). Anything the engine does not
+recognise answers `undefined`, exactly like a denied path, so a dotted look-alike such as `world.vars` or `world.location`
+fails silently rather than loudly: a host that reads state must use the real paths and test them against a real engine,
+not a fake that accepts both spellings. `world/vars/<key>` takes the var key verbatim (`world/vars/res.food` is fine, the
+dots belong to the key).
+
+See `contracts.ts` query catalogue. Also supported: `characters/<id>` (summary), `characters/<id>/alias` (runtime nickname, aliases and address labels set via `entity.alias_set`; `characters/<id>/alias/nickname` is the nickname entry only), `characters/<id>/card` (the full authored card with extension fields; **`debug` viewer only**, whatever the policy says), `world/location`, `world/time`, `world/chapter`, `world/fields`, `budget`, `director/*`, `events` (last 200, kind-filtered), `timeline`.
 
 ## Visibility
 - Rules evaluated in order; **last match wins**; no match → deny.

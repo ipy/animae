@@ -42,6 +42,8 @@ export interface ViewerDef {
 }
 
 export interface LedgerEntry { eventId: EventId; kind: string; field?: string; detail: Record<string, unknown> }
+/** The scene currently open on the timeline (see `Engine.scene.active`). */
+export interface ActiveScene { id: SceneId; location: string; participants: CharacterId[]; turn: number }
 export interface SceneReport { sceneId: SceneId; turns: number; events: number; summary?: string; reflections: { owner: CharacterId; accepted: boolean }[]; anchors: { id: string; status: string }[] }
 export interface TimelineDiff { state: { path: string; a: unknown; b: unknown }[]; events: { onlyA: EventId[]; onlyB: EventId[]; commonUntil?: EventId } }
 export interface Explanation { turnId: TurnId; viewer: Viewer; chain: { eventId: EventId; kind: string; summary: string; data?: unknown }[] }

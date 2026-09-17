@@ -58,7 +58,7 @@ Miss in replay: `AnimaeError("RECORDING_MISSING", key + label)`.
 | Code | When |
 |------|------|
 | `MODEL_CONFIG` | Invalid openai-compatible config (missing `baseURL`), missing `models` in config, unsupported embedding provider |
-| `MODEL_OUTPUT_INVALID` | Schema validation failed after one repair pass |
+| `MODEL_OUTPUT_INVALID` | Schema validation failed after one repair pass **and** salvage found nothing usable |
 | `RECORDING_MISSING` | Replay lookup miss |
 
 Transient HTTP/network/429/5xx: bounded exponential backoff (default 3). Client validation 4xx: no retry. Missing API keys: warn once; 401 at request time.
@@ -78,3 +78,4 @@ Transient HTTP/network/429/5xx: bounded exponential backoff (default 3). Client 
 - `spec.options` forwarded as `providerOptions[provider]` (Ollama merges default `num_ctx` as above).
 - Opt-in live check: `bun run smoke:ollama` in `@animae/engine` (requires local Ollama; not part of `bun test`). Exercises text, stream, Zod object + repair, `think` on/off, warning sink, and missing-key tolerance with tiny `num_predict`. On slow 8B models, expect tens of seconds per check; keep `options.think: false` unless you need separated reasoning.
 - Repair pass adds a short system hint; one retry only for schema failures.
+- **Salvage** (`salvageStructuredFromValidationError`) runs when the repair pass still fails, on the raw text the SDK kept: fenced JSON is unwrapped, prose without any `{` becomes `{ text }`, and JSON that is broken only by raw control characters inside strings or by a token-limit cut-off is repaired (`repairJsonText`: escape control characters, close the string and containers, drop a dangling key). A cut-off reply keeps just its `text`; half-written cues and choices are dropped, and a reply without text is still `MODEL_OUTPUT_INVALID`.

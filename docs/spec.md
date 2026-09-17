@@ -450,7 +450,7 @@ start: { day: 1, minute: 480 }
 | 项 | 规格 |
 |---|---|
 | 观察者 | 内置五种：`debug`（始终全部可见）、`author`、`gm`、`player`、`npc:<id>`（角色的自我视图，叠加了 L4 效果）。上层可以用 `introspect.registerViewer` 注册自定义观察者 |
-| 路径 | `characters/<id>/{identity,constraints,traits,tracks,tiers,goals,secrets,memory,knowledge}`、`world/{vars,locations,items}`、`ledger`、`events`、`timeline` |
+| 路径 | `characters/<id>/{identity,constraints,traits,tracks,tiers,goals,secrets,memory,knowledge,alias}`、`world/{vars,locations,items}`、`ledger`、`events`、`timeline` |
 | 可见性策略 | `visibility.rules: [{viewer, path: <glob>, allow: bool}]`，按顺序求值，以最后一条匹配的规则为准；没有任何规则匹配时拒绝 |
 | 临时授权 | `grant(viewer, path, ttl)`：写入 `visibility.granted` 事件；到期时写入 `visibility.expired` 事件 |
 | explain | `explain(turnId, viewer)` 返回该回合的事件链：输入、评估、检定、数值变化、场、意图、路由、检索命中。结果经过可见性过滤 |

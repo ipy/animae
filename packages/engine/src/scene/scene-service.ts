@@ -1,4 +1,4 @@
-import type { Kernel, SceneReport } from "../contracts.ts";
+import type { ActiveScene, Kernel, SceneReport } from "../contracts.ts";
 import type { CharacterId, SceneId, TurnChunk } from "../types.ts";
 import { AnimaeError } from "../types.ts";
 import { runStageRules } from "../rules/stages.ts";
@@ -19,6 +19,7 @@ export interface SceneService {
     outputLocale?: string;
   }): AsyncIterable<TurnChunk>;
   end(sceneId: SceneId): Promise<SceneReport>;
+  active(): ActiveScene | null;
 }
 
 export function createSceneService(
@@ -27,6 +28,11 @@ export function createSceneService(
   opts?: { afterTurn?: () => Promise<void> },
 ): SceneService {
   let turnInFlight = false;
+
+  /** A rule can end the scene part-way through a turn (a stop word, a scripted ending); nothing follows an ended scene. */
+  function stillOpen(sceneId: SceneId): boolean {
+    return k.timeline.state().scene?.id === sceneId;
+  }
 
   function pickSpeaker(actor: string, addressee: string | undefined, participants: CharacterId[]): CharacterId {
     const player = k.authored.world.player;
@@ -144,6 +150,7 @@ export function createSceneService(
           outputLocale: t.outputLocale,
         });
         await opts?.afterTurn?.();
+        if (!stillOpen(t.sceneId)) return;
 
         const auto = k.policy.scene.autonomous ?? { maxExchangesPerPlayerTurn: 0, when: "true" };
         const maxEx = auto.maxExchangesPerPlayerTurn ?? 0;
@@ -174,11 +181,23 @@ export function createSceneService(
             autonomous: true,
           });
           await opts?.afterTurn?.();
+          if (!stillOpen(t.sceneId)) return;
           prevSpeaker = nextSpeaker;
         }
       } finally {
         turnInFlight = false;
       }
+    },
+
+    active() {
+      const scene = k.timeline.state().scene;
+      if (!scene || scene.ended) return null;
+      return {
+        id: scene.id,
+        location: scene.location,
+        participants: [...scene.participants],
+        turn: scene.turn,
+      };
     },
 
     async end(sceneId) {

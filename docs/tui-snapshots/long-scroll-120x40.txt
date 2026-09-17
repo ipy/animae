@@ -1,40 +1,40 @@
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ — · — · — · main                                                                                                     │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  No active scene — use :help or :commands to explore.                                                                   
-scroll line 186                                                                      Side panel                         
-scroll line 187                                                                                                         
-scroll line 188                                                                      Tracks                             
-scroll line 189                                                                                                         
-scroll line 190                                                                      Fields                             
-scroll line 191                                                                      No visible fields                  
-scroll line 192                                                                                                         
-scroll line 193                                                                      Beat / anchors                     
-scroll line 194                                                                                                         
-scroll line 195                                                                      Demo                                 
-scroll line 196                                                                      百合园 · Demo                           
-scroll line 197                                                                      第 1 天 07:00 · —                    
-scroll line 198                                                                                                         
-scroll line 199                                                                      资源                                 
-No active scene — use :commands or start a scene.                                    食物 ░░░░░░░░░░░░ 0 ⚠                
-                                                                                     净水 ░░░░░░░░░░░░ 0 ⚠                
-                                                                                     电力 ░░░░░░░░░░░░ 0 ⚠                
-                                                                                     药品 ░░░░░░░░░░░░ 0 ⚠                
-                                                                                     弹药 ░░░░░░░░░░░░ 0 ⚠                
-                                                                                     材料 ░░░░░░░░░░░░ 0 ⚠                
-                                                                                                                        
-                                                                                     威胁 ░░░░░░░░░░░░ 0                  
-                                                                                     威信 ░░░░░░░░░░░░ 0                  
-                                                                                     和睦 ░░░░░░░░░░░░ 0                  
-                                                                                                                        
-                                                                                     今日岗位                               
-                                                                                     scroll +15                         
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
->                                                                                                                       
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ F1 help · F2 log · F3 timeline · Tab focus · Enter send                                                           —  │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+scroll line 157                                                                                                         
+scroll line 158                                                                      ▾ Demo                             
+scroll line 159                                                                      Demo session                       
+scroll line 160                                                                      No location                        
+scroll line 161                                                                                                         
+scroll line 162                                                                                                         
+scroll line 163                                                                                                         
+scroll line 164                                                                                                         
+scroll line 165                                                                                                         
+scroll line 166                                                                                                         
+scroll line 167                                                                                                         
+scroll line 168                                                                                                         
+scroll line 169                                                                                                         
+scroll line 170                                                                                                         
+scroll line 171                                                                                                         
+scroll line 172                                                                                                         
+scroll line 173                                                                                                         
+scroll line 174                                                                                                         
+scroll line 175                                                                                                         
+scroll line 176                                                                                                         
+scroll line 177                                                                                                         
+scroll line 178                                                                                                         
+scroll line 179                                                                                                         
+scroll line 180                                                                                                         
+scroll line 181                                                                                                         
+scroll line 182                                                                                                         
+scroll line 183                                                                                                         
+scroll line 184                                                                                                         
+Jump to latest                                                                                                          
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │:quit                                                                                                               │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+> :quit                                                                                                                 
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load · Mouse · Shift+drag selects text              —  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

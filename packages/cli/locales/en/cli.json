@@ -1,0 +1,16 @@
+{
+  "command": {
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
+    "saved": "Saved {label} @ {eventId}",
+    "load_usage": "Usage: :load <slot>",
+    "loaded": "Loaded {slot}",
+    "rewind_usage": "Usage: :rewind <eventId>",
+    "rewound": "Rewound to {eventId}",
+    "branches_none": "(none)",
+    "explain_usage": "Usage: :explain <turnId>",
+    "query_usage": "Usage: :query <viewer> <path>",
+    "advance_usage": "Usage: :advance <duration>",
+    "advanced": "Advanced {duration}",
+    "unknown": "Unknown command: {name}"
+  }
+}

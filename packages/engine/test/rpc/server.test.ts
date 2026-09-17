@@ -107,6 +107,7 @@ test("concurrent scene.turn calls are serialised", async () => {
     scene: {
       start: async () => "scn_0001",
       end: async () => ({ sceneId: "scn_0001", turns: 0, events: 0, reflections: [], anchors: [] }),
+      active: () => null,
       turn: async function* () {
         active++;
         maxActive = Math.max(maxActive, active);

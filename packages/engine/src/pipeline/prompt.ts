@@ -73,6 +73,22 @@ function outputLanguageDirective(k: Kernel, tag: string): string {
   return ui.t("diagnostics:output_language_directive", { language: lang, tag });
 }
 
+/** Primary language subtag (`zh` for `zh-CN`). */
+function languageOf(tag: string): string {
+  return tag.toLowerCase().split(/[-_]/)[0] ?? tag.toLowerCase();
+}
+
+/**
+ * The output-language directive written in the output language itself, placed last in the user message. The working
+ * prompt (persona, style examples, reminders) may be in another language and drags replies toward it; models weigh the
+ * final instruction they read most. Empty when the working prompt already is in the output language.
+ */
+function outputLanguageReminder(k: Kernel, tag: string): string {
+  if (languageOf(tag) === languageOf(promptLocale(k))) return "";
+  const own = createEngineI18n(tag, [k.i18n.fallbackLocale]);
+  return own.t("diagnostics:output_language_directive", { language: displayLanguageName(tag, tag), tag });
+}
+
 function tierLengthHint(k: Kernel, tier: PromptInput["tier"]): string {
   const budget = routerBudgetK(k).maxOutputTokens;
   const max = tier === "s2" ? budget.s2 : budget.s1;
@@ -433,6 +449,7 @@ function userMessage(k: Kernel, i: PromptInput): string {
     getPromptSection(promptLocale(k), "render_user"),
     getPromptSection(promptLocale(k), "render_output_reminder", { tag: lang }),
     i.appraisal?.type && `Event context: ${i.appraisal.type}`,
+    outputLanguageReminder(k, lang),
   );
 }
 

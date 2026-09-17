@@ -29,6 +29,7 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
         yield { type: "done", turnId: "turn_0001" as TurnId, events: ["evt_0002"] };
       },
       end: async () => ({ sceneId: "scn_0001", turns: 1, events: 1, reflections: [], anchors: [] }),
+      active: () => null,
     },
     entities: {
       generate: async () => ({ kind: "character", id: "gen_1" }),

@@ -149,6 +149,59 @@ describe("introspect query", () => {
     expect(ex.chain.every((c) => c.kind === "utterance" || c.kind === "retrieval")).toBe(true);
   });
 
+  test("alias paths expose runtime nicknames and address labels", async () => {
+    const { k } = createFakeKernel({
+      chars: [charDef("npc1"), charDef("player", "supporting")],
+      policy: { visibility: { rules: [{ viewer: "player", path: "characters/npc1", allow: true }] } },
+    });
+    k.m.memory = createMemoryService(k);
+    const intro = createIntrospect(k);
+
+    expect(intro.query("player", "characters/npc1/alias")).toEqual({ aliases: {}, addressAs: {} });
+    expect(intro.query("player", "characters/npc1/alias/nickname")).toBeUndefined();
+
+    await k.emit([
+      { kind: "entity.alias_set", source: "test", entity: "npc1", nickname: { label: "Nic", by: "player" } },
+      { kind: "entity.alias_set", source: "test", entity: "npc1", addressAs: { target: "player", label: "boss", by: "player" } },
+    ]);
+
+    expect(intro.query("player", "characters/npc1/alias/nickname")).toEqual({ label: "Nic", by: "player" });
+    const view = intro.query("player", "characters/npc1/alias") as {
+      nickname?: { label: string };
+      addressAs: Record<string, Record<string, { label: string }>>;
+    };
+    expect(view.nickname?.label).toBe("Nic");
+    expect(view.addressAs.npc1?.player?.label).toBe("boss");
+
+    await k.emit([{ kind: "entity.alias_set", source: "test", entity: "npc1", nickname: null }]);
+    expect(intro.query("player", "characters/npc1/alias/nickname")).toBeUndefined();
+  });
+
+  test("the full authored card is readable by the debug viewer only", () => {
+    const { k } = createFakeKernel({
+      chars: [charDef("npc1")],
+      // Access to the character itself opens its sub-paths, but not its raw card.
+      policy: { visibility: { rules: [{ viewer: "player", path: "characters/npc1", allow: true }] } },
+    });
+    k.m.memory = createMemoryService(k);
+    const intro = createIntrospect(k);
+    expect(intro.query("player", "characters/npc1/identity")).toBeDefined();
+    expect(intro.query("player", "characters/npc1/card")).toBeUndefined();
+    const card = intro.query("debug", "characters/npc1/card") as { identity?: { name?: string } } | undefined;
+    expect(card?.identity?.name).toBeDefined();
+  });
+
+  test("alias paths follow the character visibility rules", () => {
+    const { k } = createFakeKernel({
+      chars: [charDef("npc1"), charDef("player", "supporting")],
+      policy: { visibility: { rules: [{ viewer: "player", path: "characters/npc1", allow: false }] } },
+    });
+    k.m.memory = createMemoryService(k);
+    const intro = createIntrospect(k);
+    expect(intro.query("player", "characters/npc1/alias")).toBeUndefined();
+    expect(intro.query("debug", "characters/npc1/alias")).toEqual({ aliases: {}, addressAs: {} });
+  });
+
   test("characters list filtered", () => {
     const { k } = createFakeKernel({
       chars: [charDef("npc1"), charDef("npc2")],

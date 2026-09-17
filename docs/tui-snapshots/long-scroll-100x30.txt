@@ -1,30 +1,30 @@
-╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ — · — · — · main                                                                                 │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
-scroll line 189e — use :help or :commands to explore.                  Side panel                   
-scroll line 190                                                                                     
-scroll line 191                                                        Tracks                       
-scroll line 192                                                                                     
-scroll line 193                                                        No visible fields            
-scroll line 194                                                                                     
-scroll line 195                                                        Beat / anchors               
-scroll line 196                                                                                     
-scroll line 197                                                        Demo                           
-scroll line 198                                                        第 1 天 07:00 · —              
-scroll line 199                                                                                     
-No active scene — use :commands or start a scene.                                                   
-                                                                       资源                           
-                                                                       食物 ░░░░░░░░░░░░ 0 ⚠          
-                                                                       电力 ░░░░░░░░░░░░ 0 ⚠          
-                                                                       药品 ░░░░░░░░░░░░ 0 ⚠          
-                                                                       弹药 ░░░░░░░░░░░░ 0 ⚠          
-                                                                       材料 ░░░░░░░░░░░░ 0 ⚠          
-                                                                       威信 ░░░░░░░░░░░░ 0            
-                                                                       和睦 ░░░░░░░░░░░░ 0            
-                                                                                                    
-                                                                                                    
-                                                                       scroll +12                   
-                                                                                                    
-╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ F1 help · F2 log · F3 timeline · Tab focus · Enter send                                       —  │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ No active scene — use :help or :commands to explore.                                               
+scroll line 173                                                                                     
+scroll line 174                                                        ▾ Demo                       
+scroll line 175                                                        Demo session                 
+scroll line 176                                                        No location                  
+scroll line 177                                                                                     
+scroll line 178                                                                                     
+scroll line 179                                                                                     
+scroll line 180                                                                                     
+scroll line 181                                                                                     
+scroll line 182                                                                                     
+scroll line 183                                                                                     
+scroll line 184                                                                                     
+scroll line 185                                                                                     
+scroll line 186                                                                                     
+scroll line 187                                                                                     
+scroll line 188                                                                                     
+scroll line 189                                                                                     
+Jump to latest                                                                                      
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────┐ 
+ │:quit                                                                                           │ 
+ └────────────────────────────────────────────────────────────────────────────────────────────────┘ 
+> :quit                                                                                             
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load · Mouse · Shift+drag select—  │
+│  text                                                                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

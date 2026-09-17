@@ -236,6 +236,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
         }
       },
       end: (sceneId) => mutationGate.withLock(() => scene.end(sceneId)),
+      active: () => scene.active(),
     },
     entities: {
       generate: (r) => mutationGate.withLock(() => entities.generate(r)),

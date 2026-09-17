@@ -67,11 +67,13 @@ def _screen_view(sess: PtySession, *, tail_chars: int = 2800) -> str:
 
 
 def help_visible(sess: PtySession) -> bool:
-    return "Help (F1)" in _screen_view(sess)
+    view = _screen_view(sess)
+    return "Help (F1)" in view or "帮助 (F1)" in view
 
 
 def event_log_visible(sess: PtySession) -> bool:
-    return "Event log (F2)" in _screen_view(sess)
+    view = _screen_view(sess)
+    return "Event log (F2)" in view or "事件日志 (F2)" in view
 
 
 def overlay_visible(sess: PtySession, title: str) -> bool:
@@ -105,7 +107,7 @@ def open_help(sess: PtySession) -> str:
         ("alt_1", KEY["alt_1"]),
     ):
         sess.write(seq)
-        if wait_overlay_open(sess, "Help (F1)", timeout=2.0):
+        if help_visible(sess):
             return label
         sess.write(KEY["esc"])
         time.sleep(0.12)
@@ -140,20 +142,33 @@ def _exercise(sess: PtySession, quick: bool) -> dict:
         metrics["esc_close_ms"] = round(esc_ms * 1000, 2)
 
         overlay_cases = (
-            ("f2_ss3", KEY["f2_ss3"], "Event log (F2)"),
-            ("f2_csi", KEY["f2_csi"], "Event log (F2)"),
-            ("f3_ss3", KEY["f3_ss3"], "Timeline (F3)"),
-            ("f4_ss3", KEY["f4_ss3"], "Explain (F4)"),
+            ("f2_ss3", KEY["f2_ss3"], ("Event log (F2)", "事件日志 (F2)")),
+            ("f2_csi", KEY["f2_csi"], ("Event log (F2)", "事件日志 (F2)")),
+            ("f3_ss3", KEY["f3_ss3"], ("Timeline (F3)", "时间线 (F3)")),
+            ("f4_ss3", KEY["f4_ss3"], ("Explain (F4)", "解释 (F4)")),
         )
-        for label, seq, title in overlay_cases:
+        for label, seq, titles in overlay_cases:
             sess.focus_input()
             time.sleep(0.05)
             sess.write(seq)
-            metrics[f"overlay_{label}"] = wait_overlay_open(sess, title, timeout=2.5)
-            if not metrics[f"overlay_{label}"]:
-                raise AssertionError(f"{label} did not open {title!r}")
+            opened = False
+            deadline = time.time() + 2.5
+            while time.time() < deadline:
+                view = _screen_view(sess)
+                if any(t in view for t in titles):
+                    opened = True
+                    break
+                time.sleep(0.04)
+            metrics[f"overlay_{label}"] = opened
+            if not opened:
+                raise AssertionError(f"{label} did not open overlay {titles!r}")
             sess.write(KEY["esc"])
-            wait_overlay_closed(sess, title)
+            close_deadline = time.time() + 1.2
+            while time.time() < close_deadline:
+                view = _screen_view(sess)
+                if not any(t in view for t in titles):
+                    break
+                time.sleep(0.04)
             time.sleep(0.06)
 
         palette_marker = os.environ.get("HOST_PTY_PALETTE_MARKER", "Command palette")

@@ -94,9 +94,9 @@ export interface HostEntityAction {
 }
 
 export interface HostCommand {
-  /** `host` catalog key (e.g. `command.desc.help`); resolve with `api.t` for display. */
-  description: string;
-  usage?: string;
+  /** Catalog key or literal; may be `() => string` for locale-aware game commands (TUI resolves at render). */
+  description: import("@animae/tui").ResolvableText;
+  usage?: import("@animae/tui").ResolvableText;
   run(args: string[], api: HostCommandApi): Promise<string | void>;
 }
 

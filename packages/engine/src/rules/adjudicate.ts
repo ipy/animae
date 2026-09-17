@@ -1,6 +1,6 @@
 import type { Appraisal, CheckRolled } from "../events.ts";
 import type { FieldEffects } from "../schema/authored.ts";
-import type { CharacterId, EventDraft, Rng, TurnId } from "../types.ts";
+import type { CharacterId, EventDraft, Rng, SceneId, TurnId } from "../types.ts";
 import { worldMinutes } from "../timeline/time.ts";
 import { buildCelContext } from "./cel-context.ts";
 import type { RulesDeps } from "./deps.ts";
@@ -11,6 +11,8 @@ export interface AdjudicateInput {
   actor: CharacterId;
   owner: CharacterId;
   turnId: TurnId;
+  /** The scene the turn belongs to, so CEL `scene.*` in windows / thresholds / custom rules describes it. */
+  sceneId?: SceneId;
   fieldEffects?: FieldEffects;
   rng: Rng;
   /** Last check from the check stage (same turn), exposed to custom adjudicate rules via CEL `check`. */
@@ -61,6 +63,7 @@ export function adjudicate(
     other: target,
     actor: input.actor,
     event: input.appraisal,
+    sceneId: input.sceneId,
     check: input.check ? ({ ...input.check } as Record<string, unknown>) : null,
   });
 

@@ -176,9 +176,12 @@ def user_flow(sess: PtySession) -> list[str]:
     turn_line = os.environ.get("HOST_PTY_TURN_LINE", "hello\n")
     sess.write(turn_line.encode("utf-8"))
     turn_ok = os.environ.get("HOST_PTY_TURN_MARKER", "")
-    if turn_ok and not sess.wait_text(turn_ok, timeout=45.0):
-        if not sess.wait_text(":", timeout=2.0):
-            errs.append("turn did not return dialogue")
+    try:
+        sess.wait_turn_done()
+    except (RuntimeError, TimeoutError) as exc:
+        errs.append(f"turn did not finish: {exc}")
+    if turn_ok and turn_ok not in sess.plain():
+        errs.append("turn did not return the stub reply")
     try:
         sess.focus_input()
     except RuntimeError as exc:
@@ -188,7 +191,7 @@ def user_flow(sess: PtySession) -> list[str]:
     sess.write(b":achievements\n")
     time.sleep(0.4)
     ach_marker = os.environ.get("HOST_PTY_ACH_MARKER", "achievement")
-    if ach_marker not in sess.plain_tail(4000).lower():
+    if ach_marker.lower() not in sess.plain_tail(4000).lower():
         errs.append(":achievements produced no visible output")
     for cmd in (b":save\n", b":name\n"):
         sess.write(cmd)
@@ -207,9 +210,7 @@ def run_once(*, quick: bool) -> int:
         turn_line = os.environ.get("HOST_PTY_TURN_LINE", "")
         if turn_line.strip() and not quick:
             sess.write(turn_line.encode("utf-8"))
-            marker = os.environ.get("HOST_PTY_TURN_MARKER", "")
-            if marker:
-                sess.wait_text(marker, timeout=45.0)
+            sess.wait_turn_done()
             time.sleep(0.2)
             sess.focus_input()
 
@@ -245,8 +246,10 @@ def run_once(*, quick: bool) -> int:
                     esc_lat.append(dt)
                 break
         metrics["esc_close_ms"] = round(statistics.median(esc_lat) * 1000, 2) if esc_lat else None
-        if esc_lat and esc_lat[0] > 0.05:
-            metrics["esc_close_warn"] = "exceeded 50ms target"
+        # A lone Esc is held back for the 50 ms escape-sequence window and then waits for the next 30 fps frame,
+        # so ~100-150 ms is the floor; anything past 200 ms would feel sluggish.
+        if esc_lat and esc_lat[0] > 0.2:
+            metrics["esc_close_warn"] = "exceeded 200ms target"
 
         sess.focus_input()
         if quick:
@@ -368,7 +371,8 @@ def main() -> int:
             sys.stderr.write("pty_tui_rigor: retry after flake\n")
         try:
             last = run_once(quick=args.quick)
-        except AssertionError:
+        except AssertionError as exc:
+            sys.stderr.write(f"pty_tui_rigor: assertion failed: {exc}\n")
             last = 1
             continue
         if last == 0:

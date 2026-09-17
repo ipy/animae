@@ -30,6 +30,8 @@ export interface MouseTargetRegistration {
   onEvent?: MouseTargetHandler;
   hint?: string;
   disabled?: boolean;
+  /** Takes wheel events. A wheel turn goes to the topmost target that does, not to a button on top of it. */
+  wheel?: boolean;
 }
 
 interface MouseContextValue {
@@ -118,7 +120,8 @@ export function MouseProvider({
       }
       const col0 = ev.col - 1;
       const row0 = ev.row - 1;
-      const targets = buildTargets();
+      const wheel = ev.button === "wheelUp" || ev.button === "wheelDown";
+      const targets = buildTargets().filter((t) => !wheel || t.wheel);
       const hit = hitTestTopmost(targets, col0, row0);
       if (ev.kind === "motion" && ev.button === "unknown") {
         setHoverHint(hit?.hint);
@@ -176,6 +179,7 @@ export function useMouseTarget(
     onEvent?: MouseTargetHandler;
     hint?: string;
     disabled?: boolean;
+    wheel?: boolean;
     offsetX?: number;
     offsetY?: number;
     deps?: readonly unknown[];
@@ -194,6 +198,7 @@ export function useMouseTarget(
       offsetY: opts.offsetY,
       hint: opts.hint,
       disabled: opts.disabled,
+      wheel: opts.wheel,
       onEvent: (ev) => {
         if (ev.kind === "motion") setHover(true);
         if (ev.kind === "press" && ev.button === "left") setPressed(true);
@@ -201,7 +206,7 @@ export function useMouseTarget(
         opts.onEvent?.(ev);
       },
     });
-  }, [register, id, ref, enabled, opts.disabled, opts.hint, opts.offsetX, opts.offsetY, ...(opts.deps ?? [])]);
+  }, [register, id, ref, enabled, opts.disabled, opts.hint, opts.wheel, opts.offsetX, opts.offsetY, ...(opts.deps ?? [])]);
 
   return { hover: enabled && hover, pressed: enabled && pressed };
 }

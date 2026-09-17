@@ -1,20 +1,20 @@
 import { Box, Text } from "ink";
 import { Overlay } from "./Overlay.tsx";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function HelpOverlay() {
+  const { t } = useTuiI18n();
   return (
-    <Overlay title="Help (F1)" width={70} height={18}>
+    <Overlay title={t("help.title")} width={70} height={18}>
       <Box flexDirection="column">
-        <Text>Enter — submit input · ↑/↓ — choice / history</Text>
-        <Text>1–9 — pick choice · any key — skip typewriter</Text>
-        <Text>Tab — focus transcript / side panel · PgUp/PgDn — scroll</Text>
-        <Text>F1–F5 overlays · Alt+1–5 same (macOS F-keys as media keys) · Ctrl+P palette</Text>
-        <Text>Ctrl+S save · Ctrl+L load · Ctrl+Z rewind turn · Ctrl+C quit</Text>
-        <Text>Esc — close overlay</Text>
+        <Text>{t("help.line_submit")}</Text>
+        <Text>{t("help.line_choices")}</Text>
+        <Text>{t("help.line_focus")}</Text>
+        <Text>{t("help.line_overlays")}</Text>
+        <Text>{t("help.line_save")}</Text>
+        <Text>{t("help.line_esc")}</Text>
         <Box marginTop={1}>
-          <Text dimColor>
-            Commands: :save :load :rewind :branches :explain :query :advance :help :quit
-          </Text>
+          <Text dimColor>{t("help.commands_line")}</Text>
         </Box>
       </Box>
     </Overlay>

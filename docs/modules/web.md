@@ -27,6 +27,7 @@ Companion package **`@animae/host`** holds UI-agnostic `SessionHost` (commands, 
 - Snapshots are full-state for v1; `patch` message type is defined for future incremental updates.
 - Engine events broadcast on `event` messages (`engine.on("*")`).
 - Config secret masking is the host game's responsibility via `WebSessionHooks.configGet`.
+- Error frames carry `{ code, message, localized? }`. `localized: true` means `message` was rendered from a catalog in the client's locale and can be shown as-is; otherwise `message` is a developer diagnostic and the client should show its own copy for `code` (falling back to a generic "something went wrong (code)" text, never a raw message key).
 - Per-client UI locale: `hello.locale`, `hello_ok.locale`, `set_locale`, and `locale` ack messages; localized snapshots/errors/toasts via `runWithLocale` pattern inside `SessionRoom` (`broadcastLocalized`).
 
 ## Changelog

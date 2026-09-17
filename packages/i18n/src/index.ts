@@ -5,7 +5,7 @@ export { formatMessage, flattenCatalog, unflattenCatalog, extractPlaceholders, p
 export { applyPseudoLocale, isPseudoLocale } from "./pseudo-locale.ts";
 export { runI18nCheck, scanSourceRoots } from "./check.ts";
 export { findCjkStringLiterals } from "./cjk-scan.ts";
-export { runWithLocale, getRequestLocale, onLocaleChange, emitLocaleChange } from "./locale-context.ts";
+export { runWithLocale, getRequestLocale, scopedI18n, onLocaleChange, emitLocaleChange } from "./locale-context.ts";
 export { structuredMessage, formatStructuredMessage, type StructuredMessage } from "./structured-message.ts";
 export { localizeError, type LocalizableError } from "./localize-error.ts";
 export {

@@ -50,12 +50,12 @@ export function coerceAppraiseRaw(raw: Record<string, unknown>, policy: Resolved
 
   let approach: string | undefined;
   if (raw.approach != null && String(raw.approach).length) {
-    let a = normalizeLower(raw.approach);
+    const a = normalizeLower(raw.approach);
     if (approaches.length) {
-      const hit = approaches.find((x) => x.toLowerCase() === a);
-      a = hit ?? a;
+      approach = approaches.find((x) => x.toLowerCase() === a);
+    } else {
+      approach = a;
     }
-    approach = a;
   }
 
   let safety = raw.safety != null ? normalizeLower(raw.safety) : undefined;

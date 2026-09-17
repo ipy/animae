@@ -17,9 +17,17 @@
     "actions": "Actions",
     "command_hint": " · Ctrl+P commands"
   },
+  "overlay": {
+    "close_hint": "Esc to close"
+  },
+  "input": {
+    "tab_to_focus": "Tab to focus"
+  },
   "transcript": {
     "jump_latest": "Jump to latest",
-    "speaker_suffix": ": "
+    "speaker_suffix": ": ",
+    "scroll_hint": "Transcript scroll",
+    "follow_tail_hint": "Follow transcript tail"
   },
   "cue": {
     "action_wrap": "({text})"
@@ -31,9 +39,128 @@
     "acquaintances": "acquaintances",
     "friends": "friends"
   },
+  "tracks": {
+    "bond": "bond",
+    "trust": "trust",
+    "respect": "respect"
+  },
+  "side_panel": {
+    "title": "Side panel",
+    "participants": "Participants",
+    "tracks": "Tracks",
+    "fields": "Fields",
+    "beat_anchors": "Beat / anchors",
+    "toggle_hint": "Toggle {title}",
+    "scroll_more": "▲ {above} · ▼ {below} more"
+  },
+  "field_list": {
+    "empty": "No visible fields",
+    "fallback_name": "field"
+  },
+  "header": {
+    "day_time": "Day {day} {time}"
+  },
+  "footer": {
+    "key_hints": "F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load · ",
+    "mouse_hint": "Mouse · Shift+drag selects text"
+  },
+  "help": {
+    "title": "Help (F1)",
+    "line_submit": "Enter — submit input · ↑/↓ — choice / history",
+    "line_choices": "1–9 — pick choice · any key — skip typewriter",
+    "line_focus": "Tab — focus transcript / side panel · PgUp/PgDn — scroll",
+    "line_overlays": "F1–F5 overlays · Alt+1–5 same (macOS F-keys as media keys) · Ctrl+P palette",
+    "line_save": "Ctrl+S save · Ctrl+L load · Ctrl+Z rewind turn · Ctrl+C quit",
+    "line_esc": "Esc — close overlay",
+    "commands_line": "Commands: :save :load :rewind :branches :explain :query :advance :help :quit"
+  },
+  "too_small": {
+    "title": "Please enlarge your terminal",
+    "size": "Need at least 80×24; current {cols}×{rows}"
+  },
+  "event_log": {
+    "title": "Event log (F2)",
+    "showing": "Showing {count} events",
+    "kinds_prefix": " · kinds: {kinds}"
+  },
+  "timeline": {
+    "title": "Timeline (F3)",
+    "current_branch": "Current branch:",
+    "branches_heading": "Branches (↑/↓ · Enter switch)",
+    "saves_heading": "Saves (Ctrl+L from game)",
+    "save_row": "{label} @ {eventId} ({branch})",
+    "pending_rewind": "Pending rewind to {eventId} — confirm from main key handler (Enter)"
+  },
+  "inspector": {
+    "title": "Inspector (F5)",
+    "meta": "viewer={viewer} · paths: scene, director/beat, director/anchors",
+    "query_hint": "Use :query <viewer> <path> for arbitrary paths"
+  },
+  "load_slots": {
+    "title": "Load save (↑/↓ · Enter)",
+    "empty": "No saves yet — use Ctrl+S or :save",
+    "row": "{label} · {branch} @ {eventId}",
+    "footer": "Enter loads slot · Esc closes"
+  },
+  "explain": {
+    "title": "Explain (F4)",
+    "title_turn": "Explain {turnId}",
+    "empty": "No turn to explain yet."
+  },
+  "rewind": {
+    "confirm_title": "Rewind confirm (Ctrl+Z)",
+    "confirm_body": "Rewind to event {eventId}? Enter confirm · Esc cancel",
+    "rewound_branch": "Rewound branch",
+    "no_prior_turn": "No prior turn to rewind"
+  },
+  "demo_panel": {
+    "session": "Demo session",
+    "location": "Location: {name}",
+    "no_location": "No location",
+    "day_minute": "Day {day} {minute}m"
+  },
+  "turn": {
+    "no_scene_free_roam": "No active scene — type a name to talk or use :help.",
+    "no_scene_default": "No active scene — use :commands or start a scene."
+  },
   "command": {
     "no_scene": "No active scene — use :help or :commands to explore.",
     "lang_set": "UI language set to {locale}",
-    "lang_usage": "Usage: :lang <locale> (e.g. en, zh-CN, en-XA)"
+    "lang_usage": "Usage: :lang <locale> (e.g. en, zh-CN, en-XA)",
+    "saved": "Saved {label} @ {eventId}",
+    "loaded": "Loaded {label}",
+    "rewound": "Rewound to {eventId}",
+    "unknown": "Unknown command: {name}",
+    "mouse_on": "Mouse capture enabled (Shift+drag still selects text in most terminals).",
+    "mouse_off": "Mouse capture disabled — native selection restored.",
+    "mouse_usage": "Usage: :mouse on|off|status · shortcut Ctrl+M",
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
+    "rewind_usage": "Usage: :rewind <eventId>",
+    "query_usage": "Usage: :query <viewer> <path>",
+    "advance_usage": "Usage: :advance <duration>",
+    "advanced": "Advanced {duration}",
+    "branches_none": "(none)",
+    "desc": {
+      "help": "Show command list",
+      "save": "Save timeline slot",
+      "load": "Load save slot",
+      "rewind": "Rewind to event",
+      "branches": "List branches",
+      "explain": "Explain a turn",
+      "query": "Query engine path",
+      "advance": "Advance world time",
+      "quit": "Exit TUI",
+      "lang": "Set UI language",
+      "mouse": "Toggle terminal mouse capture (on|off|status)"
+    },
+    "usage": {
+      "load": ":load [slot]",
+      "rewind": ":rewind <eventId>",
+      "explain": ":explain [turnId]",
+      "query": ":query <viewer> <path>",
+      "advance": ":advance <duration>",
+      "lang": ":lang <locale>",
+      "mouse": ":mouse [on|off|status]"
+    }
   }
 }

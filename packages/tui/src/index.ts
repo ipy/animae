@@ -18,6 +18,7 @@ export type {
   EntityTuiAction,
   ActionContext,
   ActionArgField,
+  ResolvableText,
 } from "./types.ts";
 
 export { runCommandLine } from "./commands/builtin.ts";
@@ -28,3 +29,6 @@ export { defaultKeymap } from "./keymap/default.ts";
 export { createCueRegistry } from "./cues/registry.ts";
 export { createTuiI18n, tuiCatalogs } from "./i18n/tui-i18n.ts";
 export { localizeError } from "@animae/i18n";
+export { resolveText } from "./utils/resolve-text.ts";
+export { selectLayoutMode } from "./utils/layout-mode.ts";
+export type { LayoutMode } from "./utils/layout-mode.ts";

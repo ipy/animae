@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { useMemo } from "react";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
 import { columnAtGraphemeIndex, displayWidth, truncateToWidth } from "../utils/display-width.ts";
 import { graphemeCount, graphemes, sliceGraphemes } from "../utils/grapheme.ts";
 
@@ -16,6 +17,7 @@ export function InputLine({
   active: boolean;
 }) {
   const theme = useTheme();
+  const { t } = useTuiI18n();
   const maxCols = Math.max(10, width - 4);
 
   const { before, at, after } = useMemo(() => {
@@ -44,7 +46,7 @@ export function InputLine({
         {active ? <Text inverse>{at}</Text> : at}
         {after}
       </Text>
-      {!active ? <Text dimColor> (Tab to focus)</Text> : null}
+      {!active ? <Text dimColor> ({t("input.tab_to_focus")})</Text> : null}
     </Box>
   );
 }

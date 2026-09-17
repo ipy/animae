@@ -11,7 +11,8 @@
     "unsupported": "不可用",
     "unknown": "未处理的消息类型",
     "request_failed": "请求失败",
-    "branch_name_required": "branch 需要 name"
+    "branch_name_required": "branch 需要 name",
+    "input_too_long": "内容过长，请缩短后再试。"
   },
   "role": {
     "controller_lost": "其他客户端已接管此会话。"

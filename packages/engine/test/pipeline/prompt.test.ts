@@ -43,6 +43,38 @@ describe("buildPromptSegments", () => {
     expect(a.static).toContain("Output contract");
   });
 
+  test("render user message closes with the output-language directive written in that language", () => {
+    const scene = { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false };
+    const input = {
+      purpose: "render" as const,
+      speaker: "npc1",
+      addressee: "player",
+      scene,
+      history: [],
+      fieldEffects: {},
+      tier: "s1" as const,
+      intent: { intent: "respond", scores: { respond: 1 } },
+    };
+    // Working prompt in one language, player-visible output in another: the last thing the model reads must be the
+    // directive in the output language, otherwise persona/examples in the working language win.
+    const cross = createPipelineKernel({
+      chars: [charDef("npc1"), charDef("player")],
+      i18n: { promptLocale: "zh-CN", outputLocale: "en" },
+    }).k;
+    const toEnglish = buildPromptSegments(cross, input).user;
+    expect(toEnglish.trimEnd().endsWith("Internal structured fields may use the working prompt language.")).toBe(true);
+    expect(toEnglish).toContain("English (en)");
+    const toChinese = buildPromptSegments(cross, { ...input, outputLocale: "zh-CN" }).user;
+    expect(toChinese).not.toContain("Internal structured fields");
+
+    // Same language for prompt and output: no duplicate directive.
+    const same = createPipelineKernel({
+      chars: [charDef("npc1"), charDef("player")],
+      i18n: { promptLocale: "en", outputLocale: "en" },
+    }).k;
+    expect(buildPromptSegments(same, input).user).not.toContain("Internal structured fields");
+  });
+
   test("unlocked secrets appear in static only", () => {
     const { k, setState } = createPipelineKernel({
       chars: [

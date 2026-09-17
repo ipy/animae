@@ -1,6 +1,7 @@
 """Shared PTY session: background reader (avoids pipe backpressure) + optional pyte screen."""
 from __future__ import annotations
 
+import codecs
 import fcntl
 import os
 import pty
@@ -73,6 +74,10 @@ class PtySession:
                 self.screen = screen
                 self._stream = Stream(screen)
 
+        # A read can end in the middle of a multi-byte character; decoding each chunk on its own turns the
+        # halves into U+FFFD and shifts every later column of the emulated screen.
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+
         def loop() -> None:
             while not self._stop.is_set():
                 if self.proc.poll() is not None:
@@ -91,7 +96,7 @@ class PtySession:
                     self.buf.extend(chunk)
                 if self._stream is not None:
                     try:
-                        self._stream.feed(chunk.decode("utf-8", errors="replace"))
+                        self._stream.feed(decoder.decode(chunk))
                     except Exception:
                         pass
 
@@ -203,6 +208,50 @@ class PtySession:
         lines = text.splitlines()
         return lines[0] if lines else ""
 
+    def turn_pending(self) -> bool:
+        path = self.draft_file
+        if not path:
+            return False
+        try:
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return False
+        return len(lines) > 2 and lines[2].strip() == "1"
+
+    def wait_shell_ready(self, *, timeout: float = 150.0) -> None:
+        """Input draft empty and no in-flight LLM turn (PTY harness mirror)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                raise RuntimeError("process exited while waiting for shell")
+            draft = self.find_input_draft().strip()
+            if not draft and not self.turn_pending() and self.input_focused():
+                return
+            time.sleep(0.2)
+        raise TimeoutError(
+            f"shell not ready draft={self.find_input_draft()!r} pending={self.turn_pending()}\n"
+            + self.plain_tail(400)
+        )
+
+    def wait_turn_done(self, *, start_timeout: float = 3.0, timeout: float = 90.0) -> None:
+        """
+        Wait for a just-submitted turn to start and finish (PTY harness mirror). The turn-pending flag lags the Enter
+        key a little, and the first words of a reply show up before the turn is over, so neither the flag alone nor the
+        reply text is enough: colon commands sent too early are refused ("one turn at a time"). Focus is not checked: a
+        finished turn may leave a choice list focused, and callers move focus back to the input themselves.
+        """
+        deadline = time.time() + start_timeout
+        while time.time() < deadline and not self.turn_pending():
+            time.sleep(0.05)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                raise RuntimeError("process exited while waiting for the turn")
+            if not self.turn_pending():
+                return
+            time.sleep(0.1)
+        raise TimeoutError("turn still pending after %.0fs\n" % timeout + self.plain_tail(400))
+
     def find_input_draft(self, expected_substr: str | None = None) -> str:
         mirrored = self._read_draft_file()
         if mirrored != "" or (self.draft_file and Path(self.draft_file).is_file()):
@@ -268,6 +317,14 @@ class PtySession:
         return False
 
     def input_focused(self) -> bool:
+        if self.screen is not None:
+            # The live screen is authoritative: the raw output history keeps stale "(Tab to focus)" hints that the
+            # terminal has long since repainted away.
+            for line in reversed(self.screen_lines()[-12:]):
+                s = line.strip()
+                if s.startswith(">"):
+                    return "(Tab to focus)" not in s
+            return True
         tail = self.plain_tail(900)
         if "(Tab to focus)" in tail:
             return False

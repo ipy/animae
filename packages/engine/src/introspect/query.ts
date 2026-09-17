@@ -1,5 +1,5 @@
 import type { FieldEffects } from "../schema/authored.ts";
-import type { EngineState } from "../state.ts";
+import type { EngineState, EntityAliasState } from "../state.ts";
 import type { Kernel } from "../contracts.ts";
 import type { Viewer } from "../types.ts";
 import { memorySyncList } from "../memory/service.ts";
@@ -52,6 +52,19 @@ function characterSummary(k: Kernel, id: string, viewer: Viewer, state: EngineSt
     if (l4.inject_belief?.length) base.injected_beliefs = l4.inject_belief.map((b) => ({ ...b }));
   }
   return base;
+}
+
+function aliasView(alias: EntityAliasState | undefined): Record<string, unknown> {
+  if (!alias) return { aliases: {}, addressAs: {} };
+  const addressAs: Record<string, Record<string, { label: string; by: string }>> = {};
+  for (const [speaker, targets] of Object.entries(alias.addressAs)) {
+    addressAs[speaker] = Object.fromEntries(Object.entries(targets).map(([target, entry]) => [target, { ...entry }]));
+  }
+  return {
+    ...(alias.nickname ? { nickname: { ...alias.nickname } } : {}),
+    aliases: Object.fromEntries(Object.entries(alias.aliases).map(([key, entry]) => [key, { ...entry }])),
+    addressAs,
+  };
 }
 
 function worldVarsForPlayer(k: Kernel, state: EngineState, viewer: Viewer): Record<string, unknown> {
@@ -109,6 +122,9 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
     switch (sub) {
       case "identity":
         return def.card.identity;
+      case "card":
+        // The authored card in full, extension fields included: for the host's own tooling, never a game viewer.
+        return viewer === "debug" ? def.card : undefined;
       case "constraints":
         return def.card.constraints;
       case "traits":
@@ -125,6 +141,12 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
         let mem = memorySyncList(k, id);
         if (viewer === `npc:${id}`) mem = filterMemoryForSelf(mem, l4ForOwner(k, id));
         return mem;
+      }
+      case "alias":
+        return aliasView(state.aliases?.[id]);
+      case "alias/nickname": {
+        const nickname = state.aliases?.[id]?.nickname;
+        return nickname ? { ...nickname } : undefined;
       }
       case "knowledge":
         return def.knowledge.map((d) => ({
@@ -250,6 +272,14 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
   if (trimmed === "timeline") {
     if (!canRead("timeline")) return undefined;
     return { branch: k.timeline.branch(), saves: [] };
+  }
+
+  if (trimmed === "policy" && viewer === "debug") {
+    return k.policy;
+  }
+
+  if (trimmed === "state" && viewer === "debug") {
+    return state;
   }
 
   return undefined;

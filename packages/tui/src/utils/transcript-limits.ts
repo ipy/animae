@@ -15,8 +15,16 @@ export function transcriptVisibleLineBudget(totalRows: number): number {
   return Math.max(8, totalRows - chrome);
 }
 
-/** Entry window size from line budget (rough average lines per entry). */
+/** Entries one PgUp/PgDn moves: about half a screen, so the reader keeps context. */
+export function transcriptPageStep(totalRows: number): number {
+  return Math.max(4, Math.floor(transcriptVisibleLineBudget(totalRows) / 2));
+}
+
+/**
+ * How many of the newest entries the transcript pane renders. An entry takes at least one line, so as many
+ * entries as the pane has lines always fill it, whatever the mix of one-line and multi-line entries; the
+ * pane clips the oldest rows.
+ */
 export function transcriptEntryWindow(totalRows: number): number {
-  const lines = transcriptVisibleLineBudget(totalRows);
-  return Math.max(12, Math.ceil(lines / 2));
+  return Math.max(12, transcriptVisibleLineBudget(totalRows));
 }

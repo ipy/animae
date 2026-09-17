@@ -53,6 +53,8 @@ export function buildHandlerMap(
     return engine.scene.end(requireString(p.sceneId, "sceneId") as never);
   });
 
+  bind("scene.active", () => engine.scene.active());
+
   bind("scene.turn", (params) => {
     return opts.turnMutex.run(async () => {
       const bag = params as Record<string, unknown>;

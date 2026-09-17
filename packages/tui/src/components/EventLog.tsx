@@ -3,8 +3,10 @@ import { useMemo } from "react";
 import { useEvents } from "../hooks/use-events.ts";
 import { useAppState } from "../context/app-state-context.tsx";
 import { Overlay } from "./Overlay.tsx";
+import { useTuiI18n } from "../i18n/context.tsx";
 
 export function EventLog({ kindFilter }: { kindFilter?: string }) {
+  const { t } = useTuiI18n();
   const { state } = useAppState();
   const kinds = state.filterEventKinds;
   const events = useEvents(kinds);
@@ -16,9 +18,10 @@ export function EventLog({ kindFilter }: { kindFilter?: string }) {
   }, [events, kindFilter]);
 
   return (
-    <Overlay title="Event log (F2)">
+    <Overlay title={t("event_log.title")}>
       <Text dimColor>
-        Showing {filtered.length} events{kinds?.length ? ` · kinds: ${kinds.join(",")}` : ""}
+        {t("event_log.showing", { count: filtered.length })}
+        {kinds?.length ? t("event_log.kinds_prefix", { kinds: kinds.join(",") }) : ""}
       </Text>
       <Box flexDirection="column" marginTop={1}>
         {filtered.slice(-20).map((e) => (

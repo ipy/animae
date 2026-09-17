@@ -11,7 +11,8 @@
     "unsupported": "Not available",
     "unknown": "Unhandled message type",
     "request_failed": "Request failed",
-    "branch_name_required": "branch requires name"
+    "branch_name_required": "branch requires name",
+    "input_too_long": "That message is too long — shorten it and try again."
   },
   "role": {
     "controller_lost": "Another client took control of this session."

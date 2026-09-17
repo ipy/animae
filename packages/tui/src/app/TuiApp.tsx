@@ -31,7 +31,8 @@ import {
   insertAtGrapheme,
 } from "../utils/display-width.ts";
 import { graphemeCount } from "../utils/grapheme.ts";
-import { transcriptEntryWindow } from "../utils/transcript-limits.ts";
+import { transcriptPageStep } from "../utils/transcript-limits.ts";
+import { OverlaySlotProvider } from "../context/overlay-slot-context.tsx";
 import { useMouseDispatch } from "../context/mouse-context.tsx";
 import { MouseCaptureBridge } from "./MouseCaptureBridge.tsx";
 import { ActionRunnerProvider } from "../context/action-runner-context.tsx";
@@ -109,7 +110,7 @@ export function TuiApp(props: TuiAppProps) {
   const Layout = (props.layout ?? defaultLayout) as ComponentType<LayoutProps>;
 
   return (
-    <EngineProvider value={{ engine: props.engine, viewer, actor }}>
+    <EngineProvider value={{ engine: props.engine, viewer, actor, displayName: props.displayName }}>
       <ThemeProvider theme={theme}>
         <KeymapProvider keymap={props.keymap}>
           <AppStateProvider
@@ -187,7 +188,7 @@ function TuiShellInner({
   noSceneHint?: string;
   dispatchMouse: ReturnType<typeof useMouseDispatch>;
 }) {
-  const { t, setLocale: setUiLocale } = useTuiI18n();
+  const { t, has, setLocale: setUiLocale } = useTuiI18n();
   const app = useApp();
   const { engine, viewer, actor } = useEngineContext();
   const { state, dispatch, commandApi, config } = useAppState();
@@ -196,27 +197,11 @@ function TuiShellInner({
   const { columns, rows } = useWindowSize();
   const theme = useTheme();
   const mode = selectLayoutMode(columns, rows);
-  const scrollPage = transcriptEntryWindow(rows);
-  const sideW =
-    mode === "two-column"
-      ? Math.max(20, Math.floor((columns * theme.sidePanel.widthPercent) / 100))
-      : 0;
-  const transcriptCols = mode === "two-column" ? columns - sideW - 1 : columns;
+  const scrollPage = transcriptPageStep(rows);
 
-  const handleMouse = useCallback(
-    (ev: SgrMouseEvent) => {
-      dispatchMouse(ev);
-      if (ev.button !== "wheelUp" && ev.button !== "wheelDown") return;
-      const col0 = ev.col - 1;
-      const delta = ev.button === "wheelUp" ? 4 : -4;
-      if (mode === "two-column" && col0 >= transcriptCols) {
-        dispatch({ type: "scrollSide", delta });
-      } else {
-        dispatch({ type: "scrollTranscript", delta });
-      }
-    },
-    [dispatchMouse, dispatch, mode, transcriptCols],
-  );
+  // Wheel turns are handled by the regions that scroll (the transcript and the side panel register as wheel
+  // targets); everything else, clicks included, goes through the hit test.
+  const handleMouse = useCallback((ev: SgrMouseEvent) => dispatchMouse(ev), [dispatchMouse]);
   const [timelineIdx, setTimelineIdx] = useState(0);
   const [loadIdx, setLoadIdx] = useState(0);
   const { setDraft: setInputDraft, clearDraft, readDraft } = useInputDraftActions();
@@ -331,6 +316,7 @@ function TuiShellInner({
               entityActions,
               config.customCommands,
               s.focusTarget,
+              { t, has },
             );
             const entry = entries[Math.min(s.paletteIndex, entries.length - 1)];
             dispatch({ type: "setPalette", open: false });
@@ -342,7 +328,7 @@ function TuiShellInner({
             if (entry.kind === "command" && entry.commandName) {
               const result = await runCommandLine(
                 `:${entry.commandName}`,
-                commandApi,
+                { ...commandApi, setUiLocale, t },
                 config.customCommands,
               );
               if (result === "quit") void onQuit();
@@ -431,7 +417,9 @@ function TuiShellInner({
             void engine.timeline.saves().then((saves) => {
               const slot = saves[loadIdx];
               if (slot) {
-                void engine.timeline.load(slot).then(() => commandApi.notify(`Loaded ${slot.label}`));
+                void engine.timeline
+                  .load(slot)
+                  .then(() => commandApi.notify(t("command.loaded", { label: slot.label })));
               }
             });
           }
@@ -440,7 +428,7 @@ function TuiShellInner({
           void engine.timeline.rewind(s.pendingRewindEventId).then(() => {
             dispatch({ type: "setPendingRewind", eventId: undefined });
             dispatch({ type: "setOverlay", overlay: undefined });
-            commandApi.notify("Rewound branch");
+            commandApi.notify(t("rewind.rewound_branch"));
           });
         }
         return;
@@ -496,12 +484,24 @@ function TuiShellInner({
       if (action === "toggleMouse") {
         const next = !s.mouseCapture;
         commandApi.setMouseCapture(next);
-        commandApi.notify(next ? "Mouse on" : "Mouse off");
+        commandApi.notify(next ? t("command.mouse_on") : t("command.mouse_off"));
         return;
       }
 
       const inputFocused = s.focus === "input" && !s.overlay;
       if (inputFocused) {
+        const draftNowLine = draftNow().draft.trim();
+        const urgentCommand =
+          draftNowLine.startsWith(":") &&
+          /^(?:quit|leave|help)\b/i.test(draftNowLine.slice(1));
+        if (
+          s.pending &&
+          !urgentCommand &&
+          (ev.key.return ||
+            (ev.input && !ev.key.escape && !ev.ctrl && !ev.key.ctrl))
+        ) {
+          return;
+        }
         if (ev.key.escape) {
           if (s.autocompleteOpen) {
             dispatch({ type: "setAutocomplete", open: false });
@@ -600,12 +600,12 @@ function TuiShellInner({
         return;
       }
       if (action === "scrollPageUp") {
-        if (s.focus === "sidePanel") dispatch({ type: "scrollSide", delta: scrollPage });
+        if (s.focus === "sidePanel") dispatch({ type: "scrollSide", delta: -scrollPage });
         else dispatch({ type: "scrollTranscript", delta: scrollPage });
         return;
       }
       if (action === "scrollPageDown") {
-        if (s.focus === "sidePanel") dispatch({ type: "scrollSide", delta: -scrollPage });
+        if (s.focus === "sidePanel") dispatch({ type: "scrollSide", delta: scrollPage });
         else dispatch({ type: "scrollTranscript", delta: -scrollPage });
         return;
       }
@@ -615,14 +615,18 @@ function TuiShellInner({
       if (action === "explain") dispatch({ type: "setOverlay", overlay: "explain" });
       if (action === "inspector") dispatch({ type: "setOverlay", overlay: "inspector" });
       if (action === "save") {
-        void engine.timeline.save().then((s) => commandApi.notify(`Saved ${s.label}`));
+        void engine.timeline
+          .save()
+          .then((s) =>
+            commandApi.notify(t("command.saved", { label: s.label, eventId: s.eventId })),
+          );
       }
       if (action === "load") dispatch({ type: "setOverlay", overlay: "loadSlots" });
       if (action === "rewindTurn") {
         void engine.timeline.events({ limit: 80 }).then((events) => {
           const target = events.at(-2)?.id;
           if (!target) {
-            commandApi.notify("No prior turn to rewind", "warn");
+            commandApi.notify(t("rewind.no_prior_turn"), "warn");
             return;
           }
           dispatch({ type: "setPendingRewind", eventId: target });
@@ -687,27 +691,45 @@ function TuiShellInner({
     noSceneHint: noSceneHint ?? t("command.no_scene"),
   };
 
+  const sidePanelOverlay = state.overlay === "sidePanel" && mode !== "two-column";
+  // `sidePanel` is not an overlay in the two-column layout: the panel is already on screen.
+  const overlayOpen =
+    (state.overlay !== undefined && (state.overlay !== "sidePanel" || sidePanelOverlay)) ||
+    state.paletteOpen ||
+    state.prompt !== undefined ||
+    (state.entityMenuOpen && state.focusTarget !== undefined);
+  const overlays = (
+    <>
+      {state.overlay === "help" ? <HelpOverlay /> : null}
+      {state.overlay === "eventLog" ? <EventLog /> : null}
+      {state.overlay === "timeline" ? <TimelineBrowser selectedBranch={timelineIdx} /> : null}
+      {state.overlay === "explain" ? <ExplainView /> : null}
+      {state.overlay === "inspector" ? <Inspector /> : null}
+      {state.overlay === "loadSlots" ? <LoadSlots selected={loadIdx} /> : null}
+      {state.overlay === "rewindConfirm" ? (
+        <Overlay title={t("rewind.confirm_title")}>
+          <Text>
+            {t("rewind.confirm_body", { eventId: state.pendingRewindEventId ?? "" })}
+          </Text>
+        </Overlay>
+      ) : null}
+      {sidePanelOverlay ? <SidePanel width={columns} fill /> : null}
+      <CommandPalette />
+      <PromptDialog />
+      <EntityActionMenu />
+    </>
+  );
+  // The default layout shows modals in its main region (the frame stays as tall as the terminal). A custom
+  // layout does not know about the slot, so its modals still follow it.
+  const inLayout = Layout === defaultLayout;
+
   return (
     <RunnerProvider onQuit={() => void onQuit()}>
       <Box flexDirection="column">
-        <Layout {...layoutProps} />
-        {state.overlay === "help" ? <HelpOverlay /> : null}
-        {state.overlay === "eventLog" ? <EventLog /> : null}
-        {state.overlay === "timeline" ? <TimelineBrowser selectedBranch={timelineIdx} /> : null}
-        {state.overlay === "explain" ? <ExplainView /> : null}
-        {state.overlay === "inspector" ? <Inspector /> : null}
-        {state.overlay === "loadSlots" ? <LoadSlots selected={loadIdx} /> : null}
-        {state.overlay === "rewindConfirm" ? (
-          <Overlay title="Rewind confirm (Ctrl+Z)">
-            <Text>Rewind to event {state.pendingRewindEventId}? Enter confirm · Esc cancel</Text>
-          </Overlay>
-        ) : null}
-        {state.overlay === "sidePanel" && mode !== "two-column" ? (
-          <SidePanel width={columns} />
-        ) : null}
-        <CommandPalette />
-        <PromptDialog />
-        <EntityActionMenu />
+        <OverlaySlotProvider value={inLayout && overlayOpen ? overlays : null}>
+          <Layout {...layoutProps} />
+        </OverlaySlotProvider>
+        {inLayout ? null : overlays}
       </Box>
     </RunnerProvider>
   );

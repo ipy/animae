@@ -11,7 +11,7 @@ import { useRunner } from "../context/runner-context.tsx";
 import { useTuiI18n } from "../i18n/context.tsx";
 
 export function CommandPalette() {
-  const { t } = useTuiI18n();
+  const { t, has, locale, setLocale: setUiLocale } = useTuiI18n();
   const theme = useTheme();
   const { state, dispatch, config, commandApi } = useAppState();
   const { actions, entityActions, actionContext, runAction, runEntityAction } = useActionRunner();
@@ -26,6 +26,7 @@ export function CommandPalette() {
         entityActions,
         config.customCommands,
         state.focusTarget,
+        { t, has },
       ),
     [
       state.paletteQuery,
@@ -34,6 +35,9 @@ export function CommandPalette() {
       entityActions,
       config.customCommands,
       state.focusTarget,
+      t,
+      has,
+      locale,
     ],
   );
 
@@ -53,7 +57,7 @@ export function CommandPalette() {
     if (entry.kind === "command" && entry.commandName) {
       const result = await runCommandLine(
         `:${entry.commandName}`,
-        commandApi,
+        { ...commandApi, setUiLocale, t },
         config.customCommands,
       );
       if (result === "quit") onQuit();

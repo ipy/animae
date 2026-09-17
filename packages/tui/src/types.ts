@@ -2,8 +2,10 @@ import type { Engine, TurnChunk } from "@animae/engine";
 import type { SceneId, TurnId, Viewer } from "@animae/engine";
 import type { ReactNode, ComponentType } from "react";
 import type { ThemePatch } from "./theme/schema.ts";
+import type { ResolvableText } from "./utils/resolve-text.ts";
 
 export type { Engine, TurnChunk, SceneId, TurnId, Viewer };
+export type { ResolvableText } from "./utils/resolve-text.ts";
 
 export type LayoutFocus = "transcript" | "sidePanel" | "input" | "choices";
 
@@ -86,16 +88,16 @@ export interface ActionContext {
 
 export interface ActionArgField {
   id: string;
-  label: string;
+  label: ResolvableText;
   type: "text" | "select";
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: ResolvableText }>;
   optional?: boolean;
 }
 
 export interface TuiAction {
   id: string;
-  label: string;
-  hint?: string;
+  label: ResolvableText;
+  hint?: ResolvableText;
   hotkey?: string;
   palette?: boolean;
   toolbar?: boolean;
@@ -107,8 +109,8 @@ export interface TuiAction {
 /** Per-entity actions (roster rows, list items). */
 export interface EntityTuiAction {
   id: string;
-  label: string;
-  hint?: string;
+  label: ResolvableText;
+  hint?: ResolvableText;
   hotkey?: string;
   when?: (ctx: ActionContext, entityId: string) => boolean;
   args?: ActionArgField[];
@@ -116,7 +118,7 @@ export interface EntityTuiAction {
 }
 
 export interface PromptRequest {
-  title: string;
+  title: ResolvableText;
   fields: ActionArgField[];
   initial?: Record<string, string>;
 }
@@ -151,17 +153,19 @@ export interface CommandApi {
   locale?(): string;
   /** @internal TUI i18n — translate built-in chrome strings. */
   t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
+  /** @internal Block input while a command-driven scene turn runs (PTY harness mirror). */
+  setTurnPending?(pending: boolean): void;
 }
 
 export interface CustomCommand {
-  description: string;
-  usage?: string;
+  description: ResolvableText;
+  usage?: ResolvableText;
   run(args: string[], api: CommandApi): Promise<string | void>;
 }
 
 export interface SidePanelSection {
   id: string;
-  title: string;
+  title: ResolvableText;
   order?: number;
   render: ComponentType<{ viewer: Viewer; engine: Engine }>;
 }
@@ -216,6 +220,12 @@ export interface RunTuiOptions {
   onReady?: () => void;
   /** Autocomplete hints for member names / nicknames (host-provided). */
   nameHints?: string[];
+  /**
+   * Display name for a character id, used for transcript speaker labels and the participant panel. Hosts need this
+   * when the viewer cannot read card identities through `engine.query` (the usual case for the `player` viewer);
+   * without it labels fall back to the identity query, then to the raw id.
+   */
+  displayName?: (id: string) => string | undefined;
   /** Shown in layout when no scene is active (host-provided copy). */
   noSceneHint?: string;
   /** BCP-47 UI locale for built-in TUI strings (default: negotiate from env). */

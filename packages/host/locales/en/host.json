@@ -25,7 +25,9 @@
   },
   "error": {
     "no_scene": "No active scene",
-    "turn_in_progress": "A turn is already in progress",
+    "turn_in_progress": "Please wait for the current reply to finish.",
+    "input_too_long": "That message is too long — shorten it and try again.",
+    "endday_in_progress": "End day is already in progress",
     "no_focus": "Select an entity first",
     "unknown_action": "Unknown action: {id}",
     "unknown_entity_action": "Unknown entity action: {id}"

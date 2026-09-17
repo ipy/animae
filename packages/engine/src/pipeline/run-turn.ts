@@ -53,8 +53,11 @@ function sceneInfo(k: Kernel): SceneInfo {
   };
 }
 
-function fieldQuery(k: Kernel, owner: CharacterId, target: CharacterId, eventType?: string) {
-  const sc = k.timeline.state().scene!;
+/**
+ * Field resolution for a turn uses the scene as the turn found it. A rule may end the scene part-way through the turn
+ * (a consent stop, an ending event); the rest of that turn is still rendered and must not read a scene that is gone.
+ */
+function fieldQuery(k: Kernel, sc: SceneInfo, owner: CharacterId, target: CharacterId, eventType?: string) {
   return {
     owner,
     target,
@@ -171,7 +174,7 @@ async function* runTurnPipeline(
         choiceId: input.choiceId,
         scene: sceneSnap,
         history,
-        fieldEffects: k.m.fields.resolve(fieldQuery(k, input.speaker, input.addressee)).effects.L1,
+        fieldEffects: k.m.fields.resolve(fieldQuery(k, sceneSnap, input.speaker, input.addressee)).effects.L1,
       } satisfies AppraiseInput),
     );
     const appraiseOut = appraisalResult as Awaited<ReturnType<typeof appraiseStage>>;
@@ -226,7 +229,7 @@ async function* runTurnPipeline(
     }
 
     const l01 = (await hooks.run("applyFields", k, turnCtx, async () =>
-      k.m.fields.resolve(fieldQuery(k, input.speaker, input.addressee, appraisal.type)),
+      k.m.fields.resolve(fieldQuery(k, sceneSnap, input.speaker, input.addressee, appraisal.type)),
     )) as ReturnType<Kernel["m"]["fields"]["resolve"]>;
     await append(
       l01.events.map((d) => ({ ...d, because: d.because ?? [appraisalEventId] })),
@@ -276,6 +279,7 @@ async function* runTurnPipeline(
         actor: input.actor,
         owner: input.speaker,
         turnId: input.turnId,
+        sceneId: input.sceneId,
         fieldEffects: l01.effects.L1,
         rng: k.timeline.rng(`adj:${input.turnId}`),
         check: checks.result ?? null,
@@ -292,7 +296,7 @@ async function* runTurnPipeline(
     );
 
     const l2 = (await hooks.run("applyFields", k, turnCtx, async () =>
-      k.m.fields.resolve(fieldQuery(k, input.speaker, input.addressee, appraisal.type)),
+      k.m.fields.resolve(fieldQuery(k, sceneSnap, input.speaker, input.addressee, appraisal.type)),
     )) as ReturnType<Kernel["m"]["fields"]["resolve"]>;
     await append(
       l2.events.map((d) => ({ ...d, because: d.because ?? [appraisalEventId] })),

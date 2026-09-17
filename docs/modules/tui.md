@@ -24,9 +24,15 @@ Terminal game shell built on **Ink 8** and **React 19**. All panel data is read 
 | `header` / `footer` | Replace default chrome slots in `defaultLayout` |
 | `mouse` | `true` / `false` / `auto` (default); `NO_MOUSE=1` disables |
 | `nameHints` | Strings for Tab autocomplete (member names, nicknames) |
+| `displayName` | `(id) => string \| undefined` — display name for character ids in transcript speaker labels and the participant panel. Needed when the viewer cannot read card identities through `engine.query` (the usual case for `player`); without it labels fall back to the identity query, then the raw id. |
 | `onSceneEnd` | Called after `engine.scene.end` |
 | `initialMessage` | System line in transcript at start |
 | `onReady` | Dev harness hook (automation); not for production games |
+| `uiLocale` | BCP-47 tag for built-in chrome (`ANIMAE_LOCALE` in harnesses). `:lang` switches locale at runtime. |
+
+### Localizable host-provided copy
+
+Toolbar actions, entity actions, custom command descriptions, side-panel section titles, and prompt titles accept `string | (() => string)` (`ResolvableText`). Components call `resolveText()` at render time and subscribe to `TuiI18nProvider` so `:lang` updates chrome without restart.
 
 Works with **no scene** (hint + `:` commands). With `scene`, starts automatically; transcript persists after `endScene`.
 
@@ -46,7 +52,19 @@ Host games dispatch `setFocusTarget` / `setEntityMenu` via `useAppState()` (expo
 
 Real TTY stdin is consumed once in `createPreparsedStdin` (50ms Esc window, UTF-8 reassembly, SGR mouse stripped to `preparsedMouseBus`); Ink reads a synthetic TTY `PassThrough` so Ink’s 20ms flush never splits SS3/CSI. On stdin `end`/`close`/`error`, SIGHUP/SIGTERM, or stdout/stderr `EPIPE`/`EIO`, `installTerminalShutdown` unmounts Ink and `runTui` stops waiting on `waitUntilExit` (hard `process.exit` after 2s if needed) so closing the terminal never leaves a render loop spinning. `useParsedInput` listens to Ink’s emitter only (no second OS reader), maps via vendored `parseKeypress`, and must **not** flush pending Esc on the next chunk. Input draft: ref-first, microtask-coalesced dispatch; React state must never overwrite a longer ref (fixes ASCII+CJK mixed bursts). Ctrl-letter shortcuts match **only with Ctrl**; **Alt+1–5** mirror F1–F5.
 
-PTY rigor (compiled host binary, vendored **pyte** under `scripts/vendor/`): `python3 scripts/pty_tui_rigor.py --quick` — typical quick gate: stress drops **0**, mixed 80-char ASCII+CJK **ok**, Esc close **&lt;1ms** p50, stress p95 **&lt;80ms** (120×40).
+PTY rigor (compiled host binary, vendored **pyte** under `scripts/vendor/`): `python3 scripts/pty_tui_rigor.py --quick` — typical quick gate: stress drops **0**, mixed 80-char ASCII+CJK **ok**, Esc close ≈ **0.1–0.15 s** (the 50 ms escape-sequence window plus one 30 fps frame; the gate warns above 200 ms), stress p95 **&lt;80ms** (120×40). The harness decodes the PTY byte stream with an incremental UTF-8 decoder, so a multi-byte character split across two reads never turns into U+FFFD on the emulated screen.
+
+## Layout contract (Ink 8 / Yoga)
+
+The frame is exactly as tall as the terminal (`height={rows}`). The chrome — header, toolbar, hint, choice menu, input line, footer — has `flexShrink={0}` and keeps its natural height; the main region (transcript + side panel, or a modal) is `flexGrow={1} flexShrink={1} flexBasis={0} overflow="hidden"` and is the only thing that gives way.
+
+- **Never rely on Yoga shrinking text.** Ink paints a `Text` child's *full* content even when Yoga has squeezed its box below the content height, so siblings overlap. Every child of a fixed-height container must therefore have `flexShrink={0}` and the container `overflow="hidden"`. `components/Viewport.tsx` packages this: `Stack` wraps each child in a non-shrinking column, `Viewport` is a clipping region (`anchor="end"` pins the newest rows to the bottom, which is what the transcript wants; `"start"` for lists). Use them for any region whose content can exceed its height; `test/layout-overflow.test.tsx` has a control showing the overlap without `flexShrink={0}`.
+- **Modals replace the main region.** Ink has no transparent layer, so `Overlay` content is handed to the layout through `OverlaySlotProvider` / `useOverlaySlot()` and `defaultLayout` renders it *in place of* transcript and side panel. Header, toolbar and input line stay where they were and a modal can never push the input off screen. A custom `layout` that does not read the slot keeps the previous behaviour (overlays drawn below the layout).
+- **Side panel** scrolls by metrics (`useBoxMetrics` on viewport and content): hidden rows above/below are reported by the `▲ n · ▼ m` indicator, the wheel (`wheel: true` mouse target), PgUp/PgDn and `scrollSide` all move it, and the offset is clamped to the laid-out height. Generic sections (participants, tracks, fields, anchor) only take room while they have data.
+- **Transcript** keeps one entry per line for system output (`appStateReducer` splits multi-line system text, ids stay unique across the 400-entry trim), so the visible window never cuts an entry in half; `transcriptEntryWindow` / `transcriptPageStep` derive window and page size from the row count.
+- **Mouse wheel** goes to the topmost target registered with `wheel: true`; plain click targets never swallow wheel events.
+
+When touching layout code, check the result with an emulator that is not the harness's own (for example `@xterm/headless` fed with the raw PTY bytes) as well as with pyte: the raw byte stream can contain the right text while the composed screen shows overlapping or clipped rows.
 
 ## Keys (§21.3)
 
@@ -68,8 +86,8 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 |------|-----------|
 | Header | Compact `Day N HH:MM · location · chapter · branch` |
 | Speakers | `characters/*/identity.color` when query allows; else theme `npc` / `player` |
-| SidePanel tracks | `ParticipantTracks`: player-visible **tier labels** (zh-CN map when chapter title is Chinese); raw track values hidden per example-game visibility |
-| Transcript | CJK wrap via display width; typewriter wraps live; scroll window scales with terminal height; store capped at 400 entries |
+| SidePanel tracks | `ParticipantTracks`: tier/track labels from `locales/*/tui.json` (`tiers.*`, `tracks.*`) using active UI locale (`useTuiI18n().locale`) — no chapter-language heuristics |
+| Transcript | CJK wrap via display width; typewriter wraps live; tail-anchored `Viewport` (newest line sits on the input line, older rows clip at the top); scroll window scales with terminal height; store capped at 400 entries |
 | InputLine | Grapheme cursor with inverse cell; horizontal scroll for long CJK/ASCII lines |
 | Errors | Turn failures show warning banner; transcript system line; UI stays usable |
 | Ink | `incrementalRendering` + `maxFps` on `runTui` |
@@ -82,6 +100,7 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 | `scripts/qa-scenario-keys.json` | Shared keystroke schedules (kept in sync with batch scenarios) |
 | `scripts/pty-render.py` | Python `pty` driver; waits for `TUI_READY` on stderr, injects keys on the PTY master; sizes 120×40, 100×30, 90×30, 79×23, 160×50; writes grids to `animae/docs/tui-snapshots/` |
 | `scripts/pty-input-harness.py` | PTY regression: burst/paced typing (ASCII+CJK), F-keys/Esc (full mode), `TUI_PTY_DRIVER=1`; `bun run test:pty` (quick), `test:pty:full` |
+| `scripts/pty_locale_harness.py` | Locale gate: zh-CN/en boot chrome + `:lang` flip (no English leaks on zh UI) |
 | `scripts/pty_tui_rigor.py` | Compiled host TUI binary: pyte screen, stress typing, F1/Esc/palette; `--quick` for CI/build gates |
 | `scripts/pty_lib.py` | Shared PTY reader thread + optional vendored pyte (`scripts/vendor/`) |
 | `scripts/demo.ts` | Fake engine interactive demo |
@@ -97,14 +116,14 @@ TUI_SNAPSHOT_SCENARIOS=empty,cjk python3 scripts/pty-render.py
 
 ## Tests
 
-`bun test` in package; component/frame checks use `test/helpers/ink-harness.ts` (`stripAnsi`, `incrementalRendering`).
+`bun test` in package; component/frame checks use `test/helpers/ink-harness.ts` (`stripAnsi`, `incrementalRendering`). `test/layout-overflow.test.tsx` renders the whole `TuiApp` at 120×40 with a 90-line transcript, a 60-row side panel and a modal, and asserts row positions (tail directly above the input, panel rows consecutive, nothing below the input row); `test/transcript-reducer.test.ts` covers system-line splitting, id uniqueness and scroll clamping. Strict hygiene: `test/hygiene/no-hardcoded-ui-text.test.ts` fails on English UI literals in `src/**` — JSX text, `{"..."}` expression literals, `title`/`hint`/`label`/… props, `notify(...)` and system lines, including ones that start with `(` or `[`. Allowlisted are key chords, engine path labels and internal ids; a bare key name (`Esc`, `Enter`, `Tab`, `PgUp`, `F1`…) is a label, but a sentence that merely mentions one is player copy and must go through `t()`.
 
 ## Decisions & gaps
 
 - **F-keys / PTY**: SS3 `\x1bOP`…`\x1bOS`, CSI `\x1b[11~`…, pending-Esc timeout 50ms; table tests in `test/key-sequences.test.ts`. `matchKeyAction` requires Ctrl for Ctrl-letter bindings so words like `achievements` type correctly. Bracketed paste enabled when `onPaste` is set on `useParsedInput`.
 - **Inspector**: read-only tree for common paths; arbitrary paths via `:query`.
 - **Policy track metadata**: tier **names** come from engine query; zh labels use example-game tier map until `policy/tracks` is exposed on `query`.
-- **Budget footer**: tries `query(viewer,"budget")` then `director/beat/budget`.
+- **Budget footer**: `query(viewer,"budget")` (nothing when the viewer may not read it).
 
 ## Integrator notes
 

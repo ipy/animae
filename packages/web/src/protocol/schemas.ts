@@ -282,6 +282,11 @@ export const ServerErrorSchema = z.object({
   id: requestId.optional(),
   code: z.string(),
   message: z.string(),
+  /**
+   * True when `message` was rendered from a catalog in the client's locale and is fit to show as-is. When absent or
+   * false, `message` is a developer diagnostic and clients should present their own copy for `code`.
+   */
+  localized: z.boolean().optional(),
   params: z.record(z.string(), z.unknown()).optional(),
 });
 

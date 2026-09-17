@@ -4,7 +4,7 @@ import type { PresetBundle } from "./preset.ts";
 import type { ModBundle, ModSelection, ModProvenanceEntry, ResolvedMod } from "./mod.ts";
 import type { FieldDef } from "./schema/authored.ts";
 import type { BranchRef, Duration, EngineEvent, EntityRef, EventId, Lod, SaveSlot, SceneId, TurnChunk, TurnId, Viewer, WorldTime } from "./types.ts";
-import type { RuleFn, StageHook, Stage, ViewerDef, LedgerEntry, SceneReport, TimelineDiff, Explanation } from "./contracts.ts";
+import type { ActiveScene, RuleFn, StageHook, Stage, ViewerDef, LedgerEntry, SceneReport, TimelineDiff, Explanation } from "./contracts.ts";
 
 /** Public engine API (spec §20.1). CONTRACT file. */
 export interface CreateEngineOptions {
@@ -48,6 +48,12 @@ export interface Engine {
       outputLocale?: string;
     }): AsyncIterable<TurnChunk>;
     end(sceneId: SceneId): Promise<SceneReport>;
+    /**
+     * The scene that is open on the current timeline right now, or `null` when none is (never started, already
+     * ended, or the timeline was loaded / rewound / switched to a point without one). Reads the live projection, so
+     * hosts can re-sync after any operation that replaces the timeline instead of trusting a cached scene id.
+     */
+    active(): ActiveScene | null;
   };
   entities: {
     generate(r: { kind: "character" | "location" | "item"; template: string; hints?: Record<string, unknown> }): Promise<EntityRef>;

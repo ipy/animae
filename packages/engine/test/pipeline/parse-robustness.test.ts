@@ -65,6 +65,22 @@ describe("schema preprocess", () => {
     expect(parsed.type).toBe("chat");
   });
 
+  test("buildAppraiseSchema drops invalid approach when policy lists approaches", () => {
+    const policy = applyPolicyDefaults({
+      events: { types: { chat: { positive: true }, other: { positive: false } } },
+      x: { approaches: ["persuasion", "comfort"] },
+    });
+    const schema = buildAppraiseSchema(policy);
+    const parsed = schema.parse({
+      type: "chat",
+      intensity: 0.4,
+      sincerity: 0.5,
+      input_class: "normal",
+      approach: "not_a_real_approach",
+    });
+    expect(parsed.approach).toBeUndefined();
+  });
+
   test("buildAppraiseSchema drops unknown fields after preprocess", () => {
     const policy = applyPolicyDefaults({ events: { types: { chat: { positive: true }, other: { positive: false } } } });
     const schema = buildAppraiseSchema(policy);

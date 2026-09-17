@@ -1,56 +1,63 @@
+import { localizeError, type FormatParams } from "@animae/i18n";
 import type { CommandApi, CustomCommand } from "../types.ts";
 
+type TFn = (key: string, params?: Record<string, string | number>) => string;
+
+function msg(api: CommandApi, key: string, params?: Record<string, string | number>): string {
+  const t = api.t ?? ((k: string) => k);
+  return t(key, params);
+}
+
+/** Built-in `:` commands (descriptions resolved at palette render via `command.desc.*` keys). */
 export const builtinCommands: Record<string, CustomCommand> = {
   help: {
-    description: "Show command list",
+    description: "command.desc.help",
     run: async (_args, api) => {
-      api.notify(
-        ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
-      );
+      api.notify(msg(api, "command.help_line"));
     },
   },
   save: {
-    description: "Save timeline slot",
+    description: "command.desc.save",
     run: async (_args, api) => {
       const slot = await api.engine.timeline.save();
-      api.notify(`Saved ${slot.label} @ ${slot.eventId}`);
+      api.notify(msg(api, "command.saved", { label: slot.label, eventId: slot.eventId }));
     },
   },
   load: {
-    description: "Load save slot",
-    usage: ":load [slot]",
+    description: "command.desc.load",
+    usage: "command.usage.load",
     run: async (args, api) => {
       if (args[0]) {
         await api.engine.timeline.load(args[0]!);
-        api.notify(`Loaded ${args[0]}`);
+        api.notify(msg(api, "command.loaded", { label: args[0]! }));
         return;
       }
       api.openOverlay("loadSlots");
     },
   },
   rewind: {
-    description: "Rewind to event",
-    usage: ":rewind <eventId>",
+    description: "command.desc.rewind",
+    usage: "command.usage.rewind",
     run: async (args, api) => {
       const id = args[0];
       if (!id) {
-        api.notify("Usage: :rewind <eventId>", "warn");
+        api.notify(msg(api, "command.rewind_usage"), "warn");
         return;
       }
       await api.engine.timeline.rewind(id);
-      api.notify(`Rewound to ${id}`);
+      api.notify(msg(api, "command.rewound", { eventId: id }));
     },
   },
   branches: {
-    description: "List branches",
+    description: "command.desc.branches",
     run: async (_args, api) => {
       const branches = await api.engine.timeline.branches();
-      api.notify(branches.map((b) => b.name).join(", ") || "(none)");
+      api.notify(branches.map((b) => b.name).join(", ") || msg(api, "command.branches_none"));
     },
   },
   explain: {
-    description: "Explain a turn",
-    usage: ":explain [turnId]",
+    description: "command.desc.explain",
+    usage: "command.usage.explain",
     run: async (args, api) => {
       const turnId = args[0];
       if (!turnId) {
@@ -62,13 +69,13 @@ export const builtinCommands: Record<string, CustomCommand> = {
     },
   },
   query: {
-    description: "Query engine path",
-    usage: ":query <viewer> <path>",
+    description: "command.desc.query",
+    usage: "command.usage.query",
     run: async (args, api) => {
       const [viewer, ...rest] = args;
       const path = rest.join(" ");
       if (!viewer || !path) {
-        api.notify("Usage: :query <viewer> <path>", "warn");
+        api.notify(msg(api, "command.query_usage"), "warn");
         return;
       }
       const value = api.engine.query(viewer, path);
@@ -76,53 +83,52 @@ export const builtinCommands: Record<string, CustomCommand> = {
     },
   },
   advance: {
-    description: "Advance world time",
-    usage: ":advance <duration>",
+    description: "command.desc.advance",
+    usage: "command.usage.advance",
     run: async (args, api) => {
       const dur = args.join(" ");
       if (!dur) {
-        api.notify("Usage: :advance <duration>", "warn");
+        api.notify(msg(api, "command.advance_usage"), "warn");
         return;
       }
       await api.engine.world.advance(dur);
-      api.notify(`Advanced ${dur}`);
+      api.notify(msg(api, "command.advanced", { duration: dur }));
     },
   },
   quit: {
-    description: "Exit TUI",
+    description: "command.desc.quit",
     run: async () => {
       /* handled by runner */
     },
   },
   lang: {
-    description: "Set UI language",
-    usage: ":lang <locale>",
+    description: "command.desc.lang",
+    usage: "command.usage.lang",
     run: async (args, api) => {
       const setUiLocale = api.setUiLocale;
-      const t = api.t ?? ((k: string) => k);
       const loc = args[0]?.trim();
       if (!loc) {
-        api.notify(t("command.lang_usage"), "warn");
+        api.notify(msg(api, "command.lang_usage"), "warn");
         return;
       }
       setUiLocale?.(loc);
-      api.notify(t("command.lang_set", { locale: loc }));
+      api.notify(msg(api, "command.lang_set", { locale: loc }));
     },
   },
   mouse: {
-    description: "Toggle terminal mouse capture (on|off|status)",
-    usage: ":mouse [on|off|status]",
+    description: "command.desc.mouse",
+    usage: "command.usage.mouse",
     run: async (args, api) => {
       const mode = (args[0] ?? "status").toLowerCase();
       if (mode === "on") {
         api.setMouseCapture(true);
-        return "Mouse capture enabled (Shift+drag still selects text in most terminals).";
+        return msg(api, "command.mouse_on");
       }
       if (mode === "off") {
         api.setMouseCapture(false);
-        return "Mouse capture disabled — native selection restored.";
+        return msg(api, "command.mouse_off");
       }
-      return "Usage: :mouse on|off|status · shortcut Ctrl+M";
+      return msg(api, "command.mouse_usage");
     },
   },
 };
@@ -145,11 +151,19 @@ export async function runCommandLine(
   if (name === "quit") return "quit";
   const cmd = extra[name] ?? builtinCommands[name];
   if (!cmd) {
-    api.notify(`Unknown command: ${name}`, "warn");
+    api.notify(msg(api, "command.unknown", { name }), "warn");
     return;
   }
-  const out = await cmd.run(args, api);
-  if (typeof out === "string" && out.length > 0) {
-    api.notify(out);
+  try {
+    const out = await cmd.run(args, api);
+    if (typeof out === "string" && out.length > 0) {
+      api.notify(out);
+    }
+  } catch (err) {
+    const t = api.t ?? ((key: string) => key);
+    api.notify(
+      localizeError(err, (key, params) => t(key, params as FormatParams & Record<string, string | number>)),
+      "warn",
+    );
   }
 }

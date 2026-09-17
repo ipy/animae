@@ -21,8 +21,11 @@ import type {
   LayoutFocus,
   PromptState,
 } from "../types.ts";
+import { mirrorPtyTurnPending } from "../input/pty-draft-mirror.ts";
 import { trimTranscript } from "../utils/transcript-limits.ts";
 import type { CueRenderer, Theme } from "../types.ts";
+import { AnimaeError } from "@animae/engine";
+import { localizeError } from "@animae/i18n";
 import type { Engine, SceneId, TurnId, Viewer } from "../types.ts";
 
 export interface AppState {
@@ -91,7 +94,25 @@ export type AppStateAction =
   | { type: "togglePanelCollapsed"; panelId: string }
   | { type: "setMouseCapture"; on: boolean };
 
-function reducer(state: AppState, action: AppStateAction): AppState {
+/** Ids must stay unique after the transcript is trimmed, so they come from a counter, not from the length. */
+let systemLineSeq = 0;
+
+/**
+ * A system message becomes one transcript entry per line. The transcript scrolls by entries, so a long message
+ * (a report, a list) can then be read piece by piece instead of being one block taller than the pane.
+ */
+function systemEntries(text: string): TranscriptEntry[] {
+  return text.split("\n").map((line) => ({
+    id: `sys_${++systemLineSeq}`,
+    kind: "system" as const,
+    // An empty Text takes no row; a space keeps blank lines (paragraph breaks) in place.
+    text: line === "" ? " " : line,
+    complete: true,
+  }));
+}
+
+/** @internal exported for tests */
+export function appStateReducer(state: AppState, action: AppStateAction): AppState {
   switch (action.type) {
     case "setScene":
       return { ...state, sceneId: action.sceneId };
@@ -114,21 +135,14 @@ function reducer(state: AppState, action: AppStateAction): AppState {
     case "systemLine":
       return {
         ...state,
-        transcript: trimTranscript([
-          ...state.transcript,
-          {
-            id: `sys_${state.transcript.length}`,
-            kind: "system",
-            text: action.text,
-            complete: true,
-          },
-        ]),
+        transcript: trimTranscript([...state.transcript, ...systemEntries(action.text)]),
       };
     case "setChoices":
       return { ...state, choices: action.choices };
     case "setSpeaking":
       return { ...state, speaking: action.speaking };
     case "setPending":
+      mirrorPtyTurnPending(action.pending);
       return { ...state, pending: action.pending };
     case "setLastRoute":
       return { ...state, lastRoute: action.route };
@@ -145,7 +159,11 @@ function reducer(state: AppState, action: AppStateAction): AppState {
     case "scrollTranscript":
       return {
         ...state,
-        transcriptScroll: Math.max(0, state.transcriptScroll + action.delta),
+        // Never past the oldest entry: scrolling further would only show an empty pane.
+        transcriptScroll: Math.min(
+          Math.max(0, state.transcript.length - 1),
+          Math.max(0, state.transcriptScroll + action.delta),
+        ),
       };
     case "scrollTranscriptTail":
       return { ...state, transcriptScroll: 0 };
@@ -283,7 +301,7 @@ export function AppStateProvider({
     () => ({ ...baseConfig, header, footer }),
     [baseConfig, header, footer],
   );
-  const [state, dispatch] = useReducer(reducer, initialAppState(), (base) => ({
+  const [state, dispatch] = useReducer(appStateReducer, initialAppState(), (base) => ({
     ...base,
     sceneId: initialSceneId,
     transcript: initialMessage
@@ -327,21 +345,46 @@ export function AppStateProvider({
     [],
   );
 
+  /**
+   * The engine owns the scene: `timeline.load` / `rewind` / `switch` can replace or drop it behind the UI's back, so
+   * re-read it instead of trusting the cached id (a stale id makes every later turn fail with `SCENE_INVALID`).
+   * Engines without `scene.active` (test doubles) keep the cached value.
+   */
+  const syncLiveScene = useCallback((): SceneId | undefined => {
+    const probe = engine.scene.active;
+    if (typeof probe === "function") {
+      const live = probe.call(engine.scene)?.id;
+      if (live !== sceneIdRef.current) {
+        sceneIdRef.current = live;
+        // Callers include render-time action predicates, so never dispatch synchronously from here.
+        queueMicrotask(() => dispatch({ type: "setScene", sceneId: live }));
+      }
+    }
+    return sceneIdRef.current;
+  }, [engine, dispatch]);
+
   const commandApi: CommandApi = useMemo(
     () => ({
       engine,
       viewer,
       actor,
-      sceneId: () => sceneIdRef.current,
+      sceneId: syncLiveScene,
       startScene: async (s) => {
         const id = await engine.scene.start(s);
         dispatch({ type: "setScene", sceneId: id });
         return id;
       },
       endScene: async () => {
-        if (!state.sceneId) return;
-        const report = await engine.scene.end(state.sceneId);
-        await config.onSceneEnd?.(report, commandApi);
+        const id = syncLiveScene();
+        if (!id) return;
+        try {
+          const report = await engine.scene.end(id);
+          await config.onSceneEnd?.(report, commandApi);
+        } catch (err) {
+          if (!(err instanceof AnimaeError && err.code === "SCENE_INVALID")) {
+            notify(localizeError(err, (key) => key), "warn");
+          }
+        }
         dispatch({ type: "setScene", sceneId: undefined });
         dispatch({ type: "setChoices", choices: undefined });
         dispatch({ type: "setFocus", focus: "input" });
@@ -353,8 +396,11 @@ export function AppStateProvider({
       openOverlay,
       closeOverlay,
       setMouseCapture,
+      setTurnPending: (pending: boolean) => {
+        dispatch({ type: "setPending", pending });
+      },
     }),
-    [engine, viewer, actor, state.sceneId, notify, openOverlay, closeOverlay, setMouseCapture, config],
+    [engine, viewer, actor, notify, openOverlay, closeOverlay, setMouseCapture, config, dispatch, syncLiveScene],
   );
 
   const value = useMemo(

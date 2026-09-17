@@ -4,6 +4,7 @@ import { useActionRunner } from "../context/action-runner-context.tsx";
 import { Overlay } from "./Overlay.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
 import { useTuiI18n } from "../i18n/context.tsx";
+import { resolveText } from "../utils/resolve-text.ts";
 
 export function PromptDialog() {
   const { t } = useTuiI18n();
@@ -19,9 +20,9 @@ export function PromptDialog() {
   const value = prompt.values[field.id] ?? "";
 
   return (
-    <Overlay title={prompt.title}>
+    <Overlay title={resolveText(prompt.title)}>
       <Text>
-        {field.label}
+        {resolveText(field.label)}
         {field.type === "select" && field.options ? (
           <Text dimColor> {t("prompt.select_hint")}</Text>
         ) : (
@@ -36,7 +37,7 @@ export function PromptDialog() {
               color={value === opt.value ? theme.colors.player : theme.colors.dim}
             >
               {value === opt.value ? "▸ " : "  "}
-              {opt.label}
+              {resolveText(opt.label)}
             </Text>
           ))}
         </Box>

@@ -19,11 +19,26 @@ export function TuiI18nProvider(props: { initialLocale?: string; children: React
   return <I18nContext.Provider value={value}>{props.children}</I18nContext.Provider>;
 }
 
-export function useTuiI18n(): { t: I18nInstance["t"]; locale: string; setLocale: (locale: string) => void } {
+export function useTuiI18n(): {
+  t: I18nInstance["t"];
+  has: (key: string) => boolean;
+  locale: string;
+  setLocale: (locale: string) => void;
+} {
   const ctx = useContext(I18nContext);
   if (!ctx) {
     const fallback = createTuiI18n();
-    return { t: bindTuiT(fallback), locale: fallback.locale, setLocale: () => {} };
+    return {
+      t: bindTuiT(fallback),
+      has: (key) => fallback.has(key, { ns: TUI_NS }),
+      locale: fallback.locale,
+      setLocale: () => {},
+    };
   }
-  return { t: bindTuiT(ctx.i18n), locale: ctx.i18n.locale, setLocale: ctx.setLocale };
+  return {
+    t: bindTuiT(ctx.i18n),
+    has: (key) => ctx.i18n.has(key, { ns: TUI_NS }),
+    locale: ctx.i18n.locale,
+    setLocale: ctx.setLocale,
+  };
 }

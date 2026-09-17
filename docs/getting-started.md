@@ -91,7 +91,7 @@ export ANTHROPIC_API_KEY=...
 ./dist/animae run --root ./tutorial
 ```
 
-**Plain line mode** (colon commands: `:save`, `:load`, `:query player world.location`):
+**Plain line mode** (colon commands: `:save`, `:load`, `:query player world/time`):
 
 ```bash
 ./dist/animae run --root ./tutorial --plain
@@ -130,7 +130,7 @@ See [rpc-reference.md](./rpc-reference.md) and [embedding.md](./embedding.md).
 
 ```bash
 export ANTHROPIC_API_KEY=...   # or your provider env
-./dist/animae inspect world.location --root ./tutorial --viewer player
+./dist/animae inspect world/time --root ./tutorial --viewer debug
 ./dist/animae timeline list --root ./tutorial
 ```
 

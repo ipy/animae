@@ -2,19 +2,25 @@ import { Box, Text } from "ink";
 import { useQuery } from "../hooks/use-query.ts";
 import { useEngineContext } from "../context/engine-context.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
+import { useTuiI18n } from "../i18n/context.tsx";
+import { chapterLabel } from "../utils/chapter-label.ts";
 
 export function Header() {
+  const { t } = useTuiI18n();
   const theme = useTheme();
   const { engine } = useEngineContext();
   const worldTime = useQuery("world/time") as { day?: number; minute?: number; hhmm?: string } | null;
-  const chapter = useQuery("world/chapter") as string | null;
+  const chapter = chapterLabel(useQuery("world/chapter"));
   const location = useQuery("world/location") as string | null;
   const timeline = useQuery("timeline") as { branch?: string } | null;
   const info = engine.info();
 
   const timeLabel =
     worldTime && typeof worldTime === "object" && worldTime.day != null
-      ? `Day ${worldTime.day} ${worldTime.hhmm ?? `${worldTime.minute}m`}`
+      ? t("header.day_time", {
+          day: worldTime.day,
+          time: worldTime.hhmm ?? `${worldTime.minute}m`,
+        })
       : "—";
 
   const branch = timeline?.branch ?? info.branch ?? "—";

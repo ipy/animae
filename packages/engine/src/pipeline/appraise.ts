@@ -42,7 +42,7 @@ function postProcessAppraisal(raw: Record<string, unknown>, policy: Kernel["poli
   const approaches = (policy.x?.approaches as string[] | undefined) ?? [];
   if (approach && approaches.length) {
     const hit = approaches.find((a) => a.toLowerCase() === approach);
-    if (hit) approach = hit;
+    approach = hit;
   }
   const base: Appraisal = { type, intensity, sincerity, claims, search_terms, tags, input_class, approach };
   if (policy.safety.enabled) {

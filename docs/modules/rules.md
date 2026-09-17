@@ -41,3 +41,6 @@ Reducer owner should fold these into `state.windows` / `state.firedThresholds` i
 - d20 advantage/disadvantage: roll twice keep high/low when expression is `1d20` (§18).
 - `decayTicks(deps, from, to)` uses closed-form hourly decay over the whole span; skips `|Δ| < 0.01`. World invokes it via `kernelRulesDeps` (not via `RuleEngine` methods).
 - Zero track deltas are not emitted from `adjudicate`.
+- `adjudicate` returns nothing for an event type that has no `delta_table` row, so its windows, thresholds and custom rules are skipped for that type too: give every event type a row (an empty `{}` is fine).
+- CEL `scene.*` in `adjudicate` (window triggers, thresholds, custom-rule `when`) describes the turn's scene when the pipeline passes `sceneId` (it always does).
+- A custom rule may emit `scene.ended` to close the scene from inside a turn. The rest of that turn still runs against the scene as the turn found it (field resolution, render, commit) and no autonomous exchange follows; hosts then see `Engine.scene.active() === null`.

@@ -13,6 +13,7 @@ import { useAppState } from "../context/app-state-context.tsx";
 import { useInputDraftDisplay } from "../context/input-draft-context.tsx";
 import { ActionToolbar } from "../components/ActionToolbar.tsx";
 import { AutocompletePopup } from "../components/AutocompletePopup.tsx";
+import { useOverlaySlot } from "../context/overlay-slot-context.tsx";
 
 function InputChrome({
   width,
@@ -39,6 +40,7 @@ export function DefaultLayout(props: LayoutProps) {
   const HeaderComp = config.header ?? Header;
   const FooterComp = config.footer ?? Footer;
   const mode = selectLayoutMode(columns, rows);
+  const modal = useOverlaySlot();
 
   if (mode === "too-small") {
     return <TooSmall cols={columns} rows={rows} />;
@@ -52,29 +54,54 @@ export function DefaultLayout(props: LayoutProps) {
   // Choices can stay visible while the player types free text (focus === "input").
   const inputActive = props.focus === "input" && !props.overlay;
 
+  // The frame is exactly as tall as the terminal. The chrome (header, toolbar, input, footer) keeps its natural
+  // height and only the main region gives way, so a long transcript or panel is clipped inside its own area
+  // instead of being painted over the input line.
   return (
     <Box flexDirection="column" height={rows}>
-      <HeaderComp {...props} />
-      <ActionToolbar width={columns} />
+      <Box flexShrink={0} flexDirection="column">
+        <HeaderComp {...props} />
+        <ActionToolbar width={columns} />
+      </Box>
       {!props.hasScene ? (
-        <Box paddingX={1}>
+        <Box paddingX={1} flexShrink={0}>
           <Text dimColor>{props.noSceneHint}</Text>
         </Box>
       ) : null}
-      <Box flexGrow={1} flexDirection={mode === "two-column" ? "row" : "column"}>
-        <Box width={transcriptW} flexDirection="column" flexGrow={1}>
-          <Transcript width={transcriptW} rows={rows} />
-        </Box>
-        {mode === "two-column" ? <SidePanel width={sideW} /> : null}
+      <Box
+        flexGrow={1}
+        flexShrink={1}
+        flexBasis={0}
+        overflow="hidden"
+        flexDirection={mode === "two-column" && !modal ? "row" : "column"}
+      >
+        {modal ? (
+          modal
+        ) : (
+          <>
+            <Box
+              width={transcriptW}
+              flexDirection="column"
+              flexGrow={1}
+              overflow="hidden"
+              paddingRight={mode === "two-column" ? 1 : 0}
+            >
+              <Transcript width={transcriptW} rows={rows} />
+            </Box>
+            {mode === "two-column" ? <SidePanel width={sideW} /> : null}
+          </>
+        )}
       </Box>
       {state.turnError ? (
-        <Box paddingX={1}>
+        <Box paddingX={1} flexShrink={0}>
           <Text color={theme.colors.warning}>⚠ {state.turnError}</Text>
         </Box>
       ) : null}
-      <ChoiceMenu />
-      <InputChrome width={columns} active={inputActive} nameHints={config.nameHints} />
-      <FooterComp {...props} />
+      <Box flexShrink={0} flexDirection="column">
+        <ChoiceMenu />
+        <InputChrome width={columns} active={inputActive} nameHints={config.nameHints} />
+        <FooterComp {...props} />
+      </Box>
     </Box>
   );
 }

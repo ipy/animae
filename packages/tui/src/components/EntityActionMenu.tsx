@@ -7,9 +7,10 @@ import { Overlay } from "./Overlay.tsx";
 import { Clickable } from "./Clickable.tsx";
 import { useTheme } from "../hooks/use-theme.ts";
 import { useTuiI18n } from "../i18n/context.tsx";
+import { resolveText } from "../utils/resolve-text.ts";
 
 export function EntityActionMenu() {
-  const { t } = useTuiI18n();
+  const { t, locale } = useTuiI18n();
   const theme = useTheme();
   const { state, dispatch } = useAppState();
   const { entityActions, actionContext, runEntityAction } = useActionRunner();
@@ -18,7 +19,7 @@ export function EntityActionMenu() {
 
   const actions = useMemo(
     () => listEntityActions(entityActions, actionContext, entityId),
-    [entityActions, actionContext, entityId],
+    [entityActions, actionContext, entityId, locale],
   );
 
   return (
@@ -28,7 +29,7 @@ export function EntityActionMenu() {
         {actions.map((a) => (
           <Clickable
             key={a.id}
-            hint={a.hint}
+            hint={a.hint ? resolveText(a.hint) : undefined}
             onPress={() => {
               dispatch({ type: "setEntityMenu", open: false });
               void runEntityAction(a, entityId);
@@ -36,7 +37,7 @@ export function EntityActionMenu() {
           >
             <Text color={theme.colors.primary}>
               {a.hotkey ? `[${a.hotkey}] ` : ""}
-              {a.label}
+              {resolveText(a.label)}
             </Text>
           </Clickable>
         ))}

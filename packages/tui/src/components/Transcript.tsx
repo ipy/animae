@@ -1,6 +1,7 @@
 import { Box, Text, useStdout } from "ink";
 import { Clickable } from "./Clickable.tsx";
 import { Button } from "./Button.tsx";
+import { Viewport } from "./Viewport.tsx";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useAppState } from "../context/app-state-context.tsx";
 import { Typewriter } from "./Typewriter.tsx";
@@ -114,20 +115,15 @@ export const Transcript = memo(function Transcript({ width, rows }: { width: num
 
   return (
     <Clickable
-      hint="Transcript scroll"
+      fill
+      frame={false}
+      hint={t("transcript.scroll_hint")}
       onWheel={(ev) => {
         const delta = ev.button === "wheelUp" ? 4 : ev.button === "wheelDown" ? -4 : 0;
         if (delta) dispatch({ type: "scrollTranscript", delta });
       }}
     >
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
-        {scrolledUp ? (
-          <Button
-            label={t("transcript.jump_latest")}
-            hint="Follow transcript tail"
-            onPress={() => dispatch({ type: "scrollTranscriptTail" })}
-          />
-        ) : null}
+      <Viewport anchor="end">
         {visibleEntries.map((entry) => {
         const isActive = entry.id === lastIncomplete?.id;
         if (entry.kind === "system") {
@@ -190,7 +186,14 @@ export const Transcript = memo(function Transcript({ width, rows }: { width: num
           </Box>
         );
         })}
-      </Box>
+        {scrolledUp ? (
+          <Button
+            label={t("transcript.jump_latest")}
+            hint={t("transcript.follow_tail_hint")}
+            onPress={() => dispatch({ type: "scrollTranscriptTail" })}
+          />
+        ) : null}
+      </Viewport>
     </Clickable>
   );
 });

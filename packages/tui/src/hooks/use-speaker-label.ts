@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useEngineContext } from "../context/engine-context.tsx";
 import { useQuery } from "./use-query.ts";
+import { characterDisplayName } from "../utils/character-name.ts";
 
 type CharacterRow = { id?: string; name?: string };
 
@@ -15,17 +16,14 @@ function resolveCharacterId(
   return byName?.id;
 }
 
-/** Display name for transcript (card identity when query exposes it). */
+/** Display name for transcript: host resolver, else card identity when the viewer may read it, else the raw speaker. */
 export function useSpeakerLabel(speaker?: string): string | undefined {
-  const { engine, viewer } = useEngineContext();
+  const { engine, viewer, displayName } = useEngineContext();
   const characters = useQuery("characters") as CharacterRow[] | null;
 
   return useMemo(() => {
     if (!speaker) return undefined;
     const id = resolveCharacterId(speaker, characters ?? undefined) ?? speaker;
-    const identity = engine.query(viewer, `characters/${id}/identity`) as
-      | { name?: string }
-      | undefined;
-    return identity?.name ?? speaker;
-  }, [speaker, characters, engine, viewer]);
+    return characterDisplayName({ engine, viewer, displayName }, id) ?? speaker;
+  }, [speaker, characters, engine, viewer, displayName]);
 }
