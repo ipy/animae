@@ -1,0 +1,5 @@
+dnd:
+  check:
+    insight_lie: 对方在说谎
+    investigation_found: 调查有所发现
+    perception_unusual: 察觉到了异常

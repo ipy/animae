@@ -66,7 +66,14 @@ export interface SaveSlot {
 }
 
 export type TurnChunk =
-  | { type: "text"; text: string; speaker?: CharacterId; autonomous?: boolean }
+  | {
+      type: "text";
+      text: string;
+      speaker?: CharacterId;
+      autonomous?: boolean;
+      /** When true, begins a new utterance even if the speaker matches the previous `text` chunk (same sub-turn). */
+      newUtterance?: boolean;
+    }
   | { type: "cue"; cue: { type: string; args: Record<string, unknown> }; at: number; speaker?: CharacterId }
   | { type: "choices"; choices: Choice[] }
   /** one `done` per processed (sub-)turn: the player's turn plus each NPC-autonomous exchange ends with its own `done`; the AsyncIterable completes after the last */

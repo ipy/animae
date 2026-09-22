@@ -159,6 +159,18 @@ export const ClientModelsProbeSchema = z.object({
   type: z.literal("models_probe"),
   id: requestId,
   slot: z.enum(["s1", "s2"]).optional(),
+  /** Unsaved slot fields; server merges with stored config (apiKey omitted = use stored key). */
+  draft: z
+    .object({
+      provider: z.string().optional(),
+      model: z.string().optional(),
+      baseURL: z.string().optional(),
+      name: z.string().optional(),
+      apiKey: z.string().optional(),
+      clearApiKey: z.boolean().optional(),
+      apiKeyEnv: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const ClientOllamaModelsSchema = z.object({
@@ -178,6 +190,23 @@ export const ClientContentPackNoticeSchema = z.object({
 export const ClientPingSchema = z.object({
   ...envelope,
   type: z.literal("ping"),
+  id: requestId,
+});
+
+export const ClientLlmLogSchema = z.object({
+  ...envelope,
+  type: z.literal("llm_log"),
+  id: requestId,
+  since: z.number().int().nonnegative().optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+  label: z.string().max(64).optional(),
+  slot: z.enum(["s1", "s2"]).optional(),
+  errorsOnly: z.boolean().optional(),
+});
+
+export const ClientLlmLogClearSchema = z.object({
+  ...envelope,
+  type: z.literal("llm_log_clear"),
   id: requestId,
 });
 
@@ -205,6 +234,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientReleaseControlSchema,
   ClientPingSchema,
   ClientSetLocaleSchema,
+  ClientLlmLogSchema,
+  ClientLlmLogClearSchema,
 ]);
 
 export const ServerLocaleSchema = z.object({

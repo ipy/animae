@@ -36,6 +36,16 @@ export function withRecording(port: ModelPort, rec: RecordingStore): ModelPort {
       return recordStream(port, rec, key, req);
     },
   };
+  Object.defineProperty(wrapped, "tags", {
+    get(): readonly string[] | undefined {
+      return port.tags;
+    },
+    set(v: readonly string[] | undefined) {
+      (port as { tags?: string[] }).tags = v ? [...v] : undefined;
+    },
+    enumerable: true,
+    configurable: true,
+  });
   return wrapped as ModelPort;
 }
 

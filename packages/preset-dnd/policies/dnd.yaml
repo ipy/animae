@@ -89,7 +89,7 @@ checks:
     onSuccess:
       emit:
         - kind: info_arrival
-          text: 对方在说谎
+          text: $t:dnd.check.insight_lie
           tags: [insight, deception]
 
   - id: dnd_investigation
@@ -100,7 +100,7 @@ checks:
     onSuccess:
       emit:
         - kind: info_arrival
-          text: 调查有所发现
+          text: $t:dnd.check.investigation_found
           tags: [investigation, exploration]
 
   - id: dnd_perception
@@ -111,5 +111,5 @@ checks:
     onSuccess:
       emit:
         - kind: info_arrival
-          text: 察觉到了异常
+          text: $t:dnd.check.perception_unusual
           tags: [perception, exploration]

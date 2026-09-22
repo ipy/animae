@@ -1,6 +1,6 @@
 # @animae/preset-dnd
 
-D&D SRD 5.2.1 social & exploration overlay (spec §19.5). Extends `@animae/preset-base`.
+D&D SRD 5.2.1 social & exploration overlay ([Section 19.5](../../docs/spec.md#195-animaepreset-dnd)). Extends `@animae/preset-base`.
 
 ```ts
 import preset, { notice, conditionField, rest } from "@animae/preset-dnd";

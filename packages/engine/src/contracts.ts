@@ -74,7 +74,7 @@ export interface PresetRegistry { get(id: string): PresetBundle | undefined; lis
 /**
  *  loadPolicy(storage, config, presets): resolves preset `extends` chain (deep merge, later overrides) → preset's own policies →
  *  animae.yaml `policies` (list order; `.yaml` docs or `.ts` modules default-exporting a Policy doc).
- *  Throws AnimaeError("CONFIG_INVALID") with file+path for any invalid config (§7.4).
+ *  Throws AnimaeError("CONFIG_INVALID") with file+path for any invalid config.
  */
 export type LoadPolicy = (storage: StoragePort, config: Authored["config"], presets: PresetRegistry) => Promise<PolicyLoadResult>;
 export type MergePolicies = (layers: { name: string; doc: unknown }[]) => { merged: Policy; warnings: ConfigWarning[] };
@@ -167,7 +167,7 @@ export interface TimelineStore {
   rng(key: string): Rng;
   artifacts: ArtifactStore;
   recordings: RecordingStore;
-  // spec §13
+  // branch import/export manifest
   save(label?: string): Promise<SaveSlot>;
   saves(): Promise<SaveSlot[]>;
   load(slot: SaveSlot | string): Promise<void>;
@@ -257,7 +257,7 @@ export interface WorldService {
   move(who: string, location: string): Promise<EngineEvent>;
   /** fire due schedule items in (from, to], update long-event phases, apply decay ticks; returns events appended */
   runSchedule(from: WorldTime, to: WorldTime): Promise<EngineEvent[]>;
-  /** lazy catch-up for a location/character since its last simulation (§12.6) */
+  /** Lazy catch-up for a location/character since its last simulation. */
   catchUp(entity: EntityRef): Promise<EngineEvent[]>;
   interruptLongEvent(id: string): Promise<EngineEvent[]>;
   chapter(t?: WorldTime): { id: string; title?: string } | undefined;
@@ -359,12 +359,30 @@ export interface EngineLocaleConfig {
   fallbackLocale: string;
 }
 
+/**
+ * Late-bound display strings (`$t:key`, `{ i18n }`) resolved against the string tables of one locale. Prompt building
+ * is synchronous, so `prepare` loads the tables beforehand (the engine does it at startup and at the start of a turn).
+ */
+export interface DisplayText {
+  /** `$t:key` / `{ i18n }` values resolve; plain strings and other values pass through unchanged. */
+  resolve(locale: string, value: unknown): unknown;
+  /**
+   * Strict lookup of one string key in exactly that locale's tables (no fallback locale), so a key translated only in
+   * the fallback language is never mistaken for a translation into another language.
+   */
+  lookup(locale: string, key: string): string | undefined;
+  /** Load string tables for these locales (idempotent). */
+  prepare(locales: readonly string[]): Promise<void>;
+}
+
 export interface Kernel {
   storage: StoragePort;
   /** (live) */ authored: Authored;
   /** (live) */ policy: ResolvedPolicy;
   /** resolved UI / prompt / content locales for this engine instance */
   i18n: EngineLocaleConfig;
+  /** Optional: embedders and tests without string tables omit it and prompts keep plain text as written. */
+  displayText?: DisplayText;
   rules: RuleEngine;
   timeline: TimelineStore;
   models: { s1: ModelPort; s2: ModelPort };

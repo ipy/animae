@@ -89,7 +89,7 @@ function mergeRecords(
   return out;
 }
 
-/** Deep-merge policy documents; later layers override earlier ones (§7.4). */
+/** Deep-merge policy documents; later layers override earlier ones. */
 export function mergePolicies(layers: PolicyLayer[]): { merged: Policy; warnings: ConfigWarning[] } {
   const warnings: ConfigWarning[] = [];
   let merged: Record<string, unknown> = {};

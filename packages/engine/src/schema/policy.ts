@@ -3,7 +3,7 @@ import { Cel, CelOrBool, CelOrNumber, EventDraftSchema, Id, LevelSchema, LodSche
 import { FieldDescriptorSchema } from "./authored.ts";
 
 /**
- * Policy schema (spec §7, §8, §9, §10, §13, §15–§19). CONTRACT file.
+ * Policy schema (tracks, checks, rules, retrieval, models). CONTRACT file.
  * A "policy" document is a (partial) policy; the loader deep-merges many documents into one validated `Policy`.
  * Merge conventions (implemented by policy/merge): records merge by key; arrays REPLACE, unless written as
  * `{ $append: [...] }` / `{ $prepend: [...] }` which concatenate to the earlier layer's array.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-S1/S2 escalation, budget enforcement, and side-job gating (§17).
+S1/S2 escalation, budget enforcement, and side-job gating ([Section 17](../spec.md#17-routing-budget-and-caching)).
 
 ## Public API
 

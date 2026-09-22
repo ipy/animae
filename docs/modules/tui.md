@@ -7,7 +7,7 @@ Terminal game shell built on **Ink 8** and **React 19**. All panel data is read 
 ## Public API
 
 - `runTui(opts: RunTuiOptions): Promise<void>` — alternate screen, restores terminal on exit; closes engine. Uses Ink `incrementalRendering: true` and `maxFps: 30` to limit full redraw flicker.
-- `defaultLayout` — §21.2 layout (Header, Transcript 70% / SidePanel 30%, ChoiceMenu, InputLine, Footer).
+- `defaultLayout` — [default layout (Section 21.2)](../spec.md#212-default-layout) (Header, Transcript 70% / SidePanel 30%, ChoiceMenu, InputLine, Footer).
 - `components` — Header, Footer, Transcript, Typewriter, ChoiceMenu, InputLine, SidePanel, TrackBar, FieldList, EventLog, TimelineBrowser, ExplainView, Inspector, Overlay.
 - `hooks` — useEngine, useTurn, useQuery, useEvents, useTheme, useKeymap (`bind` for overrides).
 
@@ -46,7 +46,7 @@ Hooks/components: `MouseProvider`, `useMouseTarget`, `Clickable`, `Button`, `use
 
 Register **`TuiAction`** items on `RunTuiOptions.actions` and **`EntityTuiAction`** on `entityActions`. Each action has `id`, `label`, optional `hint`, `hotkey`, `when(ctx)`, optional `args` (inline prompt: text or select), and `run`. They feed the **action toolbar**, **entity context menu** (when `focusTarget` is set), and **command palette** alongside `commands`.
 
-Host games dispatch `setFocusTarget` / `setEntityMenu` via `useAppState()` (exported from `@animae/tui` hooks).
+Host applications dispatch `setFocusTarget` / `setEntityMenu` via `useAppState()` (exported from `@animae/tui` hooks).
 
 ## Input pipeline
 
@@ -66,17 +66,17 @@ The frame is exactly as tall as the terminal (`height={rows}`). The chrome — h
 
 When touching layout code, check the result with an emulator that is not the harness's own (for example `@xterm/headless` fed with the raw PTY bytes) as well as with pyte: the raw byte stream can contain the right text while the composed screen shows overlapping or clipped rows.
 
-## Keys (§21.3)
+## Keys ([Section 21.3](../spec.md#213-overlays-and-keys))
 
 Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ autocomplete), **Ctrl+P** or **`/`** (empty input) command palette, Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, wheel on transcript, **F1–F5** overlays (**Alt+1–5** same, for macOS F-keys as media keys), Ctrl+S/L/Z/M, Esc, Ctrl+C quit.
 
 **Choice digits vs input:** `1`–`9` pick choices only when the input draft is **empty** and focus is **not** on the input line. With focus on input (including while choices are visible), digits are inserted as text.
 
-## Cues (§21.4)
+## Cues ([Section 21.4](../spec.md#214-cue-rendering))
 
 `CueRenderer` registry; built-ins `expression`, `action`, `sfx` (optional terminal bell via `theme.bell`). Unregistered cue types hidden in transcript (still in EventLog via engine events).
 
-## Theme (§21.5)
+## Theme ([Section 21.5](../spec.md#215-theme))
 
 YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`.
 
@@ -96,7 +96,7 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/dev-session.ts` | Real example-game `data/` copy, `openexample-gameEngine`, `ScriptedModel`, `BasePanel` panel, `registerexample-gameRules` via bootstrap |
+| `scripts/dev-session.ts` | Temp data root via `copyDemoDataRoot()` (`seedE2eAuthored`), `createEngine` + `e2ePreset`, `ScriptedModel`, custom `DemoSidePanel`, optional QA actions |
 | `scripts/qa-scenario-keys.json` | Shared keystroke schedules (kept in sync with batch scenarios) |
 | `scripts/pty-render.py` | Python `pty` driver; waits for `TUI_READY` on stderr, injects keys on the PTY master; sizes 120×40, 100×30, 90×30, 79×23, 160×50; writes grids to `animae/docs/tui-snapshots/` |
 | `scripts/pty-input-harness.py` | PTY regression: burst/paced typing (ASCII+CJK), F-keys/Esc (full mode), `TUI_PTY_DRIVER=1`; `bun run test:pty` (quick), `test:pty:full` |
@@ -122,7 +122,7 @@ TUI_SNAPSHOT_SCENARIOS=empty,cjk python3 scripts/pty-render.py
 
 - **F-keys / PTY**: SS3 `\x1bOP`…`\x1bOS`, CSI `\x1b[11~`…, pending-Esc timeout 50ms; table tests in `test/key-sequences.test.ts`. `matchKeyAction` requires Ctrl for Ctrl-letter bindings so words like `achievements` type correctly. Bracketed paste enabled when `onPaste` is set on `useParsedInput`.
 - **Inspector**: read-only tree for common paths; arbitrary paths via `:query`.
-- **Policy track metadata**: tier **names** come from engine query; zh labels use example-game tier map until `policy/tracks` is exposed on `query`.
+- **Policy track metadata**: tier **names** come from engine query; localized labels use `locales/*/tui.json` (`tracks.*`, `tiers.*`) until `policy/tracks` is exposed on `query`.
 - **Budget footer**: `query(viewer,"budget")` (nothing when the viewer may not read it).
 
 ## Integrator notes

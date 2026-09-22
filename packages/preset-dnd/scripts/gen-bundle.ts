@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { liftStringRefs } from "../../engine/src/i18n/string-resolve.ts";
 
 const pkgRoot = join(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -14,9 +15,33 @@ async function readPresetMeta(): Promise<{ id: string; extends: string[]; polici
   return { id, extends: extendsList, policies };
 }
 
+function flattenStringTable(obj: Record<string, unknown>, prefix = ""): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (typeof v === "string") out[key] = v;
+    else if (v && typeof v === "object" && !Array.isArray(v)) Object.assign(out, flattenStringTable(v as Record<string, unknown>, key));
+  }
+  return out;
+}
+
+async function collectDisplayStrings(): Promise<Record<string, Record<string, string>> | undefined> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const locale of ["en", "zh-CN"]) {
+    const path = join(pkgRoot, "locales", locale, "strings.yaml");
+    try {
+      const text = await readFile(path, "utf8");
+      out[locale] = flattenStringTable(parseYaml(text) as Record<string, unknown>);
+    } catch {
+      /* locale table optional */
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 async function loadPolicy(rel: string): Promise<{ name: string; doc: unknown }> {
   const text = await readFile(join(pkgRoot, rel), "utf8");
-  return { name: rel, doc: parseYaml(text) };
+  return { name: rel, doc: liftStringRefs(parseYaml(text)) };
 }
 
 async function walkMd(base: string, dir: string, out: Record<string, string>): Promise<void> {
@@ -65,11 +90,13 @@ export async function buildPresetBundleObject(): Promise<Record<string, unknown>
   const policies = [];
   for (const rel of meta.policies) policies.push(await loadPolicy(rel));
   const knowledge = await collectKnowledge();
+  const displayStrings = await collectDisplayStrings();
   return {
     id: meta.id,
     extends: meta.extends,
     policies,
     ...(knowledge ? { knowledge } : {}),
+    ...(displayStrings ? { displayStrings } : {}),
   };
 }
 

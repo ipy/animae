@@ -7,19 +7,18 @@
 ## 1. Repository layout
 
 ```
-/ (monorepo root; bun workspaces: animae/packages/*, games/*)
-  animae/                      ← itself a monorepo, publishable on its own (own package.json, workspaces: packages/*)
-    docs/{spec.md, architecture.md, ...}
-    packages/
-      engine/        @animae/engine       src/<module>/…, test/…
-      preset-base/   @animae/preset-base
-      preset-dnd/    @animae/preset-dnd
-      i18n/          @animae/i18n         catalogs, ICU subset, locale negotiation, hygiene helpers
-      tui/           @animae/tui          Ink 8 components + default layout
-      cli/           animae               CLI, `serve --stdio` JSON-RPC, `bun build --compile` script
-  games/<host>/                ← the game (depends on animae only through its public packages)
-  docs/                        ← product-level docs (spec original, progress log)
+animae/                        ← publishable engine monorepo (package.json, workspaces: packages/*)
+  docs/{spec.md, architecture.md, ...}
+  packages/
+    engine/        @animae/engine       src/<module>/…, test/…
+    preset-base/   @animae/preset-base
+    preset-dnd/    @animae/preset-dnd
+    i18n/          @animae/i18n         catalogs, ICU subset, locale negotiation, hygiene helpers
+    tui/           @animae/tui          Ink 8 components + default layout
+    cli/           animae               CLI, `serve --stdio` JSON-RPC, `bun build --compile` script
 ```
+
+Host applications live outside this tree; they depend on `@animae/*` through npm or a workspace link.
 
 ## 2. Tooling and conventions (all packages)
 
@@ -28,13 +27,13 @@
 * **Dev resolution**: package `exports` point at `src/index.ts` (so no build step in dev); `publishConfig.exports` point to `dist/`.
 * **Runtime portability**: engine code must run on Node ≥ 24 *and* Bun. Use `node:` APIs only (fs, crypto, zlib, path…). Never `Bun.*` in `@animae/engine`.
   (`@animae/tui` and `animae` CLI may be Bun-first but must work on Node via the built `dist`.)
-* **Tests**: `bun test` with `import { test, expect } from "bun:test"`, files `packages/<pkg>/test/**/*.test.ts` (game: `games/<host>/test`).
+* **Tests**: `bun test` with `import { test, expect } from "bun:test"`, files `packages/<pkg>/test/**/*.test.ts`.
   Test doubles (`MemoryStorage`, `ScriptedModel`) may be used in tests only. **Production code must never contain mock/placeholder data.**
 * **Typecheck**: `node_modules/.bin/tsc -p tsconfig.json --noEmit` from the repo root must stay green for your files.
 * **Dependencies**: add only what is needed (`bun add` inside the package dir). Prefer Node built-ins; no gray-matter/lodash etc. (we parse frontmatter with `yaml`).
 * **No unrelated edits**: edit only the directories you own. The CONTRACT files are:
   `engine/src/{types,ports,events,state,preset,api,contracts}.ts`, `engine/src/schema/*.ts`. Additive changes only (new optional fields / new types), and each
-  must be appended to the *Contract changelog* (§9). Never rename or remove contract members.
+  must be appended to the [Contract changelog](#9-contract-changelog-append-only). Never rename or remove contract members.
 * **Barrels**: each module has `src/<module>/index.ts`, already re-exported from `engine/src/index.ts`. Export only what other modules/packages need;
   avoid name collisions across modules (prefix generic names).
 * **Errors**: throw `AnimaeError(code, message, details)`. Config problems: `CONFIG_INVALID` with `file` + `path` in the message.
@@ -68,7 +67,7 @@
 ## 4. Pinned decisions (the spec leaves these open)
 
 ### 4.0 Locales (UI, prompts, output, content)
-* **UI locale** (`i18n.locale`): all engine-produced system/UI strings (errors, CLI/TUI, validate/doctor, introspection labels). Resolved: explicit config / `createEngine` / CLI `--lang` → `ANIMAE_LOCALE` → `LC_*` / `LANG` → default `en`.
+* **UI locale** (`i18n.locale`): all engine-produced system/UI strings (errors, CLI/TUI, `validate`, introspection labels). Resolved: explicit config / `createEngine` / CLI `--lang` → `ANIMAE_LOCALE` → `LC_*` / `LANG` → default `en`.
 * **Prompt locale** (`i18n.promptLocale`): static LLM scaffolding in `engine/src/prompts/<locale>/`; default `zh-CN` in config resolver (product tuning — not referenced in code strings). English set must stay in parity (`animae i18n check`).
 * **Output locale** (`i18n.outputLocale`, default UI locale): player-facing model text; render prompts append output-language directive from catalogs + `Intl.DisplayNames`.
 * **Content locale** (`i18n.contentLocale`, default **prompt locale**): LLM-facing `locales/<locale>/` overlays (persona, knowledge, templates). Display `$t:` string tables resolve at **UI locale** via late binding (`liftStringRefs` → `{ i18n: { key } }` → `localize*` at presentation).
@@ -99,17 +98,18 @@
 ### 4.3 Turn pipeline (per `scene.turn`)
 1. `turn.started`; actor input → `input.received`.
 2. **appraise** (S1, sync call #1, structured output `Appraisal`) → `appraisal`, `input.classified`; unknown `type` → `other`. Input-class response (`policy.input.response`) overrides the appraisal's event type + forces an intent. Safety (if enabled) → `safety.flagged`.
-3. **check** (policy `checks[]` whose `when` is true) → `check.rolled`; `onSuccess/onFailure` may retype the appraisal / add tags / emit events.
-4. **adjudicate** (rules): delta table + primitives (+ window/threshold/custom rule fns) → `track.delta`, `tier.changed`, rule-emitted events.
-5. **applyFields**: `fields.resolve` for the speaking NPC (L0–L4); emits `field.applied`. L1 effects feed steps 3–4 (resolve a first pass *before* check with scope event unknown → `eventType` = appraisal type is known after step 2, so resolve right after appraise).
-6. **decide**: `intent_rules` scoring (+ L2 force/forbid/bias). → `intent.decided`.
-7. **route** (router) → `route.decided`.
-8. **render** (S1 or S2, sync call #2; S2 may use `search`/`read` tools ≤ 3 steps): structured output `{text, cues[], intent_realized, choices?}`; stream `text` diffs as `TurnChunk.text`; cues as `cue` chunks with `at` offsets; `utterance`, `intent.mismatch`, `choice.offered/filtered`.
-9. **commit**: `memory.written` (episodic), `world.var_set`/others from rules, director `afterRender`, promotions check, scheduled advance of time, `turn.ended`, then `done` chunk. Async after the turn: nothing blocks the next turn except the lock on the timeline (writes are serialised through `timeline.append`).
+3. **applyFields** (L0–L1): `fields.resolve` for the speaking NPC; emits `field.applied`. L1 effects are visible to check/adjudicate (`event.type` is known after step 2).
+4. **check** (policy `checks[]` whose `when` is true) → `check.rolled`; `onSuccess/onFailure` may retype the appraisal / add tags / emit events.
+5. **adjudicate** (rules): delta table + primitives (+ window/threshold/custom rule fns) → `track.delta`, `tier.changed`, rule-emitted events.
+6. **applyFields** (L2–L4): second resolve pass; L2 force/forbid/bias feed step 7. Emits `field.applied` / `field.rejected`.
+7. **decide**: `intent_rules` scoring (+ L2 force/forbid/bias). → `intent.decided`.
+8. **route** (router) → `route.decided`.
+9. **render** (S1 or S2, sync call #2; S2 may use `search`/`read` tools ≤ 3 steps): structured output `{text, cues[], intent_realized, choices?}`; stream `text` diffs as `TurnChunk.text`; cues as `cue` chunks with `at` offsets; `utterance`, `intent.mismatch`, `choice.offered/filtered`.
+10. **commit**: `memory.written` (episodic), `world.var_set`/others from rules, director `afterRender`, promotions check, scheduled advance of time, `turn.ended`, then `done` chunk. Async after the turn: nothing blocks the next turn except the lock on the timeline (writes are serialised through `timeline.append`).
    * Scene end additionally: `scene.ended`, field cost settlement, reflection (S2, per principal; router may defer), propagation tick, snapshot.
 
 ### 4.4 CEL context (`buildCelContext`)
-Plain JSON-like values. All numbers are passed as doubles (adapter converts for cel-js). Missing → `null`/`{}`/`[]` (never undefined).
+Plain JSON-like values. All numbers are passed as doubles (adapter converts for cel-js). Missing **top-level** bindings → `null`/`{}`/`[]` (never undefined). Indexing a **missing map key** (e.g. `world.vars['k']`) is a runtime `CEL_EVAL` error — see [cel-reference.md — Map keys](./cel-reference.md#map-keys-worldvars-character-vars).
 
 | var | shape |
 |---|---|
@@ -133,23 +133,23 @@ Extra keys may be supplied by callers (`extra`), e.g. `goal`, `conflict`, `propo
 
 ### 4.6 Presets in a single executable
 Built-in presets are exported as `PresetBundle` objects (YAML sources are converted to TS by each preset's `scripts/gen-bundle.ts` → `src/generated.ts`, committed).
-The CLI / game register them via `createEngine({presets:[…]})`. The game's authored data is embedded the same way (`scripts/gen-data.ts` → `src/data.generated.ts`) and extracted to the user data dir.
+The CLI and hosts register them via `createEngine({presets:[…]})`. Hosts may embed authored data the same way (`scripts/gen-data.ts` → `src/data.generated.ts`) and extract it to the user data dir at runtime.
 
 ### 4.7 Viewers and paths
-See `contracts.ts` "Query path catalogue". Base visibility (preset-base §19.4) covers those paths; the TUI only ever calls `engine.query(viewer, path)`.
+See `contracts.ts` "Query path catalogue". Base visibility ([preset-base / Section 19.4](./spec.md#194-animaepreset-base)) covers those paths; the TUI only ever calls `engine.query(viewer, path)`.
 
 ## 5. Phase plan
 
 **Status: complete (v1.0.0).**
 
 1. **Contracts** — types, schemas, ports, module interfaces.
-2. **Parallel module build** — all engine modules, CLI, TUI, presets, example-game content.
-3. **Integration** — e2e tests, record/replay determinism (I6), `animae` and `example-game` compiled binaries.
-4. **Hardening** — conformance audits ([conformance-a.md](./conformance-a.md), [b](./conformance-b.md), [c](./conformance-c.md)), user-facing docs, packaging.
+2. **Parallel module build** — all engine modules, CLI, TUI, presets.
+3. **Integration** — e2e tests, record/replay determinism (I6), compiled `animae` binary.
+4. **Hardening** — conformance tests under `packages/engine/test/conformance/`, user-facing docs, packaging.
 
 ## 6. Module notes
 
-Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/README.md](./README.md)). Update the matching file when your module’s public API or invariants change; append contract-only changes to §9 below.
+Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/README.md](./README.md)). Update the matching file when your module’s public API or invariants change; append contract-only changes to the [Contract changelog](#9-contract-changelog-append-only) below.
 
 ## 9. Contract changelog (append-only)
 * (initial) contracts created.
@@ -160,6 +160,7 @@ Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/R
 * `events.ts`: extension kinds `field.age`, `info_arrival` (payloads `FieldAge`, `InfoArrival`); reducer folds `field.age` into `ActiveField.scenesElapsed` / `turnsElapsed`.
 * `contracts.ts`: `Director.beatNote()` — active beat prompt note.
 * TurnChunk: added optional `speaker` (text/cue/done) and `autonomous` (text); one `done` per sub-turn.
+* TurnChunk: optional `newUtterance` on `text` chunks; consecutive same-speaker `text` chunks between `done` values are utterance fragments unless `newUtterance` is set.
 * CEL builtins (rules/cel): `abilityMod(int)`, `profBonus(int)`, `maxInt(int,int)` for RPG presets; `self.hard_bottom_line_tags` in CEL context for intent rules.
 * Introspect: `npc:<id>` query paths `characters/self/**` alias to `characters/<id>/**` for visibility rules (see `resolveNpcSelfQueryPath`).
 * `Kernel.runExclusive` / `Kernel.acquireExclusive` — engine serializes world/scene/timeline mutations; `close()` drains the gate then timeline append queue. Scene-end reflection/offscreen work is awaited before `scene.end` resolves; async timeline appends stay ordered via the append queue.
@@ -167,7 +168,7 @@ Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/R
 * `Director.tick(..., { asOf?: WorldTime })` — simulate anchor/beat evaluation at a wall time before `time.advanced` has committed (used by `world.advance` span checkpoints).
 * `MemoryService.reflect` optional `participants` — scene end passes roster after `scene.ended`; deferred queue stores `{ sceneId, participants }` for deterministic flush at next scene start.
 * `adjudicate` accepts optional `check` (last `check.rolled` payload) so custom adjudicate rules can read `check.success` in CEL.
-* `api.ts` `Engine.queryAsync(viewer, path)` — player location/character queries run §12.6 lazy catch-up before the synchronous visibility-filtered read; RPC `query` uses this. Plain `query()` remains sync and does not await narrate fidelity.
+* `api.ts` `Engine.queryAsync(viewer, path)` — player location/character queries run [lazy catch-up (Section 12.6)](./spec.md#126-lazy-catch-up) before the synchronous visibility-filtered read; RPC `query` uses this. Plain `query()` remains sync and does not await narrate fidelity.
 * `policy.render.maxSegmentChars` — optional `{ static?, semiStatic?, dynamic? }` character caps for prompt segments (truncate with marker; default unlimited).
 * `ModelSpecSchema.provider` — additive values `deepseek`, `ollama` (native Ollama `/api/chat`, `/api/embed`; default base `http://127.0.0.1:11434`). `resolveApiKey` returns `undefined` when unset (one-time warning via `ModelWarningSink` / `AI_SDK_LOG_WARNINGS` handler); hosted providers still construct and fail at request time on 401.
 * **Mods (content packs):** `AnimaeConfigSchema.mods`, `mod.ts` (`ModBundle`, `ModSetupCtx`), layered read-only storage (`mods/`), patch merge operators, `CreateEngineOptions.mods` / `modBundles`, `Engine.mods()`, `config.reloaded.mods`, `EngineState.config.mods`, `config.warning` code `mod_drift`. See [mods.md](./mods.md). Filesystem mods are data-only; `ModBundle.setup()` only from host-registered bundles.

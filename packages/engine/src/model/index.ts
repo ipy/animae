@@ -1,5 +1,17 @@
 export { createModelPort } from "./port.ts";
 export { withRecording } from "./recording.ts";
+export {
+  createModelCallLog,
+  withModelCallLog,
+  redactSecrets,
+  writeModelCallLogJsonl,
+  type ModelCallLog,
+  type ModelCallLogEntry,
+  type ModelCallLogOptions,
+  type ModelCallLogQuery,
+  type ModelCallSlot,
+  type ModelCallLogStatus,
+} from "./call-log.ts";
 export { createModelsFromConfig, resolveEngineModels } from "./config.ts";
 export { createScriptedModel, streamFromObject, ScriptedModel, type ScriptedHandler } from "./scripted.ts";
 export { createEmbeddingPort } from "./embedding.ts";

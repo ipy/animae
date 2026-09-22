@@ -14,7 +14,7 @@ export interface ConditionParams {
 
 const SOCIAL_SKILLS = ["persuasion", "deception", "intimidation", "performance"] as const;
 
-/** Build a field definition for an SRD condition mapped in §19.5. */
+/** Build a field definition for an SRD condition mapped by the D&D preset. */
 export function conditionField(name: ConditionName, params: ConditionParams = {}): FieldDef {
   switch (name) {
     case "charmed": {

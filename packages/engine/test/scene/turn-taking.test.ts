@@ -85,7 +85,7 @@ async function collectDoneCount(iter: AsyncIterable<{ type: string }>): Promise<
   return n;
 }
 
-describe("scene turn-taking (§14)", () => {
+describe("scene turn-taking", () => {
   test("addressed: addressee speaks", async () => {
     await withSceneEngine(presetWithScene({ turnTaking: "addressed" }), async (engine) => {
       const sceneId = await engine.scene.start({

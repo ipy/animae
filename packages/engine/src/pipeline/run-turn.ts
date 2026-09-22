@@ -13,6 +13,17 @@ import type { AppraiseInput, RenderInput, RenderPart, RenderResult, SceneInfo } 
 import { HookRegistry } from "./hooks.ts";
 import { resolveAppraiseStage, resolveRenderStage } from "./stages-default.ts";
 
+function choiceTextFromTimeline(k: Kernel, choiceId: string): string | undefined {
+  for (let i = k.timeline.events().length - 1; i >= 0; i--) {
+    const e = k.timeline.events()[i];
+    if (!e || e.kind !== "choice.offered") continue;
+    const choices = (e as { choices?: { id: string; text: string }[] }).choices ?? [];
+    const hit = choices.find((c) => c.id === choiceId);
+    if (hit?.text) return hit.text;
+  }
+  return undefined;
+}
+
 export interface RunTurnInput {
   turnId: TurnId;
   sceneId: SceneId;
@@ -150,6 +161,14 @@ async function* runTurnPipeline(
         ],
         { source: "pipeline:input", because: [inputEventId] },
       );
+    }
+
+    if (!input.autonomous) {
+      const playerLine =
+        input.text.trim() || (input.choiceId ? choiceTextFromTimeline(k, input.choiceId) : "");
+      if (playerLine) {
+        yield { type: "text", text: playerLine, speaker: input.actor, newUtterance: true };
+      }
     }
 
     const dirTick = await k.m.director.tick("turn_start");
@@ -392,9 +411,17 @@ async function* runTurnPipeline(
       parts: RenderPart[];
     };
     renderResult = renderOut.result;
+    let firstRenderText = true;
     for (const part of renderOut.parts) {
       if (part.type === "text") {
-        yield { type: "text", text: part.text, speaker: input.speaker, autonomous: input.autonomous };
+        yield {
+          type: "text",
+          text: part.text,
+          speaker: input.speaker,
+          autonomous: input.autonomous,
+          ...(firstRenderText ? { newUtterance: true } : {}),
+        };
+        firstRenderText = false;
       } else if (part.type === "cue") {
         yield {
           type: "cue",

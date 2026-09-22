@@ -1,6 +1,6 @@
 # CEL reference
 
-Animae uses [@marcbachmann/cel-js](https://github.com/marc-bachmann/cel-js) **8.x** with `unlistedVariablesAreDyn: true` (missing keys → `null`). Expressions appear in policy YAML, authored scopes, beats, schedules, checks, and visibility-adjacent hooks.
+Animae uses [@marcbachmann/cel-js](https://github.com/marc-bachmann/cel-js) **8.x** with `unlistedVariablesAreDyn: true`. Expressions appear in policy YAML, authored scopes, beats, schedules, checks, and visibility-adjacent hooks.
 
 Compile-time validation: every `Cel` schema field is checked via `celCheck()` at load.
 
@@ -12,7 +12,7 @@ Compile-time validation: every `Cel` schema field is checked via `celCheck()` at
 
 ## Standard context (`buildCelContext`)
 
-Plain JSON-like objects; **never `undefined`** (missing → `null` / empty collections).
+Plain JSON-like objects; **never `undefined`** (missing top-level bindings → `null` / empty collections).
 
 | Variable | Shape |
 |----------|--------|
@@ -28,8 +28,35 @@ Plain JSON-like objects; **never `undefined`** (missing → `null` / empty colle
 | `memory` | `{ count }` (+ retrieval helpers in some call sites) |
 | `fields` | `{ active: [ids], <id>: true }` |
 | `check` | Last roll `{ success, total, margin, ... }` or `null` |
+| `model` | Active model context: `{ slot: "s1" \| "s2" \| "", tags: string[] }` — see below |
 
-Character `vars` and `world.vars` use a **dynamic map** proxy: reading a missing key yields `null` (not an error).
+### `model` (knowledge `when:` and prompt assembly)
+
+Always present in contexts built for **knowledge inject `when`**, render choice filters, and prompt assembly:
+
+| Field | Meaning |
+|-------|---------|
+| `model.slot` | `"s1"` or `"s2"` during the sync LLM call for that pipeline tier; `""` on non-model stages unless the host passes `extra.model` |
+| `model.tags` | Capability tags from the host-declared `ModelPort.tags` for the active slot (for example `tier:fast`, `content:mature`) |
+
+Test membership with `'tier:fast' in model.tags` (tags are a list, not a map). Hosts attach tags when constructing model ports from config; policy authors can gate knowledge injection on tags without hard-coding provider ids.
+
+Example knowledge frontmatter:
+
+```yaml
+inject: when
+when: "'tier:fast' in model.tags && tracks.trust >= 30"
+```
+
+### Map keys (`world.vars`, character `vars`)
+
+Indexing or selecting a **missing map key** (including `world.vars['k']` and `self.vars['k']`) is a **runtime error** (`CEL_EVAL`, “No such key …”). cel-js uses `Object.hasOwn` on the map object, so absent keys are not coerced to `null`.
+
+- Test presence before read: `'k' in world.vars && world.vars['k'] == true` (the guard is also required before numeric comparisons, because `null` is not comparable to numbers).
+- **Best practice:** declare initial values under `vars:` in `world.yaml` (they seed every branch, rewind, and import) so the key always exists.
+- Mods can add initial vars through a `world/world.patch.yaml` patch.
+
+See also [mods.md — CEL guards](./mods.md#cel-guards-optional-world-vars).
 
 ### `self.hard_bottom_line_tags`
 
@@ -78,8 +105,7 @@ time.day >= 55 && time.day <= 62
 check.success && event.approach == "investigation"
 "1d20+" + string(abilityMod(actor.traits.abilities.CHA))
 maxInt(15, self.traits.abilities.INT)
+'feature.on' in world.vars && world.vars['feature.on'] == true
 ```
 
-## Errors
-
-Runtime evaluation failures throw `AnimaeError` code `CEL_EVAL` with the expression embedded in the message. Load failures use `CONFIG_INVALID` with file path.
+Further reading: [policy-reference.md](./policy-reference.md), [modules/rules.md](./modules/rules.md).

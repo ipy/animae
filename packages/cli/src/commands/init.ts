@@ -32,7 +32,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
   const presetLine = opts.preset ? `preset: ${JSON.stringify(opts.preset)}\n` : "";
   await writeFile(
     join(target, "animae.yaml"),
-    `# Animae engine config (spec §5)
+    `# Animae engine config (see docs/authoring-guide.md)
 ${presetLine}seed: 1
 policies: []
 # models:

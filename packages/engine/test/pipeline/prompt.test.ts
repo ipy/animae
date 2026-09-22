@@ -39,7 +39,7 @@ describe("buildPromptSegments", () => {
     expect(a.static).not.toContain("hidden truth");
     expect(a.semiStatic).toContain("scn_0001");
     expect(a.dynamic).toContain("Topics closed: forbidden");
-    expect(a.user).toContain("Generate your in-character response");
+    expect(a.user).toContain("Generate npc1's in-character response");
     expect(a.static).toContain("Output contract");
   });
 

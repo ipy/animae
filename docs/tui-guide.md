@@ -1,6 +1,6 @@
 # TUI guide (`@animae/tui`)
 
-Ink **8** + React 19 terminal UI used by `animae run` and example-game.
+Ink **8** + React 19 terminal UI used by `animae run` and embeddable via `runTui` in host applications.
 
 ## Entry
 
@@ -35,12 +35,20 @@ Replace via `layout`, `header`, `footer`, or `panels` on `RunTuiOptions`.
 
 ## Hooks (`hooks/`)
 
+Exported from `@animae/tui` (see [21.6 API](./spec.md#216-api) plus layout helpers):
+
 | Hook | Purpose |
 |------|---------|
+| `useEngine` | Engine handle from context |
+| `useTurn` | Active turn stream / chunks |
+| `useQuery` | Path reads via `engine.query` |
+| `useEvents` | Timeline subscription |
 | `useTheme` | Resolved theme patch |
-| `useParsedInput` | Keypress → logical keys |
 | `useKeymap` | Merged keymap + bind helper |
-| `useTypewriter` | Chunk streaming cadence |
+| `useAppState` | Shell layout / overlay state |
+| `useActionRunner` | Dispatch colon / toolbar actions |
+| `useMouseTarget` | Mouse hit target (when enabled) |
+| `useElementRect` | Measure panel geometry |
 
 ## Theme
 
@@ -91,7 +99,11 @@ Pass `cueRenderers` to `runTui`.
 
 `commands: Record<string, CustomCommand>` — each `{ description, usage?, run(args, api) }`.
 
+Built-in when the engine was created with `modelCallLog`: **`:llmlog`** — last 10 calls; **`:llmlog <seq>`** — prompt + response for one entry; **`:llmlog dump`** — JSONL under `<data root>/llm-log/`. Disabled sessions show a localized warning. See [model-call-log.md](./model-call-log.md).
+
 `CommandApi`: `engine`, `viewer`, `actor`, `sceneId()`, `startScene`, `endScene`, `notify`, overlays.
+
+`useTurn` accumulates `TurnChunk` text with `applyTextTurnChunk` (one transcript/typewriter row per utterance, matching `@animae/host` stream semantics).
 
 ## Custom layout example
 

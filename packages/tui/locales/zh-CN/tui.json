@@ -151,16 +151,23 @@
       "advance": "推进世界时间",
       "quit": "退出 TUI",
       "lang": "设置界面语言",
-      "mouse": "切换终端鼠标捕获 (on|off|status)"
+      "mouse": "切换终端鼠标捕获 (on|off|status)",
+      "llmlog": "查看最近模型调用（调试）"
     },
+    "llmlog_disabled": "本会话未启用模型调用日志。",
+    "llmlog_empty": "尚无模型调用记录。",
+    "llmlog_not_found": "找不到序号为 {seq} 的日志条目。",
+    "llmlog_dumped": "已写入 LLM 日志：{path}",
     "usage": {
+      "save": ":save [label]",
       "load": ":load [slot]",
       "rewind": ":rewind <eventId>",
       "explain": ":explain [turnId]",
       "query": ":query <viewer> <path>",
       "advance": ":advance <duration>",
       "lang": ":lang <locale>",
-      "mouse": ":mouse [on|off|status]"
+      "mouse": ":mouse [on|off|status]",
+      "llmlog": ":llmlog [seq|dump]"
     }
   }
 }

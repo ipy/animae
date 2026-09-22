@@ -1,12 +1,13 @@
 import type { I18nConfig } from "./schema/authored.ts";
 import type { EmbeddingPort, ModelMode, ModelPort, StoragePort } from "./ports.ts";
+import type { ModelCallLog, ModelCallLogOptions } from "./model/call-log.ts";
 import type { PresetBundle } from "./preset.ts";
 import type { ModBundle, ModSelection, ModProvenanceEntry, ResolvedMod } from "./mod.ts";
 import type { FieldDef } from "./schema/authored.ts";
 import type { BranchRef, Duration, EngineEvent, EntityRef, EventId, Lod, SaveSlot, SceneId, TurnChunk, TurnId, Viewer, WorldTime } from "./types.ts";
 import type { ActiveScene, RuleFn, StageHook, Stage, ViewerDef, LedgerEntry, SceneReport, TimelineDiff, Explanation } from "./contracts.ts";
 
-/** Public engine API (spec §20.1). CONTRACT file. */
+/** Public engine API surface. CONTRACT file. */
 export interface CreateEngineOptions {
   root: string;
   /** required unless `modelSpecs` in animae.yaml can be built from env (then engine builds AI SDK ports) */
@@ -26,6 +27,8 @@ export interface CreateEngineOptions {
   sessionId?: string;
   /** overrides / extends `animae.yaml` `i18n:` */
   i18n?: Partial<I18nConfig>;
+  /** In-memory ring buffer of model requests/responses for debugging (`true` = defaults, or pass a shared log instance). */
+  modelCallLog?: boolean | ModelCallLogOptions | ModelCallLog;
 }
 
 export interface Engine {
@@ -113,7 +116,7 @@ export interface Engine {
   introspect: { registerViewer(v: ViewerDef): void };
   /** synchronous read of in-memory projection, filtered by viewer + visibility policy */
   query(viewer: Viewer, path: string): unknown;
-  /** like `query`, but runs §12.6 lazy catch-up for stale player location/character paths first */
+  /** Like `query`, but runs lazy catch-up for stale player location/character paths first. */
   queryAsync(viewer: Viewer, path: string): Promise<unknown>;
   grant(viewer: Viewer, path: string, ttl?: Duration): Promise<void>;
   explain(turnId: TurnId, viewer: Viewer): Explanation;
@@ -132,6 +135,7 @@ export interface Engine {
   };
   /** read-only info useful for UIs (not visibility filtered; contains no hidden state): engine/preset ids, language, models ids */
   info(): {
+    root: string;
     preset?: string;
     language: string;
     locale: string;
@@ -143,6 +147,8 @@ export interface Engine {
     models: { s1: string; s2: string };
     modelMode: ModelMode;
   };
+  /** Present when `createEngine({ modelCallLog: … })` enabled the in-memory call log. */
+  modelCallLog?: ModelCallLog;
   /** enabled mods with provenance; `drift` when timeline record differs from current set */
   mods(): { mods: ResolvedMod[]; drift: boolean; driftMessage?: string; provenance: Record<string, ModProvenanceEntry> };
   close(): Promise<void>;

@@ -8,7 +8,7 @@ import { minimalPolicy } from "../timeline/fixture.ts";
 describe("salvageStructuredFromValidationError", () => {
   test("wraps prose-only render body", () => {
     const schema = buildRenderSchema(minimalPolicy());
-    const prose = "（她停了一下）今天温室很稳。";
+    const prose = "（她停了一下）今天天气很稳。";
     const err = new NoObjectGeneratedError({
       message: "no object",
       text: prose,
@@ -105,9 +105,9 @@ describe("salvageStructuredFromValidationError (cut-off JSON)", () => {
   const schema = buildRenderSchema(minimalPolicy());
 
   test("keeps the text of a reply that was cut off inside a later field", () => {
-    const err = noObject('{"text":"（她停了一下）今天温室很稳。","cues":[{"type":"expression","args":{"na');
+    const err = noObject('{"text":"（她停了一下）今天天气很稳。","cues":[{"type":"expression","args":{"na');
     const out = salvageStructuredFromValidationError(err, schema);
-    expect(out?.text).toBe("（她停了一下）今天温室很稳。");
+    expect(out?.text).toBe("（她停了一下）今天天气很稳。");
     expect(out?.cues).toEqual([]);
   });
 

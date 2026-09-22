@@ -8,7 +8,7 @@ import { createScriptedModel } from "../../src/model/scripted.ts";
 import { AnimaeError } from "../../src/types.ts";
 import { e2ePreset, seedE2eAuthored } from "../e2e/fixture.ts";
 
-describe("createEngine models (§19.3)", () => {
+describe("createEngine models", () => {
   test("rejects missing both ports and animae.yaml models", async () => {
     const root = await mkdtemp(join(tmpdir(), "animae-no-models-"));
     try {

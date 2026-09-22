@@ -21,4 +21,4 @@ export { COMMAND_API_METHODS, guardCommandApi, type CommandApiMethodName } from 
 export { consumeTurnStream } from "./turn-consumer.ts";
 export { hostBuiltinCommands, runHostCommandLine } from "./builtin-commands.ts";
 export { createHostI18n, hostCatalogs, hostPackageCatalogs } from "./i18n/host-i18n.ts";
-export { localizeSnapshot } from "./localize-snapshot.ts";
+export { bindLocalizeTranslator, localizeSnapshot } from "./localize-snapshot.ts";

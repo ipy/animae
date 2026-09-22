@@ -18,11 +18,18 @@ export function streamFromObject(obj: Record<string, unknown>, chunkSize = 4): A
   return gen();
 }
 
-export function createScriptedModel(id: string, handler: ScriptedHandler, usageSeed?: Usage): ModelPort {
+export function createScriptedModel(
+  id: string,
+  handler: ScriptedHandler,
+  usageSeed?: Usage,
+  opts?: { tags?: readonly string[] },
+): ModelPort {
   let cumulative: Usage = usageSeed ?? { inputTokens: 0, outputTokens: 0 };
+  const tags = opts?.tags?.length ? [...opts.tags] : [];
 
   return {
     id,
+    tags,
     usage() {
       return { ...cumulative };
     },

@@ -17,7 +17,7 @@ export function createModelsFromConfig(config: AnimaeConfig, opts: ModelPortOpti
   };
 }
 
-/** Resolve S1/S2 ports from explicit opts or authored config (spec §19.3). */
+/** Resolve S1/S2 model ports from explicit opts or authored config. */
 export function resolveEngineModels(
   opts: { models?: { s1: ModelPort; s2: ModelPort } },
   config: AnimaeConfig,

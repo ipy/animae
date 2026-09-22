@@ -23,7 +23,7 @@ Then `carry.applied` summarizes copied items.
 
 ## Reducer notes
 
-- Tiers on `track.delta` use `rules/tierFor` (architecture §4.2); initial tiers use the same helper with `current = null`.
+- Tiers on `track.delta` use `rules/tierFor` ([tracks, tiers, deltas](../architecture.md#42-tracks-tiers-deltas)); initial tiers use the same helper with `current = null`.
 - `rule.window_opened` → `state.windows`; `rule.threshold_fired` → `state.firedThresholds`.
 - `character.promoted.data` merges into `state.generated.characters` and updates live character fields when present.
 - `reflection.accepted.goal_changes`: `add` / `remove` / `update` on `CharacterState.goals`.
@@ -34,11 +34,11 @@ Then `carry.applied` summarizes copied items.
 ## Verification
 
 - `test/timeline/reducer-audit.test.ts`: long mixed sequence + snapshot-vs-incremental replay equality.
-- `test/conformance/section-a.test.ts`: §3/§5/§13 invariant checks (I2 property replay, export manifest, import branch naming, lock).
+- `test/conformance/section-a.test.ts`: invariants, data-root layout, and timeline checks (I2 property replay, export manifest, import branch naming, lock).
 - `test/timeline/carry-memory.test.ts`: post-fork memory carry with filters and `carriedFrom`.
 - `scripts/node-smoke.mjs` (`bun run smoke:node`): Node ≥24 import of built `dist/` + `createEngine` + `world.set`.
 
-See also `docs/conformance-a.md` for the full audit table.
+See also [spec Section 13](../spec.md#13-timeline) for normative timeline behaviour.
 
 ## Storage test helper
 

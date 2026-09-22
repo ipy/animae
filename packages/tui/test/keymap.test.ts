@@ -11,7 +11,7 @@ test("choiceIndexFromKey maps 1-9", () => {
   expect(choiceIndexFromKey("2", "")).toBe(1);
 });
 
-test("defaultKeymap matches spec §21.3 bindings", () => {
+test("defaultKeymap matches documented default bindings", () => {
   const km = defaultKeymap;
   expect(km.submit).toContain("return");
   expect(km.choiceUp).toContain("up");

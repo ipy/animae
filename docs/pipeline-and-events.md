@@ -1,6 +1,6 @@
 # Pipeline and events
 
-Source of truth: `packages/engine/src/events.ts` (kinds + payload interfaces), `architecture.md` §4.3, `pipeline/run-turn.ts`.
+Source of truth: `packages/engine/src/events.ts` (kinds + payload interfaces), [turn pipeline](./architecture.md#43-turn-pipeline-per-sceneturn), `pipeline/run-turn.ts`.
 
 ## Turn pipeline (`scene.turn`)
 
@@ -10,17 +10,31 @@ Per player/NPC turn inside an active scene:
 |------|-----------|-------------------|
 | 1. Input | — | `turn.started`, `input.received` |
 | 2. Appraise | **S1 #1** | `appraisal`, `input.classified`; optional `safety.flagged` |
-| 3. Check | — | `check.rolled` (0..n policy checks) |
-| 4. Adjudicate | — | `track.delta`, `tier.changed`, `rule.window_opened`, `rule.threshold_fired`, rule-emitted drafts |
-| 5. Apply fields | — | `field.applied`, `field.rejected` |
-| 6. Decide intent | — | `intent.decided` |
-| 7. Route | — | `route.decided`; may `budget.degraded` |
-| 8. Render | **S1 or S2 #2** | streams `TurnChunk` text/cue; `utterance`, `intent.mismatch`, `choice.offered` / `choice.filtered` |
-| 9. Commit | — | `memory.written`, director hooks, `turn.ended`, `TurnChunk.done` |
+| 3. Apply fields (L0–L1) | — | `field.applied`, `field.rejected` (L1 effects visible to check/adjudicate) |
+| 4. Check | — | `check.rolled` (0..n policy checks) |
+| 5. Adjudicate | — | `track.delta`, `tier.changed`, `rule.window_opened`, `rule.threshold_fired`, rule-emitted drafts |
+| 6. Apply fields (L2+) | — | `field.applied`, `field.rejected` |
+| 7. Decide intent | — | `intent.decided` |
+| 8. Route | — | `route.decided`; may `budget.degraded` |
+| 9. Render | **S1 or S2 #2** | streams `TurnChunk` text/cue; `utterance`, `intent.mismatch`, `choice.offered` / `choice.filtered` |
+| 10. Commit | — | `memory.written`, director hooks, `turn.ended`, `TurnChunk.done` |
 
 **Default sync budget:** `router.budget.syncCallsPerTurn = 2` (appraise + render). S2 routing is optional per turn (`s2PerTurn`, triggers, scene pool). Scene end may add **S2 reflection** (not counted in the two sync turn slots) and offscreen narrate when fidelity demands.
 
 Field L1 effects are resolved after appraise so `event.type` is known for check/adjudicate.
+
+### `TurnChunk` streaming (render step)
+
+Render emits incremental `TurnChunk` values (`text`, `cue`, `choices`, `done`). Text chunks may carry optional `speaker`, `autonomous`, and **`newUtterance`**.
+
+**Utterance contract** (shared helper `createUtteranceStreamState` / `applyTextTurnChunk` / `closeUtteranceStream` in `@animae/engine`):
+
+- Consecutive `text` chunks from the **same speaker** between two `done` chunks are **fragments of one utterance** unless `newUtterance: true` on a chunk.
+- A **speaker change**, **`newUtterance`**, or **`done`** closes the open utterance.
+- Consumers (`@animae/host` `consumeTurnStream`, `@animae/tui` `useTurn`, Web `stream` frames) must append fragments into **one transcript row** and emit **one** stream start / end pair per utterance. Web `stream` `phase=delta` carries the **fragment** (`applied.delta`), not the full accumulated line.
+- Timeline replay seeds the first text chunk of each stored utterance with `newUtterance: true` so playback matches live streaming boundaries.
+
+See [spec.md](./spec.md) (TurnChunk type) and [embedding.md](./embedding.md) (host integration).
 
 ## Scene lifecycle (extensions)
 
@@ -32,7 +46,7 @@ Field L1 effects are resolved after appraise so `event.type` is known for check/
 
 ## Event catalogue
 
-Kinds are listed in `EVENT_KINDS`. Payload interfaces below; envelopes also carry `id`, `kind`, `source`, `because`, `at` (world time).
+Kinds are listed in `EVENT_KINDS`. Payload interfaces below; envelopes also carry `id`, `kind`, `source`, `because`, `t` (world time).
 
 ### Input & appraisal
 
@@ -124,7 +138,7 @@ Kinds are listed in `EVENT_KINDS`. Payload interfaces below; envelopes also carr
 | `carry.applied` / `purge.applied` | rewind/carry |
 | `config.reloaded` / `config.warning` / `config.error` | hot reload |
 
-Games may emit **additional kinds** via rule drafts (e.g. example-game `example-game.pair.formed`); those must be handled by reducers or tolerated as informational.
+Host applications may emit **additional kinds** via rule drafts (e.g. `myapp.pair.formed`); those must be handled by reducers or tolerated as informational.
 
 ## Subscriptions (RPC)
 

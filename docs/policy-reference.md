@@ -195,7 +195,7 @@ Array of `{ id, when, expr, dc, advantage?, disadvantage?, skill?, onSuccess?, o
 
 ### `x`
 
-Free-form map; readable in rule functions as `ctx.policy.x` (via kernel). Games store balance tables here (see example-game `policy.x.jobs`).
+Free-form map; readable in rule functions as `ctx.policy.x` (via kernel). Hosts store balance tables here (e.g. `policy.x.jobs` in a host policy overlay).
 
 ---
 
@@ -211,6 +211,6 @@ Free-form map; readable in rule functions as `ctx.policy.x` (via kernel). Games 
 | Checks | event + actor/self/other + `check` after roll |
 | Choices.filter | per-choice `choice` extra |
 | Reflection.accept | `conflict`, memory helpers |
-| Knowledge inject when | query-time context |
+| Knowledge inject when | query-time context + **`model`** (`slot`, `tags` from active `ModelPort`) |
 
 See [cel-reference.md](./cel-reference.md).

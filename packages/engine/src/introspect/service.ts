@@ -9,7 +9,7 @@ import { evaluateVisibility } from "./visibility.ts";
 
 const customViewers = new WeakMap<Kernel, Map<string, ViewerDef>>();
 
-/** `npc:<id>` viewers may query `characters/self/...`; visibility rules use that alias (§19.4). */
+/** `npc:<id>` viewers may query `characters/self/...`; visibility rules use that alias. */
 export function resolveNpcSelfQueryPath(viewer: Viewer, path: string): string {
   if (typeof viewer !== "string" || !viewer.startsWith("npc:")) return path;
   const id = viewer.slice(4);

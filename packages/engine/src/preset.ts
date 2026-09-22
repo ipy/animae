@@ -3,7 +3,7 @@ import type { Policy } from "./schema/policy.ts";
 import type { RuleFn } from "./contracts.ts";
 
 /**
- * A preset (spec §19.2) as an in-memory bundle. Preset packages (`@animae/preset-*`) export a `PresetBundle`
+ * A preset as an in-memory bundle. Preset packages (`@animae/preset-*`) export a `PresetBundle`
  * (generated from their YAML sources by `scripts/gen-bundle.ts`) so that presets work inside the
  * single-file executable without touching the filesystem. Filesystem presets (directory with `preset.yaml`)
  * are converted to the same shape by `loadPresetDir`.
@@ -21,6 +21,8 @@ export interface PresetBundle {
   rules?: (reg: { register(name: string, fn: RuleFn): void }) => void;
   /** license/attribution text that must ship with the preset */
   notice?: string;
+  /** UI string tables keyed by BCP-47 tag (merged into engine display resolution for this preset chain) */
+  displayStrings?: Record<string, Record<string, string>>;
 }
 
 export type PresetPolicyDoc = Policy;

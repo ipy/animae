@@ -141,7 +141,7 @@ test("I6: append + reload preserves events.jsonl bytes", async () => {
   expect(tl2.events().every((e) => Array.isArray(e.because))).toBe(true);
 });
 
-test("§13 export manifest includes engine, preset, branch, chain, hashes", async () => {
+test("export manifest includes engine, preset, branch, chain, hashes", async () => {
   const storage = MemoryStorage();
   const tl = createTimeline({
     storage,
@@ -165,7 +165,7 @@ test("§13 export manifest includes engine, preset, branch, chain, hashes", asyn
   expect(typeof manifest.hashes).toBe("object");
 });
 
-test("§13 import branch name is content-derived (not wall clock)", async () => {
+test("import branch name is content-derived (not wall clock)", async () => {
   const storage = MemoryStorage();
   const tl = createTimeline({
     storage,
@@ -194,7 +194,7 @@ test("§13 import branch name is content-derived (not wall clock)", async () => 
   expect(ref.name).not.toMatch(/import_\d{13}/);
 });
 
-test("§5 snapshot at scene end", async () => {
+test("snapshot at scene end", async () => {
   const storage = MemoryStorage();
   const tl = createTimeline({
     storage,

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Kernel wiring, hot reload, and the public `createEngine` facade (spec §20.1, architecture §4.1).
+Kernel wiring, hot reload, and the public `createEngine` facade ([TypeScript API](../spec.md#201-typescript-api), [Ids, time, RNG](../architecture.md#41-ids-time-rng)).
 
 ## Public API
 
@@ -22,9 +22,9 @@ See `src/api.ts` for `Engine` and options. Exported from `@animae/engine` via `s
 
 ## Turn pipeline
 
-Implemented in `pipeline/run-turn.ts` (architecture §4.3): hooks per stage, `input.received`, lazy catch-up on scene first turn, commit includes full turn event ids in the `done` chunk (`eventsByTurn`).
+Implemented in `pipeline/run-turn.ts` ([turn pipeline](../architecture.md#43-turn-pipeline-per-sceneturn)): hooks per stage, `input.received`, lazy catch-up on scene first turn, commit includes full turn event ids in the `done` chunk (`eventsByTurn`).
 
-## Hot reload (§13)
+## Hot reload ([Section 13](../spec.md#13-timeline))
 
 `checkHotReload`: mtime/size fingerprint on `Authored.files` **and** raw `mods/**` on disk, hash compare, swap on success (`config.reloaded` includes resolved `mods` record), keep old on failure (`config.error`). Refreshes mod overlay via `refreshEngineModContext` before reload. Initial fingerprint seeded with `seedAuthoredStatFingerprint`.
 

@@ -42,32 +42,17 @@ function celNumber(v: number): number | bigint {
   return v;
 }
 
-/** Map-like vars: missing keys read as null (spec §4.3 CEL context). */
-export function celDynamicMap(obj: Record<string, unknown>): Record<string, unknown> {
-  return new Proxy(obj, {
-    get(target, prop, receiver) {
-      if (typeof prop === "string") return prop in target ? Reflect.get(target, prop, receiver) : null;
-      return Reflect.get(target, prop, receiver);
-    },
-    has(target, prop) {
-      if (typeof prop === "string") return true;
-      return Reflect.has(target, prop);
-    },
-  });
-}
-
 /** Prepare context for cel-js 8.x: safe integers as bigint, fractional values as double; strip undefined. */
 export function adaptCelContext(ctx: CelContext): Record<string, unknown> {
-  const walk = (v: unknown, key?: string): unknown => {
+  const walk = (v: unknown): unknown => {
     if (v === undefined) return null;
     if (typeof v === "bigint") return v;
     if (typeof v === "number") return celNumber(v);
     if (typeof v === "string" || typeof v === "boolean" || v === null) return v;
     if (Array.isArray(v)) return v.map((x) => walk(x));
     if (typeof v === "object") {
-      if (key === "vars") return celDynamicMap(v as Record<string, unknown>);
       const o: Record<string, unknown> = {};
-      for (const [k, val] of Object.entries(v as Record<string, unknown>)) o[k] = walk(val, k);
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) o[k] = walk(val);
       return o;
     }
     return v;
@@ -75,12 +60,26 @@ export function adaptCelContext(ctx: CelContext): Record<string, unknown> {
   return walk(ctx) as Record<string, unknown>;
 }
 
+const CEL_MISSING_KEY_HINT =
+  " — hint: guard optional keys with `'key' in world.vars` or declare an initial value under `vars:` in world.yaml";
+
+function celNoSuchKey(err: unknown): boolean {
+  if (!(err instanceof EvaluationError)) return false;
+  const summary = err.summary || err.message;
+  return summary.startsWith("No such key:");
+}
+
 function celErrorMessage(expr: string, err: unknown): string {
+  let base: string;
   if (err instanceof ParseError || err instanceof TypeError || err instanceof EvaluationError) {
-    return `${err.summary || err.message} (expression: ${expr})`;
+    base = `${err.summary || err.message} (expression: ${expr})`;
+  } else if (err instanceof Error) {
+    base = `${err.message} (expression: ${expr})`;
+  } else {
+    base = `CEL error (expression: ${expr})`;
   }
-  if (err instanceof Error) return `${err.message} (expression: ${expr})`;
-  return `CEL error (expression: ${expr})`;
+  if (celNoSuchKey(err)) return base + CEL_MISSING_KEY_HINT;
+  return base;
 }
 
 /** Compile-only check for zod `Cel` fields. */

@@ -17,7 +17,7 @@ export const BUILTIN_PRESET_BUNDLES: PresetBundle[] = BUILTIN_MODULES.map((mod) 
   extractPreset(mod as Record<string, unknown>),
 ).filter((p): p is PresetBundle => p !== undefined);
 
-/** Built-in presets shipped with the CLI (spec §19.4 / §19.5). */
+/** Built-in presets shipped with the CLI (preset-base and preset-dnd). */
 export async function builtinPresets(): Promise<PresetBundle[]> {
   return BUILTIN_PRESET_BUNDLES;
 }

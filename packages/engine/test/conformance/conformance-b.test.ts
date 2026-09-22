@@ -13,7 +13,7 @@ import { HookRegistry } from "../../src/pipeline/hooks.ts";
 import { createScriptedModel } from "../../src/model/scripted.ts";
 import type { Kernel } from "../../src/contracts.ts";
 
-describe("§7.2 CEL context variables", () => {
+describe("CEL context variables", () => {
   test("all spec roots are present and usable in CEL", () => {
     const policy = applyPolicyDefaults({});
     const { k } = createPipelineKernel({});
@@ -37,7 +37,7 @@ describe("§7.2 CEL context variables", () => {
   });
 });
 
-describe("§9.3 retrieval weights", () => {
+describe("retrieval weights", () => {
   test("default weights 0.5/0.2/0.2/0.1 and K=8 policy default", () => {
     const policy = applyPolicyDefaults({});
     expect(policy.memory.k).toBe(8);
@@ -67,7 +67,7 @@ describe("§9.3 retrieval weights", () => {
   });
 });
 
-describe("§12.6 query-triggered catch-up", () => {
+describe("query-triggered catch-up", () => {
   test("entityRefForQueryCatchUp maps player character and location paths", () => {
     expect(entityRefForQueryCatchUp("player", "characters/npc1/tracks")).toEqual({ kind: "character", id: "npc1" });
     expect(entityRefForQueryCatchUp("player", "world/locations/tavern")).toEqual({ kind: "location", id: "tavern" });
@@ -93,7 +93,7 @@ describe("§12.6 query-triggered catch-up", () => {
   });
 });
 
-describe("§8 sync LLM calls per turn", () => {
+describe("sync LLM calls per turn", () => {
   test("S1 turn: exactly appraise + render (no reflect/narrate)", async () => {
     const labels: string[] = [];
     const handler = (req: { label?: string }) => {

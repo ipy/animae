@@ -11,4 +11,9 @@ export {
   type WebSecurityConfig,
 } from "./server/security.ts";
 export type { WebSessionHooks } from "./server/session-room.ts";
-export { createWebI18n, webPackageCatalogs, WEB_SUPPORTED_LOCALES } from "./i18n/web-i18n.ts";
+export {
+  createWebI18n,
+  registerWebI18nCatalogs,
+  webPackageCatalogs,
+  WEB_SUPPORTED_LOCALES,
+} from "./i18n/web-i18n.ts";

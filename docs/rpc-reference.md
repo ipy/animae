@@ -18,7 +18,7 @@ Implementation: `packages/engine/src/rpc/`.
 
 | Method | Params |
 |--------|--------|
-| `turn.chunk` | `{ requestId, chunk: TurnChunk }` — during `scene.turn` / `timeline.replay` |
+| `turn.chunk` | `{ requestId, chunk: TurnChunk }` — during `scene.turn` / `timeline.replay` (see utterance rules below) |
 | `event` | `{ kind, event }` — after `subscribe` |
 
 Client notifications are rejected (except ignored `ping`).
@@ -27,11 +27,25 @@ Client notifications are rejected (except ignored `ping`).
 
 Params are objects unless noted. `scene.turn` and `timeline.replay` return `{ events, chunks, summary? }` after stream completes.
 
+### `TurnChunk` (streaming)
+
+Principal shape (see [spec.md](./spec.md)):
+
+```typescript
+type TurnChunk =
+  | { type: "text"; text: string; speaker?: string; autonomous?: boolean; newUtterance?: boolean }
+  | { type: "cue"; cue: Cue; at?: number; speaker?: string }
+  | { type: "choices"; choices: Choice[] }
+  | { type: "done"; turnId: string; speaker?: string };
+```
+
+Consecutive same-speaker `text` chunks between two `done` values are **utterance fragments** unless `newUtterance` is set. Integrators should use `@animae/engine` `applyTextTurnChunk` or `@animae/host` `consumeTurnStream` rather than treating every chunk as a separate line.
+
 ### Engine / world
 
 | Method | Params | Result |
 |--------|--------|--------|
-| `info` | — | `{ preset?, language, branch, sessionId, models, modelMode }` |
+| `info` | — | `{ preset?, language, locale, promptLocale, outputLocale, contentLocale, branch, sessionId, models, modelMode }` |
 | `reload` | — | `{ ok, errors[], warnings[] }` |
 | `world.now` | — | `WorldTime` |
 | `world.advance` | `{ by: Duration \| { to } }` | `EngineEvent[]` |

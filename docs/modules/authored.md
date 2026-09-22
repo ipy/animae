@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Loads and validates all author-time content under the data root (spec §5, §6 file layout, §9.2 knowledge frontmatter, §12.2 world, §19 animae.yaml).
+Loads and validates all author-time content under the data root ([data root](../spec.md#5-data-root-directory), [characters](../spec.md#6-character-system), [knowledge frontmatter](../spec.md#92-knowledge-documents-and-frontmatter-injection), [calendar](../spec.md#122-calendar), [policies and presets](../spec.md#19-policies-and-presets)).
 
 ## Public API
 

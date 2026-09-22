@@ -22,7 +22,7 @@ function exhaustionLevelFromId(id: string): number | undefined {
 }
 
 /**
- * Short rest: advance world time 60 minutes. Long rest: 480 minutes and reduce exhaustion by 1 level (spec §19.5).
+ * Short rest: advance world time 60 minutes. Long rest: 480 minutes and reduce exhaustion by 1 level.
  */
 export async function rest(engine: RestEngine, kind: "short" | "long", characterId = "player"): Promise<void> {
   const minutes = kind === "short" ? SHORT_REST_MINUTES : LONG_REST_MINUTES;

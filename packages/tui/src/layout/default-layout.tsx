@@ -106,5 +106,5 @@ export function DefaultLayout(props: LayoutProps) {
   );
 }
 
-/** Spec §21.2 default layout component. */
+/** Default TUI layout shell (see docs/modules/tui.md, Layout). */
 export const defaultLayout = DefaultLayout;

@@ -30,7 +30,7 @@ export interface EmbeddingPort {
   embed(texts: string[]): Promise<Float32Array[]>;
 }
 
-/** Prompt split into three cache-ordered segments (§17.4) + chat history + the current user input. */
+/** Prompt split into three cache-ordered segments plus chat history and the current user input. */
 export interface PromptSegments {
   /** world rules, `always` knowledge, identity, constraints, style. Cache breakpoint 1 after this. */
   static: string;
@@ -77,6 +77,8 @@ export type StreamPart =
 export interface ModelPort {
   /** model identifier, e.g. "anthropic/claude-haiku-5-5" — part of the recording key */
   id: string;
+  /** Host-defined capability tags (e.g. content tier labels) exposed to CEL as `model.tags`. */
+  tags?: readonly string[];
   object<T>(req: ModelRequestBase & { schema: ZodType<T> }): Promise<T>;
   stream(req: ModelRequestBase & { schema: ZodType<unknown> }): AsyncIterable<StreamPart>;
   /** cumulative usage since creation (best effort) */

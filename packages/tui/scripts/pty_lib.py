@@ -405,7 +405,7 @@ def spawn_host_dist(
     rows: int = 40,
     port: str = "9878",
 ) -> tuple[PtySession, subprocess.Popen[bytes], str, str]:
-    """Compiled host game binary (`new`) with temp home/config and stub LLM.
+    """Compiled host application binary (`new`) with temp home/config and stub LLM.
 
     Requires ``HOST_PTY_BIN`` and ``HOST_PTY_STUB`` (absolute paths); set by the host monorepo build/CI.
     """
@@ -503,9 +503,7 @@ def _shell_ui_markers(plain: str) -> bool:
             "Side panel",
             ">",
             "输入 :help",
-            "Lilium · Base",
-            "百合园 · 基地",
-            "温室",
+            "Demo session",
         )
     )
 
@@ -521,8 +519,12 @@ def wizard_answer_bytes() -> bytes:
     return raw.encode("utf-8")
 
 
-def wait_host_main_ui(sess: PtySession, timeout: float = 120.0) -> None:
-    """Wait for optional name wizard + intro skip, then TUI shell markers."""
+def wait_host_main_ui(sess: PtySession, timeout: float = 120.0, *, allow_config_wizard: bool = False) -> None:
+    """Wait for optional name wizard + intro skip, then TUI shell markers.
+
+    A config wizard in the transcript means the host did not load its config, unless the caller has just driven that
+    wizard in this very session (``allow_config_wizard``).
+    """
     wizard_answer = wizard_answer_bytes()
     deadline = time.time() + timeout
     name_done = False
@@ -534,9 +536,17 @@ def wait_host_main_ui(sess: PtySession, timeout: float = 120.0) -> None:
         if sess.proc.poll() is not None:
             break
         plain = sess.plain().replace("\r", "")
-        if "选择模型提供商" in plain or "首次运行 — 进入配置向导" in plain:
+        wizard_markers = [
+            m.strip()
+            for m in os.environ.get(
+                "HOST_PTY_CONFIG_WIZARD_MARKERS",
+                "Choose model provider,First run — configuration wizard",
+            ).split(",")
+            if m.strip()
+        ]
+        if not allow_config_wizard and any(m in plain for m in wizard_markers):
             raise TimeoutError(
-                "Config wizard appeared — LILIUM_CONFIG/config.yaml not loaded; "
+                "Config wizard appeared — host config env not loaded; "
                 f"check env {os.environ.get('HOST_PTY_CONFIG_VAR', 'HOST_CONFIG')} "
                 f"and file at {plain[:200]!r}"
             )
@@ -574,7 +584,7 @@ def attach_pty_draft_mirror(env: dict[str, str]) -> tuple[dict[str, str], str]:
     """Expose input draft on disk — Ink absolute layout breaks pyte line parsing."""
     import tempfile
 
-    fd, path = tempfile.mkstemp(prefix="lilium-pty-draft-", text=True)
+    fd, path = tempfile.mkstemp(prefix="animae-pty-draft-", text=True)
     os.close(fd)
     out = dict(env)
     out["TUI_PTY_DRAFT_FILE"] = path

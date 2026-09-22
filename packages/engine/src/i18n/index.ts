@@ -26,3 +26,8 @@ export {
 } from "./display.ts";
 export { validateContentLocalePresence } from "./validate-lanes.ts";
 export { localized } from "./system-message.ts";
+export {
+  collectPresetDisplayStrings,
+  mergeDisplayStringTables,
+  presetDisplayStringsCatalog,
+} from "./preset-display-strings.ts";

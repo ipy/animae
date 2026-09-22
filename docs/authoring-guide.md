@@ -224,7 +224,7 @@ Each item needs `at` **or** `every`, and `emit` **or** `rule`.
     - { id: whisper, minutes: 720 }
   emit: [...]
   onInterrupt: myRuleFn
-  rule: example-game.dailyTick    # alternatively: registered rule name
+  rule: myHost.dailyTick           # alternatively: registered rule name
 ```
 
 ---
@@ -239,7 +239,7 @@ name: market-rules
 description: Basic market etiquette
 scope: location:market    # world | location:<id> | character:<id> | scene:<id>
 inject: always            # always | when | on-demand
-when: "check.success"      # required if inject: when
+when: "check.success"      # required if inject: when (CEL; includes `model.slot` / `model.tags`)
 tags: [market]
 priority: 0
 shareable: false
@@ -278,7 +278,7 @@ lod: principal          # principal | supporting | extra
 tags: [npc]
 style: Warm, concise.
 ---
-Persona prose (文风) for prompts.
+Persona prose for prompts.
 ```
 
 ### `traits.yaml`

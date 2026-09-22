@@ -26,8 +26,9 @@ Companion package **`@animae/host`** holds UI-agnostic `SessionHost` (commands, 
 
 - Snapshots are full-state for v1; `patch` message type is defined for future incremental updates.
 - Engine events broadcast on `event` messages (`engine.on("*")`).
-- Config secret masking is the host game's responsibility via `WebSessionHooks.configGet`.
+- Config secret masking is the host application's responsibility via `WebSessionHooks.configGet`.
 - Error frames carry `{ code, message, localized? }`. `localized: true` means `message` was rendered from a catalog in the client's locale and can be shown as-is; otherwise `message` is a developer diagnostic and the client should show its own copy for `code` (falling back to a generic "something went wrong (code)" text, never a raw message key).
+- Frame timing contract for clients: frames from one client run in order, so the server reports `busy` only after it has dequeued a turn-starting frame (`input`, `choose`, `command`) and answers with `result` / `error` when it finishes. Snapshot pushes are single-flight, so `transcript` patches can trail `busy: false` by a few hundred milliseconds. A client should lock its turn controls from the moment it sends such a frame until the answer arrives (otherwise a second click queues a second turn) and treat the transcript as eventually consistent.
 - Per-client UI locale: `hello.locale`, `hello_ok.locale`, `set_locale`, and `locale` ack messages; localized snapshots/errors/toasts via `runWithLocale` pattern inside `SessionRoom` (`broadcastLocalized`).
 
 ## Changelog

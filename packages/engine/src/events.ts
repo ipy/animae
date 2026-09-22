@@ -1,7 +1,7 @@
 import type { CharacterId, EntityRef, EventId, JsonValue, Lod, SceneId, WorldTime } from "./types.ts";
 
 /**
- * Event catalog (spec §22 + documented extensions). CONTRACT file.
+ * Event catalog and documented extensions. CONTRACT file.
  * Payload shapes of the STATE-AFFECTING events; the reducer (timeline/reducer.ts) folds these into EngineState.
  * Emitters MUST produce exactly these shapes. Extra informational fields are allowed.
  */
@@ -18,7 +18,7 @@ export const EVENT_KINDS = [
   // fields
   "field.applied", "field.rejected", "field.cost_due", "field.cost_settled",
   "field.granted", "field.revoked", "field.age", // extension: runtime grant / revoke / ttl ticks (state-affecting)
-  "info_arrival", // extension: knowledge/tag arrival (anchor targets, §11)
+  "info_arrival", // extension: knowledge/tag arrival (director anchor targets)
   // intent & generation
   "intent.decided", "intent.mismatch", "route.decided", "utterance", "choice.offered", "choice.taken", "choice.filtered",
   // memory

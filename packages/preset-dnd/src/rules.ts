@@ -12,7 +12,7 @@ function readRelationTrack(
   return c.tracks.toward[target]?.[track] ?? initial;
 }
 
-/** Intimidation success: additional affinity −2 and trust −2 (spec §19.5). */
+/** Intimidation success: additional affinity −2 and trust −2 (D&D preset). */
 export function dndIntimidationExtra(ctx: Readonly<RuleCtx>): EventDraft[] {
   const selfId = (ctx.vars.self as { id?: string } | null)?.id;
   const actorId = (ctx.vars.actor as { id?: string } | null)?.id;

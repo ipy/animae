@@ -8,6 +8,7 @@ import { buildRenderSchema } from "./schemas.ts";
 import { buildPromptSegments } from "./prompt.ts";
 import { routerBudgetK } from "../router/policy-access.ts";
 import type { RenderInput, RenderPart, RenderResult } from "./types.ts";
+import { modelCelExtra } from "./model-cel.ts";
 
 function textDelta(prev: string, next: string): string | null {
   if (next === prev) return null;
@@ -22,6 +23,7 @@ async function resolveHits(k: Kernel, i: RenderInput, t: TurnCtx): Promise<Retri
     other: i.addressee,
     event: i.appraisal,
     sceneId: i.scene.id,
+    extra: modelCelExtra(k, i.tier),
   });
   const salience = i.fieldEffects.salience;
   const raw = await k.m.memory.retrieve({
@@ -54,7 +56,10 @@ function buildS2Tools(k: Kernel, speaker: string): ToolDef[] {
       execute: async (input) => {
         const q = input as { query: string; scope?: string; tags?: string[] };
         const terms = q.query.split(/\s+/).filter(Boolean);
-        const ctx = k.celContext({ self: speaker as import("../types.ts").CharacterId });
+        const ctx = k.celContext({
+          self: speaker as import("../types.ts").CharacterId,
+          extra: modelCelExtra(k, "s2"),
+        });
         const hits = await k.m.memory.retrieve({
           owner: speaker as import("../types.ts").CharacterId,
           terms,
@@ -130,6 +135,7 @@ function filterChoices(
   addressee: string,
   appraisal: RenderInput["appraisal"],
   raw: { text: string; expected_event_type: string; tags: string[] }[],
+  tier: RenderInput["tier"],
 ): { kept: Choice[]; drafts: EventDraft[] } {
   const drafts: EventDraft[] = [];
   const kept: Choice[] = [];
@@ -139,7 +145,7 @@ function filterChoices(
       self: speaker as import("../types.ts").CharacterId,
       other: addressee as import("../types.ts").CharacterId,
       event: appraisal,
-      extra: { choice: c },
+      extra: { choice: c, ...modelCelExtra(k, tier) },
     });
     const ok = k.rules.cel.bool(k.policy.choices.filter, ctx);
     if (!ok) {
@@ -307,7 +313,7 @@ export async function* renderStage(k: Kernel, t: TurnCtx, i: RenderInput): Async
   const choiceDrafts: EventDraft[] = [];
   let choices: Choice[] = [];
   if (k.policy.choices.enabled && final.choices?.length) {
-    const filtered = filterChoices(k, i.speaker, i.addressee, i.appraisal, final.choices);
+    const filtered = filterChoices(k, i.speaker, i.addressee, i.appraisal, final.choices, i.tier);
     choices = filtered.kept;
     choiceDrafts.push(...filtered.drafts);
   }

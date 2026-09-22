@@ -16,9 +16,35 @@ import { notice } from "../src/notice.ts";
 import { stableStringify } from "../../engine/src/store/util.ts";
 import { loadDndPolicy } from "../../preset-base/test/helpers.ts";
 import { authoredStub, baseState, catalog, npcDef } from "../../preset-base/test/helpers.ts";
+import { createTranslator, localizeDeep } from "../../i18n/src/index.ts";
 
 test("generated.ts matches YAML", async () => {
   expect(stableStringify(await buildPresetBundleObject())).toBe(stableStringify(generatedBundle));
+});
+
+test("skill check info_arrival copy localizes via preset displayStrings", () => {
+  const dndPolicy = generatedBundle.policies.find((p) => p.name === "policies/dnd.yaml")?.doc as {
+    checks?: { id: string; onSuccess?: { emit?: { text?: unknown }[] } }[];
+  };
+  const insight = dndPolicy?.checks?.find((c) => c.id === "dnd_insight");
+  const textRef = insight?.onSuccess?.emit?.[0]?.text;
+  expect(textRef).toEqual({ i18n: { key: "dnd.check.insight_lie" } });
+
+  const tables = generatedBundle.displayStrings;
+  expect(tables?.en).toBeDefined();
+  expect(tables?.["zh-CN"]).toBeDefined();
+  const en = createTranslator({
+    locale: "en",
+    catalogs: { strings: { en: tables!.en! } },
+    defaultNamespace: "strings",
+  });
+  const zh = createTranslator({
+    locale: "zh-CN",
+    catalogs: { strings: { "zh-CN": tables!["zh-CN"]! } },
+    defaultNamespace: "strings",
+  });
+  expect(localizeDeep({ text: textRef }, en.t.bind(en))).toEqual({ text: "They seem to be lying." });
+  expect(localizeDeep({ text: textRef }, zh.t.bind(zh))).toEqual({ text: "对方在说谎" });
 });
 
 test("SRD notice shipped in README, NOTICE, and export", () => {

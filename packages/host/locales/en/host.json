@@ -8,8 +8,13 @@
       "branches": "List branches",
       "explain": "Explain a turn",
       "query": "Query engine path",
-      "advance": "Advance world time"
+      "advance": "Advance world time",
+      "llmlog": "Inspect recent model calls (debug)"
     },
+    "llmlog_disabled": "Model call log is not enabled for this session.",
+    "llmlog_empty": "No model calls recorded yet.",
+    "llmlog_not_found": "No log entry with seq {seq}.",
+    "llmlog_dumped": "Wrote LLM log to {path}",
     "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help",
     "saved": "Saved {label} @ {eventId}",
     "loaded": "Loaded {slot}",

@@ -6,6 +6,7 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
+    "./generated": "./src/generated.ts",
     "./preset.yaml": "./preset.yaml"
   },
   "publishConfig": {

@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Built-in policy bundles (spec §19.4–§19.5) shipped as npm packages. **Source of truth is YAML** under each package; `scripts/gen-bundle.ts` emits committed `src/generated.ts` for single-file executables (no runtime filesystem reads).
+Built-in policy bundles ([19.4](../spec.md#194-animaepreset-base)–[19.5](../spec.md#195-animaepreset-dnd)) shipped as npm packages. **Source of truth is YAML** under each package; `scripts/gen-bundle.ts` emits committed `src/generated.ts` for single-file executables (no runtime filesystem reads).
 
 ## Layout
 
 ```
 packages/preset-base/
   preset.yaml              # id, extends, policies[]
-  policies/base.yaml       # full §19.4 policy
+  policies/base.yaml       # full base preset policy (Section 19.4)
   scripts/gen-bundle.ts
   src/generated.ts         # generated PresetBundle object
   src/index.ts             # export const preset + default
 
 packages/preset-dnd/
   preset.yaml              # extends @animae/preset-base
-  policies/dnd.yaml        # §19.5 overlays (traits schema, checks, x.*)
+  policies/dnd.yaml        # DnD preset overlays (Section 19.5): traits schema, checks, x.*
   knowledge/               # example exploration doc (check.success + approach)
   templates/fields/        # SRD condition YAML (authoring reference only; not merged into `PresetBundle.knowledge`)
   NOTICE                   # SRD 5.2.1 attribution (duplicate of `notice` export)
@@ -46,7 +46,7 @@ Regenerate: `bun scripts/gen-bundle.ts` from the package directory. Tests assert
 
 Policy data: `policy.x.approaches`, `policy.x.skills`, `policy.x.abilities` (18 SRD skills → ability keys).
 
-## Visibility (§19.4)
+## Visibility ([Section 19.4](../spec.md#194-animaepreset-base))
 
 - **author / gm**: broad path globs (`characters/*/*`, `world/*`, `events`, …).
 - **player**: `events` with kinds `utterance`, `choice.offered`, `choice.taken`, `input.received`; `world/vars` (+ per-key rules; `world.public_vars` in authored data filters keys for `player`).

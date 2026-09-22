@@ -12,12 +12,12 @@ Loads, merges, validates, and default-fills strategy documents into a `ResolvedP
 | `createPresetRegistry(initial?)` | In-memory preset bundle registry |
 | `resolvePresetChain(registry, id)` | Topological `extends` resolution; `CONFIG_INVALID` on cycle/missing |
 | `loadPresetDir(path \| StoragePort)` | Filesystem or storage preset → `PresetBundle` |
-| `loadPolicy(storage, config, registry, opts?)` | Full §7.4 load path; throws `AnimaeError("CONFIG_INVALID")` with `file:path: msg` lines |
+| `loadPolicy(storage, config, registry, opts?)` | Full [7.4 load path](../spec.md#74-loading-and-validation); throws `AnimaeError("CONFIG_INVALID")` with `file:path: msg` lines |
 | `applyPolicyDefaults(doc)` | Fill spec defaults (memory k=8, render.recentTurns=12, router budget, …) |
 | `validatePolicyDocument(merged, opts?)` | Zod + cross-ref validation |
 | `ResolvedPolicy`, `Policy` | Re-exported from `schema/policy.ts` |
 
-`LoadPolicyOptions`: `knownRuleFns?: Set<string>`, `authoredFields?: Record<string, { level }>` for grant vs declared field level (§10.3).
+`LoadPolicyOptions`: `knownRuleFns?: Set<string>`, `authoredFields?: Record<string, { level }>` for grant vs declared field level ([10.3](../spec.md#103-grants)).
 
 Policy hash: `sha256(stableStringify(resolved))`.
 

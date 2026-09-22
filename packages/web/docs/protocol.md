@@ -39,6 +39,8 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 | `models_probe` | `{ id, slot?: "s1" \| "s2" }` — connectivity test (host-defined) |
 | `ollama_models` | `{ id, baseURL? }` — list local Ollama models via `/api/tags` (host-defined) |
 | `content_pack_notice` | `{ id, packId }` — fetch opt-in pack notice text |
+| `llm_log` | `{ id, since?, limit?, label?, slot?, errorsOnly? }` — in-memory model call log (when host enabled `modelCallLog` on the engine); `result.data`: `{ enabled, entries, newestSeq }`, at most **50** entries per response |
+| `llm_log_clear` | `{ id }` — clear the in-memory log buffer |
 | `ping` | `{ id }` |
 
 ## Server → client
@@ -49,7 +51,7 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 | `locale` | `{ locale }` — negotiated UI locale for this client (after `hello` or `set_locale`) |
 | `snapshot` | Full UI state (see below) |
 | `patch` | `{ ops: [{ op, path, value? }] }` — incremental snapshot updates when diff is small |
-| `stream` | Token-level narration/dialogue |
+| `stream` | Per-**utterance** narration/dialogue (`start` / `delta` / `end`); each `delta` is a text **fragment**, not a full line |
 | `event` | `{ kind, payload }` — engine timeline events |
 | `error` | `{ code, message, id?, params? }` — `message` localized per client; `code`/`params` stable for clients |
 | `toast` | `{ level, text }` — `text` localized per client |

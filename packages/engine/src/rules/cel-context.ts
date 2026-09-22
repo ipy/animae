@@ -162,14 +162,23 @@ export function buildCelContext(deps: BuildCelContextDeps, params: BuildCelConte
     memory: { count: selfId ? (state.memoryIndex[selfId]?.count ?? 0) : 0 },
     fields: { active: activeFields, ...Object.fromEntries(activeFields.map((id) => [id, true])) },
     check: params.check ?? null,
+    model: { slot: "", tags: [] as string[] },
   };
 
   const extra = (params.extra ?? {}) as Record<string, unknown>;
   const extraWorld = extra.world;
   const extraTime = extra.time;
+  const extraModel = extra.model;
   for (const [k, v] of Object.entries(extra)) {
-    if (k === "world" || k === "time") continue;
+    if (k === "world" || k === "time" || k === "model") continue;
     (ctx as Record<string, unknown>)[k] = v;
+  }
+  if (extraModel && typeof extraModel === "object" && !Array.isArray(extraModel)) {
+    const m = extraModel as { slot?: string; tags?: string[] };
+    ctx.model = {
+      slot: typeof m.slot === "string" ? m.slot : "",
+      tags: Array.isArray(m.tags) ? [...m.tags] : [],
+    };
   }
   if (extraWorld && typeof extraWorld === "object" && !Array.isArray(extraWorld)) {
     const world = ctx.world as Record<string, unknown>;

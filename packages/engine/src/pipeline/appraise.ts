@@ -4,6 +4,7 @@ import type { EventDraft } from "../types.ts";
 import { AnimaeError } from "../types.ts";
 import { buildAppraiseSchema } from "./schemas.ts";
 import { buildPromptSegments } from "./prompt.ts";
+import { promptText } from "./prompt-text.ts";
 import { routerBudgetK } from "../router/policy-access.ts";
 import type { AppraiseInput, AppraiseStageResult } from "./types.ts";
 
@@ -70,7 +71,10 @@ function appraiseInstructions(k: Kernel): string {
   const types = k.policy.events.types;
   const typeLines = Object.entries(types)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, def]) => `- ${key}${def.description ? `: ${def.description}` : ""}${def.positive ? " (positive)" : ""}`);
+    .map(([key, def]) => {
+      const description = promptText(k, def.description);
+      return `- ${key}${description ? `: ${description}` : ""}${def.positive ? " (positive)" : ""}`;
+    });
   const approaches = (k.policy.x?.approaches as string[] | undefined) ?? [];
   const examples = (k.policy.x?.prompt as { appraise_examples?: string } | undefined)?.appraise_examples ?? "";
 

@@ -1,6 +1,6 @@
 # Content mods
 
-Mods are **optional content packs** (and optionally **code plugins** via embedded `ModBundle`) that overlay the data root without forking the base game. They are gameplay-agnostic: `rating` and `tags` are free metadata for host apps (e.g. example-game setup UI).
+Mods are **optional content packs** (and optionally **code plugins** via embedded `ModBundle`) that overlay the data root without forking the base authored tree. They are gameplay-agnostic: `rating` and `tags` are free metadata for host applications (e.g. a mod picker in setup UI).
 
 ## Why mods vs presets vs authored vs plugins
 
@@ -116,7 +116,7 @@ Filesystem mods are **data-only**. Only registered `ModBundle.setup()` runs code
 
 ### CEL guards (optional world vars)
 
-Indexing a missing key as `world.vars['some.key']` throws at runtime. For optional flags (pairs, milestones), test membership first: `'some.key' in world.vars && world.vars['some.key'] == true`.
+Optional flags in `world.vars` must use presence guards before indexing. Full semantics and examples: [cel-reference.md — Map keys](./cel-reference.md#map-keys-worldvars-character-vars).
 
 **Host bundles with empty `files`:** When a registered `ModBundle` has no embedded overlay files, the engine still loads overlay content from `mods/<id>/` on disk (manifest comes from the bundle). Use this for code-only plugins (e.g. host-registered optional mod rule hooks).
 

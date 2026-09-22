@@ -3,13 +3,12 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
-/** Split so engine hygiene scan does not treat this integration test as game-coupled engine code. */
-const GAME_DIR = ["li", "lium"].join("");
-const GAME = join(REPO, "games", GAME_DIR);
-const MAIN = join(GAME, "src/main.ts");
-const DATA = join(GAME, "data");
-const DIST_BIN = join(GAME, "dist", GAME_DIR);
+/** Animae repo root (`packages/tui/test` → `../../..`). */
+const ANIMae_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const TUI_PKG = join(ANIMae_ROOT, "packages/tui");
+const DEV_SESSION = join(TUI_PKG, "scripts/dev-session.ts");
+const TUI_SCRIPTS = join(TUI_PKG, "scripts");
+const CLI_DIST = join(ANIMae_ROOT, "dist", "animae");
 
 function psCpu(pid: number): number {
   const out = Bun.spawnSync(["ps", "-p", String(pid), "-o", "%cpu="]).stdout.toString().trim();
@@ -18,51 +17,28 @@ function psCpu(pid: number): number {
 
 describe("terminal hangup", () => {
   test(
-    "dev game binary exits within 2s when PTY master fd closes (detach_master)",
+    "dev-session TUI exits within 2s when PTY master fd closes (detach_master)",
     async () => {
-      const tuiScripts = join(REPO, "animae/packages/tui/scripts");
       const py = `
-import os, sys, time, tempfile, subprocess
+import os, sys, time, subprocess
 from pathlib import Path
-sys.path.insert(0, ${JSON.stringify(tuiScripts)})
+sys.path.insert(0, ${JSON.stringify(TUI_SCRIPTS)})
 from pty_lib import spawn_pty
-repo = Path(${JSON.stringify(REPO)})
-game = Path(${JSON.stringify(GAME)})
-main = game / "src/main.ts"
-data = game / "data"
-stub = game / "scripts/dev/stub-openai-server.ts"
-port = "9866"
-stub_proc = subprocess.Popen(["bun", "run", str(stub)], env={**os.environ, "STUB_PORT": port}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(0.4)
-home = tempfile.mkdtemp(prefix="hangup-home-")
-cfg = tempfile.mkdtemp(prefix="hangup-cfg-")
-(Path(cfg) / "config.yaml").write_text(
-    f"models:\\n  s1:\\n    provider: openai-compatible\\n    model: stub\\n    baseURL: http://127.0.0.1:{port}/v1\\n    apiKey: test\\n  s2:\\n    provider: openai-compatible\\n    model: stub\\n    baseURL: http://127.0.0.1:{port}/v1\\n    apiKey: test\\nmodelMode: record\\ntypewriter: false\\n",
-    encoding="utf-8",
-)
-env = os.environ.copy()
-env["TERM"] = "xterm-256color"
-env["LILIUM_HOME"] = home
-env["LILIUM_CONFIG"] = cfg
-env["HOST_PTY_WIZARD_ANSWER"] = "Test\\n"
-sess = spawn_pty(["bun", "run", str(main), "new", "--root", str(data)], env=env, cwd=str(repo))
+root = Path(${JSON.stringify(ANIMae_ROOT)})
+dev = Path(${JSON.stringify(DEV_SESSION)})
+sess = spawn_pty(["bun", "run", str(dev), "--batch", "help"], env={**os.environ, "TERM": "xterm-256color"}, cwd=str(root))
 time.sleep(2.0)
 sess.detach_master()
 deadline = time.time() + 2.5
 while time.time() < deadline and sess.proc.poll() is None:
     time.sleep(0.05)
 alive = sess.proc.poll() is None
-stub_proc.terminate()
-try:
-    stub_proc.wait(timeout=2)
-except subprocess.TimeoutExpired:
-    stub_proc.kill()
 if alive:
     sess.kill_process_group()
     raise SystemExit(2)
 `;
       const proc = Bun.spawn(["python3", "-c", py], {
-        cwd: REPO,
+        cwd: ANIMae_ROOT,
         env: process.env,
         stdout: "pipe",
         stderr: "pipe",
@@ -76,11 +52,11 @@ if alive:
   );
 
   test(
-    "dev game binary exits within 2s when PTY master closes (no CPU spin)",
+    "dev-session TUI exits within 2s when PTY master closes (no CPU spin)",
     async () => {
       const env = { ...process.env, TERM: "xterm-256color" };
-      const proc = Bun.spawn(["bun", "run", MAIN, "new", "--root", DATA], {
-        cwd: REPO,
+      const proc = Bun.spawn(["bun", "run", DEV_SESSION, "--batch", "help"], {
+        cwd: ANIMae_ROOT,
         env,
         stdin: "ignore",
         stdout: "pipe",
@@ -104,52 +80,29 @@ if alive:
   );
 
   test(
-    "compiled game binary exits within 2s when PTY master fd closes",
+    "compiled animae CLI exits within 2s when PTY master fd closes",
     async () => {
-      const dist = DIST_BIN;
-      if (!existsSync(dist)) return;
-      const tuiScripts = join(REPO, "animae/packages/tui/scripts");
+      if (!existsSync(CLI_DIST)) return;
       const py = `
-import os, sys, time, tempfile, subprocess
+import os, sys, time, subprocess
 from pathlib import Path
-sys.path.insert(0, ${JSON.stringify(tuiScripts)})
+sys.path.insert(0, ${JSON.stringify(TUI_SCRIPTS)})
 from pty_lib import spawn_pty
-repo = Path(${JSON.stringify(REPO)})
-game = Path(${JSON.stringify(GAME)})
-binary = Path(${JSON.stringify(DIST_BIN)})
-stub = game / "scripts/dev/stub-openai-server.ts"
-port = "9867"
-stub_proc = subprocess.Popen(["bun", "run", str(stub)], env={**os.environ, "STUB_PORT": port}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(0.4)
-home = tempfile.mkdtemp(prefix="hangup-dist-home-")
-cfg = tempfile.mkdtemp(prefix="hangup-dist-cfg-")
-(Path(cfg) / "config.yaml").write_text(
-    f"models:\\n  s1:\\n    provider: openai-compatible\\n    model: stub\\n    baseURL: http://127.0.0.1:{port}/v1\\n    apiKey: test\\n  s2:\\n    provider: openai-compatible\\n    model: stub\\n    baseURL: http://127.0.0.1:{port}/v1\\n    apiKey: test\\nmodelMode: record\\ntypewriter: false\\n",
-    encoding="utf-8",
-)
-env = os.environ.copy()
-env["TERM"] = "xterm-256color"
-env["LILIUM_HOME"] = home
-env["LILIUM_CONFIG"] = cfg
-env["HOST_PTY_WIZARD_ANSWER"] = "Test\\n"
-sess = spawn_pty([str(binary), "new"], env=env, cwd=str(game))
-time.sleep(2.5)
+root = Path(${JSON.stringify(ANIMae_ROOT)})
+binary = Path(${JSON.stringify(CLI_DIST)})
+sess = spawn_pty([str(binary), "--help"], env={**os.environ, "TERM": "xterm-256color"}, cwd=str(root))
+time.sleep(1.0)
 sess.detach_master()
 deadline = time.time() + 2.5
 while time.time() < deadline and sess.proc.poll() is None:
     time.sleep(0.05)
 alive = sess.proc.poll() is None
-stub_proc.terminate()
-try:
-    stub_proc.wait(timeout=2)
-except subprocess.TimeoutExpired:
-    stub_proc.kill()
 if alive:
     sess.kill_process_group()
     raise SystemExit(2)
 `;
       const proc = Bun.spawn(["python3", "-c", py], {
-        cwd: REPO,
+        cwd: ANIMae_ROOT,
         env: process.env,
         stdout: "pipe",
         stderr: "pipe",

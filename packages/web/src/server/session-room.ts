@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import { localizeSnapshot, SessionHost } from "@animae/host";
+import { bindLocalizeTranslator, localizeSnapshot, SessionHost } from "@animae/host";
 import { AnimaeError, type EngineEvent } from "@animae/engine";
 import { localizeDeep, localizeValue, matchAvailableLocale, runWithLocale, type FormatParams } from "@animae/i18n";
 import { ClientMessageSchema, type ServerMessage } from "../protocol/schemas.ts";
@@ -16,7 +16,10 @@ export interface WebSessionHooks {
     patch: Record<string, unknown>,
     consent?: { packId: string; phrase: string; noticeVersion: string },
   ): Promise<{ reloadRecommended?: boolean; message?: string } | void>;
-  modelsProbe?(slot?: "s1" | "s2"): Promise<Record<string, unknown>>;
+  modelsProbe?(
+    slot?: "s1" | "s2",
+    draft?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
   ollamaModels?(baseURL?: string): Promise<{ ok: boolean; models?: string[]; error?: string }>;
   contentPackNotice?(packId: string): Promise<{ notice: string; noticeVersion?: string }>;
 }
@@ -112,7 +115,7 @@ export class SessionRoom {
           type: "toast",
           seq: this.nextSeq(),
           level,
-          text: String(localizeValue(text, i18n.t.bind(i18n))),
+          text: String(localizeValue(text, bindLocalizeTranslator(i18n.t.bind(i18n), i18n.has.bind(i18n)))),
         }));
       },
       onBusy: (active, requestId) => {
@@ -136,7 +139,7 @@ export class SessionRoom {
         type: "event",
         seq: this.nextSeq(),
         kind: e.kind,
-        payload: localizeEventFields(e, i18n.t.bind(i18n)),
+        payload: localizeEventFields(e, bindLocalizeTranslator(i18n.t.bind(i18n), i18n.has.bind(i18n))),
       }));
     });
     this.engineUnsubs.push(off);
@@ -197,7 +200,7 @@ export class SessionRoom {
   }
 
   private localizeState(state: Record<string, unknown>, i18n: WebI18n): Record<string, unknown> {
-    return localizeSnapshot(state, i18n.t.bind(i18n));
+    return localizeSnapshot(state, i18n.t.bind(i18n), i18n.has.bind(i18n));
   }
 
   /** Fire-and-forget trigger for engine callbacks: a failed build is logged instead of becoming an unhandled rejection. */
@@ -678,7 +681,7 @@ export class SessionRoom {
               this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
               break;
             }
-            const result = await this.hooks.modelsProbe(m.slot);
+            const result = await this.hooks.modelsProbe(m.slot, m.draft);
             this.ok(ws, m.id, result);
             break;
           }
@@ -704,6 +707,29 @@ export class SessionRoom {
             this.host.cancelActive(m.targetId ?? m.id);
             this.ok(ws, m.id, { cancelled: true });
             break;
+          case "llm_log": {
+            const log = this.host.engine.modelCallLog;
+            if (!log) {
+              this.ok(ws, m.id, { entries: [], enabled: false });
+              break;
+            }
+            const limit = Math.min(m.limit ?? 50, 50);
+            const entries = log.list({
+              since: m.since,
+              limit,
+              label: m.label,
+              slot: m.slot,
+              errorsOnly: m.errorsOnly,
+            });
+            this.ok(ws, m.id, { entries, enabled: true, newestSeq: entries[0]?.seq ?? 0 });
+            break;
+          }
+          case "llm_log_clear": {
+            const log = this.host.engine.modelCallLog;
+            if (log) log.clear();
+            this.ok(ws, m.id, { cleared: true });
+            break;
+          }
           default:
             this.err(ws, "UNKNOWN", "error.unknown");
         }

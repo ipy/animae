@@ -15,6 +15,8 @@ export function replayChunks(events: readonly EngineEvent[]): TurnChunk[] {
   let currentTurn: TurnId | undefined;
   let turnEvents: EventId[] = [];
   let pendingChoices: TurnChunk | undefined;
+  /** Most recent offer, so a turn driven by a choice id echoes the choice's text exactly like the live pipeline. */
+  let lastOffered: readonly { id: string; text: string }[] = [];
 
   const flushTurn = () => {
     if (pendingChoices) {
@@ -44,7 +46,23 @@ export function replayChunks(events: readonly EngineEvent[]): TurnChunk[] {
     }
     if (currentTurn && e.turn === currentTurn) turnEvents.push(e.id);
 
-    if (e.kind === "utterance") {
+    if (e.kind === "input.received") {
+      // The live pipeline echoes the player's own line (typed text, or the text of the chosen option) as the first
+      // chunk of a turn; replay must reproduce the same stream.
+      const input = e as { actor?: string; text?: string; choiceId?: string; autonomous?: boolean };
+      if (!input.autonomous) {
+        const typed = (input.text ?? "").trim();
+        const line = typed || (input.choiceId ? (lastOffered.find((c) => c.id === input.choiceId)?.text ?? "") : "");
+        if (line) {
+          chunks.push({
+            type: "text",
+            text: line,
+            ...(input.actor ? { speaker: input.actor } : {}),
+            newUtterance: true,
+          });
+        }
+      }
+    } else if (e.kind === "utterance") {
       const u = e as {
         text?: string;
         speaker?: string;
@@ -58,6 +76,7 @@ export function replayChunks(events: readonly EngineEvent[]): TurnChunk[] {
         chunks.push({
           type: "text",
           text,
+          newUtterance: true,
           ...(speaker ? { speaker } : {}),
           ...(autonomous !== undefined ? { autonomous } : {}),
         });
@@ -73,7 +92,9 @@ export function replayChunks(events: readonly EngineEvent[]): TurnChunk[] {
       }
     } else if (e.kind === "choice.offered") {
       const choices = (e as { choices?: TurnChunk extends { type: "choices" } ? never : unknown }).choices;
-      pendingChoices = { type: "choices", choices: (choices as import("../types.ts").Choice[]) ?? [] };
+      const offered = (choices as import("../types.ts").Choice[]) ?? [];
+      pendingChoices = { type: "choices", choices: offered };
+      lastOffered = offered;
     } else if (e.kind === "turn.ended") {
       flushTurn();
       currentTurn = undefined;

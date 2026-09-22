@@ -3,7 +3,7 @@ import type { EntityRef, Viewer } from "../types.ts";
 import { compareTime } from "../world/calendar.ts";
 import { fidelityForEntity } from "../world/offscreen.ts";
 
-/** Map a query path to an offscreen entity when §12.6 lazy catch-up applies. */
+/** Map a query path to an offscreen entity when lazy catch-up applies. */
 export function entityRefForQueryCatchUp(viewer: Viewer, path: string): EntityRef | null {
   if (viewer !== "player") return null;
   const trimmed = path.replace(/^\/+/, "").replace(/\/+$/, "");
@@ -38,8 +38,8 @@ function isStale(k: Kernel, entity: EntityRef): boolean {
 }
 
 /**
- * §12.6: before a player `query`, catch up stale locations/characters.
- * Narrate/full fidelity may await S1; rule span (schedule/decay) runs inside `world.catchUp`.
+ * Before a player `query`, catch up stale locations/characters when needed.
+ * Narrate/full fidelity may await S1. Global schedule/decay/long-event span work runs on `time.advanced`, not inside per-entity `catchUp` (see `docs/modules/world.md`, offscreen / catch-up).
  */
 export async function preflightPlayerCatchUp(k: Kernel, viewer: Viewer, path: string): Promise<void> {
   const entity = entityRefForQueryCatchUp(viewer, path);

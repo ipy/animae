@@ -1,5 +1,5 @@
 import type { CreateEngineOptions, Engine } from "../api.ts";
-import type { Kernel, Stage, StageHook, ViewerDef } from "../contracts.ts";
+import type { DisplayText, Kernel, Stage, StageHook, ViewerDef } from "../contracts.ts";
 import { createEngineModContext, type EngineModContext } from "./mod-context.ts";
 import { modDrift } from "../mods/resolve.ts";
 import { modRecordFromResolved, syncModTimelineRecord } from "./mod-sync.ts";
@@ -13,6 +13,7 @@ import { buildCelContext } from "../rules/cel-context.ts";
 import { createTimeline } from "../timeline/timeline-store.ts";
 import { FsStorage } from "../store/fs.ts";
 import { withRecording } from "../model/recording.ts";
+import { createModelCallLog, withModelCallLog, type ModelCallLog } from "../model/call-log.ts";
 import { resolveEngineModels } from "../model/config.ts";
 import { createFieldSystem } from "../fields/field-system.ts";
 import { createDirector } from "../director/director.ts";
@@ -31,7 +32,9 @@ import { replayChunks } from "../timeline/replay.ts";
 import type { EventId, TurnChunk } from "../types.ts";
 import type { ModelMode } from "../ports.ts";
 import { message as systemMessage } from "../i18n/system-message.ts";
+import { collectPresetDisplayStrings } from "../i18n/preset-display-strings.ts";
 import { StringTableCache } from "../i18n/string-table-cache.ts";
+import { liftStringRefs } from "../i18n/string-resolve.ts";
 import { normalizeLocaleTag } from "@animae/i18n";
 
 function sessionId(opts: CreateEngineOptions): string {
@@ -117,9 +120,22 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
   );
 
   const rawModels = resolveEngineModels(opts, live.authored.config);
+  let modelCallLog: ModelCallLog | undefined;
+  if (opts.modelCallLog === true) {
+    modelCallLog = createModelCallLog();
+  } else if (opts.modelCallLog && typeof opts.modelCallLog === "object" && "list" in opts.modelCallLog) {
+    modelCallLog = opts.modelCallLog;
+  } else if (opts.modelCallLog && typeof opts.modelCallLog === "object") {
+    modelCallLog = createModelCallLog(opts.modelCallLog);
+  }
+  const wrapSlot = (port: typeof rawModels.s1, slot: "s1" | "s2") => {
+    let p = withRecording(port, timeline.recordings);
+    if (modelCallLog) p = withModelCallLog(p, { slot, log: modelCallLog });
+    return p;
+  };
   const models = {
-    s1: withRecording(rawModels.s1, timeline.recordings),
-    s2: withRecording(rawModels.s2, timeline.recordings),
+    s1: wrapSlot(rawModels.s1, "s1"),
+    s2: wrapSlot(rawModels.s2, "s2"),
   };
 
   const warn = (code: string, messageText: string, extra?: Record<string, unknown>) => {
@@ -141,8 +157,28 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     contentLocale: modCtx.i18n.contentLocale,
     fallbackLocale: modCtx.i18n.fallbackLocale,
   };
-  const stringTables = new StringTableCache(storage, engineLocale.fallbackLocale);
-  await stringTables.warm(modCtx.i18n.fallbackChain);
+  const stringTables = new StringTableCache(
+    storage,
+    engineLocale.fallbackLocale,
+    collectPresetDisplayStrings(presets, authored.config.preset),
+  );
+  // Prompts are built synchronously, so the tables behind late-bound strings (`$t:key`) and name glossaries must
+  // already be loaded: the UI chain plus the prompt, output, and content languages.
+  await stringTables.warm([
+    ...new Set(
+      [
+        ...modCtx.i18n.fallbackChain,
+        engineLocale.promptLocale,
+        engineLocale.outputLocale,
+        engineLocale.contentLocale,
+      ].map(normalizeLocaleTag),
+    ),
+  ]);
+  const displayText: DisplayText = {
+    resolve: (locale, value) => stringTables.resolveValue(normalizeLocaleTag(locale), liftStringRefs(value)),
+    lookup: (locale, key) => stringTables.lookup(normalizeLocaleTag(locale), key),
+    prepare: (locales) => stringTables.warm([...new Set(locales.map(normalizeLocaleTag))]),
+  };
 
   kernel = {
     storage,
@@ -153,6 +189,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       return live.policy;
     },
     i18n: engineLocale,
+    displayText,
     rules,
     timeline,
     models,
@@ -230,6 +267,8 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       turn: async function* (t) {
         const release = await mutationGate.acquire();
         try {
+          // A per-turn output language (one client's UI locale) may not have been loaded yet.
+          if (t.outputLocale) await displayText.prepare([t.outputLocale]);
           yield* scene.turn(t);
         } finally {
           release();
@@ -360,6 +399,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       },
     },
     info: () => ({
+      root: opts.root,
       preset: live.authored.config.preset,
       language: live.authored.world.language,
       locale: engineLocale.locale,
@@ -371,6 +411,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       models: { s1: models.s1.id, s2: models.s2.id },
       modelMode,
     }),
+    modelCallLog,
     close: async () => {
       await mutationGate.drain();
       await timeline.close();

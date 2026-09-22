@@ -78,6 +78,7 @@ export interface FakeKernelOpts {
   embedding?: Kernel["embedding"];
   s2Handler?: (req: { label: string }) => unknown;
   i18n?: Partial<Kernel["i18n"]>;
+  displayText?: Kernel["displayText"];
 }
 
 export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitted: EventDraft[]; setState: (s: EngineState) => void } {
@@ -168,6 +169,7 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
       fallbackLocale: "en",
       ...opts.i18n,
     },
+    displayText: opts.displayText,
     rules,
     timeline,
     models: {

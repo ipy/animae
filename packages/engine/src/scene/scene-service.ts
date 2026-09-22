@@ -179,6 +179,8 @@ export function createSceneService(
             speaker: nextSpeaker,
             text: "",
             autonomous: true,
+            // The exchange is part of this player turn, so it is narrated in the same language.
+            outputLocale: t.outputLocale,
           });
           await opts?.afterTurn?.();
           if (!stillOpen(t.sceneId)) return;

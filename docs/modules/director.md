@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Narrative director (§11): **anchors**, **beats**, **sidenotes**, and **exceptions**, driven off the event log and `FieldSystem` grants.
+Narrative director ([Section 11](../spec.md#11-narrative-director)): **anchors**, **beats**, **sidenotes**, and **exceptions**, driven off the event log and `FieldSystem` grants.
 
 ## Public API
 

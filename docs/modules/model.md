@@ -2,7 +2,7 @@
 
 ## Purpose
 
-AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `generateText` / `streamText`), tools with step limits, prompt cache breakpoints (§17.4), record/replay (§13), and test doubles.
+AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `generateText` / `streamText`), tools with step limits, prompt cache breakpoints ([17.4](../spec.md#174-prompt-segments)), record/replay ([Section 13](../spec.md#13-timeline)), and test doubles.
 
 ## Public API
 
@@ -10,8 +10,9 @@ AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `ge
 |--------|------|
 | `createModelPort(spec, opts?)` | Live port for `anthropic` / `openai` / `google` / `deepseek` / `ollama` / `openai-compatible` |
 | `withRecording(port, RecordingStore)` | `live` passthrough, `record` append, `replay` serve (no network) |
+| `createModelCallLog`, `withModelCallLog` | In-memory debug log ([model-call-log.md](../model-call-log.md)) |
 | `createModelsFromConfig(config, opts?)` | `{ s1, s2 }` from `animae.yaml` `models` (throws `MODEL_CONFIG` if either missing) |
-| `resolveEngineModels(opts, config, portOpts?)` | Used by `createEngine`: explicit `opts.models` or config fallback (§19.3) |
+| `resolveEngineModels(opts, config, portOpts?)` | Used by `createEngine`: explicit `opts.models` or config fallback ([19.3](../spec.md#193-model-configuration)) |
 | `createScriptedModel(id, handler)` | Deterministic port for tests |
 | `streamFromObject(obj, chunkSize?)` | Growing `{ text }` partials for render streaming tests |
 | `createEmbeddingPort(spec, opts?)` | Optional `embedMany` → `Float32Array[]` (engine wiring off by default) |
@@ -27,7 +28,7 @@ AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `ge
 - `sleep` / `maxTransientRetries` — retry tests & tuning
 - `model` — inject `LanguageModelV4` (tests)
 
-## Prompt segments (§17.4)
+## Prompt segments ([Section 17.4](../spec.md#174-prompt-segments))
 
 Order: **static** (system, Anthropic cache bp 1) → **semiStatic** (system, bp 2) → **dynamic** (system, uncached) → **history** → **user**. OpenAI/Google rely on stable prefix ordering for automatic prefix caching; Anthropic uses `providerOptions.anthropic.cacheControl: { type: 'ephemeral' }` on the first two system blocks.
 

@@ -13,7 +13,7 @@ function systemBlock(text: string, cache?: typeof EPHEMERAL_CACHE): ModelMessage
 }
 
 /**
- * Maps §17.4 segments to model messages with provider-specific cache breakpoints.
+ * Maps prompt segments to model messages with provider-specific cache breakpoints.
  * Anthropic: `providerOptions.anthropic.cacheControl` on static (bp1) and semiStatic (bp2).
  * OpenAI / Google: stable prefix ordering (static → semiStatic → dynamic) for automatic prefix caching.
  */

@@ -8,7 +8,9 @@ import type { CharacterId } from "../types.ts";
 import { memorySyncList } from "../memory/service.ts";
 import { routerBudgetK } from "../router/policy-access.ts";
 import type { PromptInput } from "./types.ts";
+import { modelCelExtra } from "./model-cel.ts";
 import { historyToMessages } from "./history.ts";
+import { promptText } from "./prompt-text.ts";
 import { segmentMetrics, truncateToCharBudget } from "./segment-utils.ts";
 
 function lines(...parts: (string | undefined | false)[]): string {
@@ -89,6 +91,46 @@ function outputLanguageReminder(k: Kernel, tag: string): string {
   return own.t("diagnostics:output_language_directive", { language: displayLanguageName(tag, tag), tag });
 }
 
+/**
+ * Heading for the character's example lines. They are written in the content language and, left unmarked, models copy
+ * their wording and their punctuation into replies meant for another language. Flag them as voice references there.
+ */
+function styleExamplesHeader(k: Kernel, lang: string): string {
+  if (languageOf(lang) === languageOf(k.i18n.contentLocale)) return "Style examples:";
+  const from = displayLanguageName(k.i18n.contentLocale, promptLocale(k));
+  return getPromptSection(promptLocale(k), "style_examples_cross", { from, tag: lang });
+}
+
+/** The speaking character's name as the prompt addresses them (nickname- and address-as-aware). */
+function speakerName(k: Kernel, i: PromptInput): string {
+  return entityDisplayName(k.timeline.state(), k.catalog, i.speaker, { viewer: i.addressee, speaker: i.speaker });
+}
+
+/**
+ * Names the model must spell the output language's way. The characters' working-language names reach the prompt
+ * through the persona; when the player reads another language, models otherwise transliterate them inconsistently
+ * (and differently from the interface). Authors provide them as `character.<id>.name` / `.nickname` strings per
+ * locale. Only strings that exist in both the content language and the output language are listed.
+ */
+function nameGlossary(k: Kernel, i: PromptInput, lang: string): string {
+  const texts = k.displayText;
+  const content = k.i18n.contentLocale;
+  if (!texts || languageOf(lang) === languageOf(content)) return "";
+  const ids = [...new Set([i.speaker, i.addressee, ...i.scene.participants])].sort();
+  const rows = new Map<string, string>();
+  for (const id of ids) {
+    for (const part of ["nickname", "name"]) {
+      const key = `character.${id}.${part}`;
+      const source = texts.lookup(content, key);
+      const target = texts.lookup(lang, key);
+      if (source && target && source !== target && !rows.has(source)) rows.set(source, target);
+    }
+  }
+  if (rows.size === 0) return "";
+  const list = [...rows].map(([from, to]) => `- ${from} → ${to}`).join("\n");
+  return getPromptSection(promptLocale(k), "name_glossary", { tag: lang, rows: list });
+}
+
 function tierLengthHint(k: Kernel, tier: PromptInput["tier"]): string {
   const budget = routerBudgetK(k).maxOutputTokens;
   const max = tier === "s2" ? budget.s2 : budget.s1;
@@ -104,7 +146,8 @@ function formatCueSpec(k: Kernel): string {
   const rows = keys.map((name) => {
     const t = types[name]!;
     const argKeys = Object.keys(t.args ?? {}).sort().join(", ");
-    return `- ${name}${t.description ? `: ${t.description}` : ""}${argKeys ? ` (args: ${argKeys})` : ""}`;
+    const description = promptText(k, t.description);
+    return `- ${name}${description ? `: ${description}` : ""}${argKeys ? ` (args: ${argKeys})` : ""}`;
   });
   return lines(getPromptSection(promptLocale(k), "cues_header"), rows.join("\n"));
 }
@@ -220,7 +263,13 @@ function staticSegment(k: Kernel, i: PromptInput): string {
     .filter((b) => b.hardness !== "hard")
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  const ctx = k.celContext({ self: i.speaker, other: i.addressee, sceneId: i.scene.id });
+  const ctx = k.celContext({
+    self: i.speaker,
+    other: i.addressee,
+    sceneId: i.scene.id,
+    event: i.appraisal,
+    extra: modelCelExtra(k, i.tier),
+  });
   const inj = k.m.memory.knowledge({ owner: i.speaker, location: i.scene.location, sceneId: i.scene.id, ctx });
   const maxStatic = k.policy.render.maxSegmentChars?.static;
   const alwaysCap = maxStatic ? Math.floor(maxStatic * 0.32) : undefined;
@@ -235,10 +284,7 @@ function staticSegment(k: Kernel, i: PromptInput): string {
         : "";
 
   const partials = templatePartialGuidance(k);
-  const displayName = entityDisplayName(k.timeline.state(), k.catalog, i.speaker, {
-    viewer: i.addressee,
-    speaker: i.speaker,
-  });
+  const displayName = speakerName(k, i);
   const promptVars = { name: displayName, nickname: displayName, canonical_name: identity?.name ?? def?.id ?? i.speaker };
   const renderExtra =
     i.purpose === "render"
@@ -246,6 +292,7 @@ function staticSegment(k: Kernel, i: PromptInput): string {
           renderTextConvention(k),
           intentRealizedRule(k),
           outputLanguageDirective(k, lang),
+          nameGlossary(k, i, lang),
           partials && `Narrator partials:\n${partials}`,
           policyPromptBlock(k, "render", promptVars),
         )
@@ -262,7 +309,7 @@ function staticSegment(k: Kernel, i: PromptInput): string {
       personaBlock,
       def.card.style && `Style: ${def.card.style}`,
       (identity?.style_examples?.length ?? 0) > 0 &&
-        `Style examples:\n${identity!.style_examples!.map((x) => `- ${x}`).join("\n")}`,
+        `${styleExamplesHeader(k, lang)}\n${identity!.style_examples!.map((x) => `- ${x}`).join("\n")}`,
       (constraints?.motives?.length ?? 0) > 0 && `Motives: ${constraints!.motives!.join("; ")}`,
       bottomHard.length > 0 && `Hard limits:\n${bottomHard.map((b) => `- ${b.text}`).join("\n")}`,
       bottomSoft.length > 0 && `Soft limits:\n${bottomSoft.map((b) => `- ${b.text}`).join("\n")}`,
@@ -316,7 +363,13 @@ function relationSummary(k: Kernel, speaker: CharacterId, participants: Characte
 function semiStaticSegment(k: Kernel, i: PromptInput): string {
   const loc = k.catalog.location(i.scene.location);
   const participants = [...i.scene.participants].sort();
-  const ctx = k.celContext({ self: i.speaker, other: i.addressee, sceneId: i.scene.id });
+  const ctx = k.celContext({
+    self: i.speaker,
+    other: i.addressee,
+    sceneId: i.scene.id,
+    event: i.appraisal,
+    extra: modelCelExtra(k, i.tier),
+  });
   const inj = k.m.memory.knowledge({ owner: i.speaker, location: i.scene.location, sceneId: i.scene.id, ctx });
   const indexLines = inj.index.sort((a, b) => a.id.localeCompare(b.id)).map((x) => `- ${x.name}: ${x.description} (id=${x.id})`);
   const summary = syncMemorySummary(k, i.speaker);
@@ -446,14 +499,14 @@ function userMessage(k: Kernel, i: PromptInput): string {
   }
   const lang = outputLanguage(k, i.speaker, i.outputLocale);
   return lines(
-    getPromptSection(promptLocale(k), "render_user"),
+    getPromptSection(promptLocale(k), "render_user", { name: speakerName(k, i) }),
     getPromptSection(promptLocale(k), "render_output_reminder", { tag: lang }),
     i.appraisal?.type && `Event context: ${i.appraisal.type}`,
     outputLanguageReminder(k, lang),
   );
 }
 
-/** Build §17.4 prompt segments (deterministic ordering). */
+/** Build prompt segments for the turn pipeline (deterministic ordering; see docs/pipeline-and-events.md). */
 export function buildPromptSegments(k: Kernel, i: PromptInput): PromptSegments {
   const ctx = k.celContext({
     self: i.speaker,
@@ -461,6 +514,7 @@ export function buildPromptSegments(k: Kernel, i: PromptInput): PromptSegments {
     actor: i.addressee,
     event: i.appraisal,
     sceneId: i.scene.id,
+    extra: modelCelExtra(k, i.tier),
   });
   const inj = k.m.memory.knowledge({ owner: i.speaker, location: i.scene.location, sceneId: i.scene.id, ctx });
 
@@ -468,7 +522,10 @@ export function buildPromptSegments(k: Kernel, i: PromptInput): PromptSegments {
     static: staticSegment(k, i),
     semiStatic: semiStaticSegment(k, i),
     dynamic: dynamicSegment(k, i, inj.when),
-    history: historyToMessages(i.history),
+    history: historyToMessages(i.history, {
+      speaker: i.speaker,
+      nameOf: (id) => entityDisplayName(k.timeline.state(), k.catalog, id),
+    }),
     user: userMessage(k, i),
   };
 }

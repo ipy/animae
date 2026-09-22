@@ -1,0 +1,5 @@
+dnd:
+  check:
+    insight_lie: They seem to be lying.
+    investigation_found: The investigation turns up something.
+    perception_unusual: You notice something unusual.

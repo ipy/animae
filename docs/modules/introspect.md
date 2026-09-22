@@ -1,7 +1,7 @@
 # Introspect module
 
 ## Purpose
-Synchronous read-only views over engine state for TUI/RPC (§15): path catalogue, visibility policy, temporary grants, and turn `explain`.
+Synchronous read-only views over engine state for TUI/RPC ([Section 15](../spec.md#15-introspection-and-visibility)): path catalogue, visibility policy, temporary grants, and turn `explain`.
 
 ## Public API
 - `createIntrospect(k: Kernel): Introspect`
@@ -14,7 +14,7 @@ Synchronous read-only views over engine state for TUI/RPC (§15): path catalogue
 | `grant(viewer, path, ttl?)` | Emits `visibility.granted` with `expiresAt` from world time + duration. |
 | `expireGrants()` | Emits `visibility.expired` for elapsed grants (call on `time.advanced`). |
 | `explain(turnId, viewer)` | Event chain filtered by viewer/kinds rules. |
-| `registerViewer(v)` | Custom viewer defs (reserved for extensions). |
+| `registerViewer(v)` | Stores custom viewer defs for future use; **visibility rules are not extended from registrations yet** (preset viewers only). JSON-RPC blocks this registrar. |
 
 ## Paths
 Paths are **slash-separated** (`world/vars`, `world/vars/<key>`, `characters/<id>/tracks`). Anything the engine does not
@@ -36,11 +36,11 @@ See `contracts.ts` query catalogue. Also supported: `characters/<id>` (summary),
 ## Memory sync
 `characters/<id>/memory` reads `memorySyncList` — async disk load is not performed inside `query`. Integrators should warm cache via `memory.list()` or prior retrieval in the same session.
 
-## Lazy catch-up (§12.6)
+## Lazy catch-up ([Section 12.6](../spec.md#126-lazy-catch-up))
 - `scene.start` and the first turn of a scene call `world.catchUp` for each participant and the scene location (async, full fidelity per policy).
 - **`Engine.queryAsync`** (and JSON-RPC `query`): for `viewer: player`, paths `characters/<id>/**` and `world/locations/<id>` trigger `world.catchUp` when `lastSimulated` is behind world time, then return the same payload as `query`.
 - **Sync `query()`** does not await catch-up; use `queryAsync` or accept stale `lastSimulated` until the next scene or async query.
-- Rule fidelity (schedule, decay, long-event phases) runs inside `world.catchUp` before narrate/full side effects.
+- Per-entity `catchUp` applies offscreen fidelity only; global schedule/decay/long-event span work runs on `time.advanced` (see [world module — Offscreen / catch-up](./world.md#offscreen--catch-up)), not inside each `catchUp` call.
 
 ## Edge cases
 - Denied paths return `undefined` (callers must distinguish from empty arrays).

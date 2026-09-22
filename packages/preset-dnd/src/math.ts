@@ -1,4 +1,4 @@
-/** D&D ability modifier: floor((score − 10) / 2), including negative scores (spec §19.5). */
+/** D&D ability modifier: floor((score − 10) / 2), including negative scores. */
 export function abilityModifier(score: number): number {
   return Math.floor((score - 10) / 2);
 }

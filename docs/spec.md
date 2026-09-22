@@ -1,87 +1,89 @@
-# Animae 引擎规格 v1.0
+# Animae Engine Specification v1.0
 
-## 1. 概述
+> This English edition is canonical. A Chinese edition of the same specification is kept in [spec.zh-CN.md](./spec.zh-CN.md).
 
-Animae 是一个与具体玩法无关的角色与世界运行时，以 TypeScript 库的形式在本地运行，为 TRPG、视觉小说等互动叙事提供以下能力：
+## 1. Overview
 
-- 角色系统
-- 认知管线
-- 记忆与知识
-- 场系统
-- 叙事导演
-- 世界与时间
-- 时间线（存档、回溯、分支）
-- 多角色编排
-- 内省与可见性
-- 输入分类与安全
-- 路由与预算
-- 骰子与检定
+Animae is a gameplay-agnostic character and world runtime. It runs locally as a TypeScript library and provides the following capabilities for interactive narrative such as TRPGs and visual novels:
 
-引擎只提供机制。所有玩法相关的选择都由上层通过策略（policy）和预设（preset）注入。
+- Character system
+- Cognitive pipeline
+- Memory and knowledge
+- Field system
+- Narrative director
+- World and time
+- Timeline (saves, rewind, branches)
+- Multi-character orchestration
+- Introspection and visibility
+- Input classification and safety
+- Routing and budget
+- Dice and checks
 
-## 2. 技术栈与交付物
+The engine provides mechanisms only. All gameplay-specific choices are injected by upper layers through policy and preset.
 
-| 项 | 规格 |
+## 2. Tech stack and deliverables
+
+| Item | Specification |
 |---|---|
-| 语言 | TypeScript（最新稳定版，`strict`），产物为 ESM |
-| 运行时 | Node.js ≥ 24；Bun 最新稳定版 |
-| 模型层 | Vercel AI SDK Core（`ai@7`），封装在 `ModelPort` 之后 |
-| Schema 校验 | zod 4 |
-| 表达式 | CEL，使用 `@marcbachmann/cel-js` 8.x 实现 |
-| 存储 | 本地纯文本文件（YAML、Markdown、JSONL、JSON） |
+| Language | TypeScript (latest stable, `strict`); output is ESM |
+| Runtime | Node.js >= 24; Bun latest stable |
+| Model layer | Vercel AI SDK Core (`ai@7`), wrapped behind `ModelPort` |
+| Schema validation | zod 4 |
+| Expressions | CEL, implemented with `@marcbachmann/cel-js` 8.x |
+| Storage | Local plain-text files (YAML, Markdown, JSONL, JSON) |
 
-| 交付物 | 内容 |
+| Deliverable | Contents |
 |---|---|
-| `@animae/engine` | 引擎库 |
-| `@animae/preset-base` | 内置基础预设（§19.4） |
-| `@animae/preset-dnd` | 内置 DnD 预设（§19.5） |
-| `@animae/tui` | 终端游戏界面：基于 Ink 8（React）的组件库，外加一套默认游戏布局（§21） |
-| `animae` | 用 `bun build --compile` 构建的单个可执行文件，内含 `@animae/tui`，提供两种模式：交互式 CLI/TUI 和 `animae serve --stdio`（基于 stdio 的 JSON-RPC 2.0 sidecar） |
+| `@animae/engine` | Engine library |
+| `@animae/preset-base` | Built-in base preset ([Section 19.4](#194-animaepreset-base)) |
+| `@animae/preset-dnd` | Built-in DnD preset ([Section 19.5](#195-animaepreset-dnd)) |
+| `@animae/tui` | Terminal game UI: Ink 8 (React) component library, plus a default game layout ([Section 21](#21-terminal-ui-animaetui)) |
+| `animae` | Single executable built with `bun build --compile`, bundling `@animae/tui`, with two modes: interactive CLI/TUI and `animae serve --stdio` (stdio-based JSON-RPC 2.0 sidecar) |
 
-## 3. 引擎不变式
+## 3. Engine invariants
 
-| # | 不变式 |
+| # | Invariant |
 |---|---|
-| I1 | 引擎代码不包含玩法偏好；所有偏好都以策略、预设或 schema 扩展的形式注入。 |
-| I2 | 所有状态变化都以事件形式追加到当前时间线的事件日志中；任何状态都可以通过重放事件得到。 |
-| I3 | LLM 的输出只是提议，由裁决器（adjudicator）决定是否写入；写入行为本身也作为事件记录。 |
-| I4 | 每个事件都带有 `because`（出处）和 `source`（来源）。 |
-| I5 | 所有状态都可以通过 `query` 读取，读取结果按观察者和可见性策略过滤。 |
-| I6 | 给定相同的种子和 LLM 录制，重放结果逐字节一致。 |
-| I7 | 规则函数是同步纯函数。阶段钩子的 IO 只能经由 `ctx` 提供的端口进行，并且会被录制。 |
-| I8 | 写者只有一个进程，由数据根目录下的 `.animae.lock` 文件保证（文件内容为 pid）。 |
+| I1 | Engine code must not embed gameplay preferences; all preferences are injected as policy, preset, or schema extensions. |
+| I2 | Every state change is appended to the current timeline's event log as an event; any state can be derived by replaying events. |
+| I3 | LLM output is proposal only; the adjudicator decides whether to commit it; the commit itself is also recorded as an event. |
+| I4 | Every event carries `because` (provenance) and `source` (origin). |
+| I5 | All state is readable via `query`; results are filtered by observer and visibility policy. |
+| I6 | Given the same seed and LLM recordings, replay is byte-identical. |
+| I7 | Rule functions are synchronous pure functions. Stage-hook IO may only use ports provided on `ctx`, and is recorded. |
+| I8 | There is a single writer process, enforced by `.animae.lock` under the data root (file contents are the pid). |
 
-## 4. 架构
+## 4. Architecture
 
-| 模块 | 职责 |
+| Module | Responsibility |
 |---|---|
-| `schema` | zod 定义与扩展注册 |
-| `store` | `StoragePort` 实现（文件系统）；原子写入（写入临时文件后 rename）；追加写入加 fsync |
-| `timeline` | 事件日志、快照、存档、回溯、分支、携带集、裁剪、清除、导出、重放 |
-| `rules` | CEL 编译与执行、规则原语、TS 规则函数注册 |
-| `adjudicator` | 提议到事件的转换与校验 |
-| `pipeline` | 回合管线与阶段钩子 |
-| `characters` | 角色、细节层级（LOD）、模板生成、导入导出 |
-| `memory` | 记忆条目、知识文档、检索、遗忘、失真、传播、反思 |
-| `fields` | 场的声明、授权、解析、代价、账本 |
-| `director` | 锚点、节拍、场边提示、例外通道 |
-| `world` | 世界变量、地点、物品、历法、调度器、长事件、离屏模拟、惰性补算 |
-| `scene` | 场景、参与者、发言轮转、NPC 自主对话 |
-| `introspect` | `query`、`grant`、`explain`、事件订阅 |
-| `classify` | 输入分类、安全分类 |
-| `router` | S1/S2 路由、预算、降级、prompt 分段 |
-| `dice` | 掷骰表达式与检定 |
-| `model` | `ModelPort`、AI SDK 适配器、录制与回放 |
-| `policy` | 策略加载、合并、校验 |
-| `rpc` / `cli` | JSON-RPC sidecar 与 CLI |
+| `schema` | zod definitions and extension registration |
+| `store` | `StoragePort` implementation (filesystem); atomic writes (write temp file then rename); append writes with fsync |
+| `timeline` | Event log, snapshots, saves, rewind, branches, carry set, prune, purge, export, replay |
+| `rules` | CEL compile and execute, rule primitives, TS rule function registration |
+| `adjudicator` | Proposal-to-event conversion and validation |
+| `pipeline` | Turn pipeline and stage hooks |
+| `characters` | Characters, level of detail (LOD), template generation, import/export |
+| `memory` | Memory entries, knowledge docs, retrieval, forgetting, distortion, propagation, reflection |
+| `fields` | Field declaration, grants, resolution, cost, ledger |
+| `director` | Anchors, beats, sidenotes, exception channel |
+| `world` | World variables, locations, items, calendar, scheduler, long events, offscreen simulation, lazy catch-up |
+| `scene` | Scenes, participants, turn-taking, autonomous NPC dialogue |
+| `introspect` | `query`, `grant`, `explain`, event subscription |
+| `classify` | Input classification, safety classification |
+| `router` | S1/S2 routing, budget, degradation, prompt segments |
+| `dice` | Dice expressions and checks |
+| `model` | `ModelPort`, AI SDK adapter, recording and playback |
+| `policy` | Policy load, merge, validation |
+| `rpc` / `cli` | JSON-RPC sidecar and CLI |
 
-## 5. 数据根目录
+## 5. Data root directory
 
 ```
 <root>/
-  animae.yaml                 # 引擎配置：预设、策略列表、种子、模型 id
+  animae.yaml                 # Engine config: preset, policy list, seed, model ids
   world/
-    world.yaml                # 语言、历法、世界变量初值、章节定义
+    world.yaml                # Language, calendar, initial world vars, chapter definitions
     locations/<id>.yaml
     items/<id>.yaml
     fields/<id>.yaml
@@ -89,222 +91,224 @@ Animae 是一个与具体玩法无关的角色与世界运行时，以 TypeScrip
     beats.yaml
     exceptions.yaml
     schedule.yaml
-    knowledge/**/*.md         # 带 frontmatter 的知识文档
+    knowledge/**/*.md         # Knowledge docs with frontmatter
   characters/<id>/
-    card.md                   # frontmatter：身份、约束集、文风；正文：人设
+    card.md                   # frontmatter: identity, constraint set, voice; body: persona
     traits.yaml
-    tracks.yaml               # 初值与轨道覆盖
+    tracks.yaml               # Initial values and track overrides
     goals.yaml
     secrets.yaml
     relations.yaml
-    knowledge/*.md            # 角色私有知识（带 frontmatter）
+    knowledge/*.md            # Character-private knowledge (with frontmatter)
   templates/{character,location,item}/<id>.yaml
   policies/*.yaml | *.ts
   timelines/<branch>/
-    events.jsonl              # 第一行是 branch.header
+    events.jsonl              # First line is branch.header
     snapshots/<eventId>.json
-    entities/                 # 本分支动态生成的角色、地点、物品
-    artifacts/                # LLM 产物：记忆文本、摘要、反思
-    recordings.jsonl          # LLM 录制
-  saves.yaml                  # 存档槽 → { branch, eventId }
-  derived/                    # 可以重建的派生视图
+    entities/                 # Dynamically generated characters, locations, items on this branch
+    artifacts/                # LLM artifacts: memory text, summaries, reflections
+    recordings.jsonl          # LLM recordings
+  saves.yaml                  # Save slot -> { branch, eventId }
+  derived/                    # Rebuildable derived views
   .animae.lock
 ```
 
-| 规则 | 规格 |
+| Rule | Specification |
 |---|---|
-| 作者文件 | `world/`、`characters/`、`templates/`、`policies/` 下的文件对所有分支全局生效 |
-| 分支文件 | `timelines/<branch>/` 只属于该分支；子分支可以读取祖先链上的 `entities/` 和 `artifacts/`，写入则只写到本分支（写时复制） |
-| 快照 | 每 200 个事件和每次 `scene.end` 时各生成一次 |
-| 分支头 | `{"kind":"branch.header","branch":"b2","parent":"main","forkAt":"evt_0412"}` |
-| 事件行 | `{"id","kind","t":<WorldTime>,"sid","scene","turn","source","because":[...],...payload}` |
+| Authored files | Files under `world/`, `characters/`, `templates/`, `policies/` apply globally to all branches |
+| Branch files | `timelines/<branch>/` belongs to that branch only; child branches may read `entities/` and `artifacts/` on the ancestor chain; writes go only to the current branch (copy-on-write) |
+| Snapshots | One snapshot every 200 events and once on each `scene.end` |
+| Branch header | `{"kind":"branch.header","branch":"b2","parent":"main","forkAt":"evt_0412"}` |
+| Event line | `{"id","kind","t":<WorldTime>,"sid","scene","turn","source","because":[...],...payload}` |
 
-## 6. 角色系统
+## 6. Character system
 
-### 6.1 角色 schema
+### 6.1 Character schema
 
-| 部分 | 字段 |
+| Part | Fields |
 |---|---|
-| 身份 `identity` | `id`、`name`、`summary`、`language`（可选，覆盖世界语言）、`style_examples[]` |
-| 约束集 `constraints` | `motives[]`；`bottom_lines[]`：`{id, text, tags[], hardness: hard\|soft}`；`taboos[]`（标签） |
-| 禀赋 `traits` | 自定义维度 `{name: number}`；`event_mult`：`{eventType: number}`，即禀赋系数 |
-| 数值轨 `tracks` | 由策略定义（§7.3）；角色文件只写初值和覆盖项 |
-| 目标 `goals` | `[{id, text, tags[], priority}]` |
-| 秘密 `secrets` | `[{id, text, tags[], unlock: <CEL>}]` |
-| 关系 `relations` | `[{to, kind, tracks?, share: <CEL>}]` |
-| 细节层级 `lod` | `extra`（路人）\| `supporting`（配角）\| `principal`（主要角色） |
+| Identity `identity` | `id`, `name`, `summary`, `language` (optional, overrides world language), `style_examples[]` |
+| Constraint set `constraints` | `motives[]`; `bottom_lines[]`: `{id, text, tags[], hardness: hard\|soft}`; `taboos[]` (tags) |
+| Traits `traits` | Custom dimensions `{name: number}`; `event_mult`: `{eventType: number}` (trait multipliers) |
+| Tracks `tracks` | Defined by policy ([Section 7.3](#73-rule-primitives)); character files only store initial values and overrides |
+| Goals `goals` | `[{id, text, tags[], priority}]` |
+| Secrets `secrets` | `[{id, text, tags[], unlock: <CEL>}]` |
+| Relations `relations` | `[{to, kind, tracks?, share: <CEL>}]` |
+| Level of detail `lod` | `extra` (passerby) \| `supporting` (supporting role) \| `principal` (principal character) |
 
-### 6.2 细节层级
+### 6.2 Level of detail
 
-| LOD | 持久化内容 | 生成用的模型 |
+| LOD | Persisted content | Model for generation |
 |---|---|---|
-| `extra` | `identity`，以及一行 `summary`；不持久化记忆 | S1 |
-| `supporting` | `identity`、`constraints`、`tracks`、记忆 | S1 |
-| `principal` | 完整 schema | S2 |
+| `extra` | `identity` and a one-line `summary`; no persisted memory | S1 |
+| `supporting` | `identity`, `constraints`, `tracks`, memory | S1 |
+| `principal` | Full schema | S2 |
 
-晋升条件由模板中的 CEL 定义。晋升时，引擎按目标 LOD 的模板补全缺失的字段，然后写入 `character.promoted` 事件。
+Promotion conditions are defined by CEL in templates. On promotion, the engine fills missing fields from the template for the target LOD, then writes a `character.promoted` event.
 
-### 6.3 动态生成
+### 6.3 Dynamic generation
 
-1. 生成可以由以下三种方式触发：上层调用 `entities.generate`、规则产出 `entity.generate` 事件、导演通过锚点兜底触发。
-2. 模板文件 `templates/<kind>/<id>.yaml` 包含以下字段：`fields`（zod 兼容的字段定义）、`guidance`（生成指引文本）、`defaults`、`promote`（晋升规则）。
-3. 模型输出结构化提议，依次经过 schema 校验和裁决器校验，通过后写入 `timelines/<branch>/entities/`，并记录 `entity.created` 事件。
-4. 地点（location）、物品（item）的生成与角色使用同一套机制。
+1. Generation may be triggered in three ways: upper layer calls `entities.generate`, rules emit `entity.generate` events, or the director triggers fallback via anchors.
+2. Template file `templates/<kind>/<id>.yaml` contains: `fields` (zod-compatible field definitions), `guidance` (generation guidance text), `defaults`, `promote` (promotion rules).
+3. Model output is a structured proposal; it passes schema validation and adjudicator validation in order; on success it is written under `timelines/<branch>/entities/` and an `entity.created` event is recorded.
+4. Location and item generation use the same mechanism as characters.
 
-### 6.4 导入与导出
+### 6.4 Import and export
 
-- **导入**：`animae import-card <file>`，支持 SillyTavern 角色卡 V2/V3。文件可以是 JSON，也可以是 PNG（读取 `chara` 或 `ccv3` 文本块）。
+- **Import**: `animae import-card <file>`, supporting SillyTavern character cards V2/V3. The file may be JSON or PNG (reads the `chara` or `ccv3` text chunk).
 
-  | 源字段 | 目标 |
+  | Source field | Target |
   |---|---|
   | `name` | `identity.name` |
-  | `description` + `personality` | `card.md` 正文 |
-  | `scenario` | `knowledge/scenario.md`（`inject: always`） |
+  | `description` + `personality` | `card.md` body |
+  | `scenario` | `knowledge/scenario.md` (`inject: always`) |
   | `first_mes` | `identity.greeting` |
   | `mes_example` | `identity.style_examples` |
-  | `character_book.entries[]` | `knowledge/<n>.md`：`keys` 转为 `when` 关键词条件，`constant: true` 转为 `inject: always` |
-  | 其余字段 | 原样存入 `card.md` frontmatter 的 `x_import` 字段 |
+  | `character_book.entries[]` | `knowledge/<n>.md`: `keys` become `when` keyword conditions; `constant: true` becomes `inject: always` |
+  | Remaining fields | Stored verbatim in `card.md` frontmatter field `x_import` |
 
-- **导出**：`animae export-card <id>`，生成 `.acard.jsonl` 文件。格式与 §13.7 相同，内容只包含 `characters/<id>/`。
+- **Export**: `animae export-card <id>`, producing a `.acard.jsonl` file. The format is the same as in [Section 13](#13-timeline); content is limited to `characters/<id>/`.
 
-## 7. 规则与表达式
+## 7. Rules and expressions
 
-### 7.1 形式
+### 7.1 Form
 
-- YAML 中的条件、数值、优先级一律用 CEL 表达式书写。
-- 复杂逻辑可以用 TS 同步纯函数实现：通过 `engine.rules.register(name, fn)` 注册，YAML 中用 `fn: <name>` 引用。
-- 规则函数的签名：`(ctx: Readonly<RuleCtx>) => EngineEventDraft[]`。函数内只能使用 `ctx.rng()`，即按时间线和事件 id 播种的随机数生成器。
+- Conditions, numeric values, and priorities in YAML are written as CEL expressions.
+- Complex logic may be implemented as synchronous pure TS functions: register with `engine.rules.register(name, fn)` and reference in YAML as `fn: <name>`.
+- Rule function signature: `(ctx: Readonly<RuleCtx>) => EngineEventDraft[]`. Inside the function, only `ctx.rng()` may be used: an RNG seeded by timeline and event id.
 
-### 7.2 CEL 上下文变量
+### 7.2 CEL context variables
 
-`self`、`other`、`actor`、`event`、`scene`、`world`、`time`、`tracks`、`tiers`、`memory`、`fields`、`check`
+`self`, `other`, `actor`, `event`, `scene`, `world`, `time`, `tracks`, `tiers`, `memory`, `fields`, `check`, `model`
 
-### 7.3 规则原语
+`model` is always present: `{ slot: "s1" | "s2" | "", tags: string[] }`. Hosts attach capability tags to each model port (for example content tier labels). During prompt assembly the active slot is set from the pipeline tier (`s1` or `s2`); other stages leave `slot` empty and `tags` empty unless the host passes `extra.model`. Use `'tag' in model.tags` before relying on a tag.
 
-| 原语 | 参数 |
+### 7.3 Rule primitives
+
+| Primitive | Parameters |
 |---|---|
-| `track` | `name`、`min`、`max`、`initial`、`tiers[]`（`{name, from}`）、`hysteresis`、`decay`（`{toward, ratePerHour}`） |
+| `track` | `name`, `min`, `max`, `initial`, `tiers[]` (`{name, from}`), `hysteresis`, `decay` (`{toward, ratePerHour}`) |
 | `delta_table` | `{eventType: {track: base}}` |
-| `delta_formula` | 固定为 `base × intensity × sincerityFactor × traitMult × marginal(n)` |
-| `marginal` | `k`；`n` 为同一 NPC 收到的同类事件计数，按 `halfLifeHours` 衰减 |
+| `delta_formula` | Fixed as `base * intensity * sincerityFactor * traitMult * marginal(n)` |
+| `marginal` | `k`; `n` is the count of like events received by the same NPC, decayed by `halfLifeHours` |
 | `turn_cap` | `{track: maxAbsPerTurn}` |
 | `window` | `{trigger: <CEL>, durationScenes, mult: {eventType: number}, capToLoss: bool}` |
 | `threshold` | `{when: <CEL>, emit: <eventDraft>}` |
 | `intent_rules` | `[{intent, when: <CEL>, score: <CEL>}]` |
 
-`sincerityFactor` 只对正向的 `base` 生效：取值等于 `sincerity`（0–1）。负向的 `base` 不受它影响。
+`sincerityFactor` applies only to positive `base`: it equals `sincerity` (0-1). Negative `base` is unaffected.
 
-### 7.4 加载与校验
+### 7.4 Loading and validation
 
-1. 策略按以下顺序加载：预设 `extends` 链（深度合并，后者覆盖前者）→ 预设自身 → `animae.yaml` 中的 `policies` 列表（按列表顺序）。
-2. 同一个键被重复定义时，后加载的覆盖先加载的，并写入一条 `config.warning` 事件。
-3. 遇到无效配置时拒绝加载，并在错误信息中给出文件和路径。无效配置包括：引用不存在、类型不匹配、CEL 编译失败、zod 校验失败、场的层级超出授权。
+1. Policies load in this order: preset `extends` chain (deep merge, later overrides earlier) -> preset itself -> `policies` list in `animae.yaml` (in list order).
+2. When the same key is defined more than once, the later load overrides the earlier and a `config.warning` event is written.
+3. Invalid configuration rejects load and errors include file and path. Invalid configuration includes: references that do not exist, type mismatch, CEL compile failure, zod validation failure, field level exceeding grant.
 
-## 8. 认知管线
+## 8. Cognitive pipeline
 
 ```
-input → classify → appraise → check → adjudicate → applyFields → decide → route → render → commit
+input -> classify -> appraise -> check -> adjudicate -> applyFields -> decide -> route -> render -> commit
 ```
 
-| 阶段 | 默认实现 | 可替换性 |
+| Stage | Default implementation | Replaceability |
 |---|---|---|
-| `classify` | 由 S1 在 `appraise` 的同一次调用中输出输入类别 | 阶段钩子 |
-| `appraise` | S1 结构化输出：`{type, intensity, sincerity, approach, claims[], search_terms[], tags[], input_class, safety?}` | 阶段钩子 |
-| `check` | 策略声明了检定规则时，掷骰并写入 `check.rolled` 事件 | 规则 |
-| `adjudicate` | 按事件类型和规则原语生成 `track.delta` 事件 | 规则 |
-| `applyFields` | 按 §10 解析所有生效的场 | 规则（冲突解析器） |
-| `decide` | 按 `intent_rules` 计分，取最高分；同分时按声明顺序 | 规则 |
-| `route` | 按 §17 选择 S1 或 S2 | 策略 |
-| `render` | 流式生成，输出 `text` 分片和 `cue` 分片；按策略附带选项 | 阶段钩子 |
-| `commit` | 追加事件，更新派生状态，异步写入记忆 | — |
+| `classify` | S1 outputs input class in the same call as `appraise` | Stage hook |
+| `appraise` | S1 structured output: `{type, intensity, sincerity, approach, claims[], search_terms[], tags[], input_class, safety?}` | Stage hook |
+| `check` | When policy declares check rules, roll dice and write `check.rolled` event | Rules |
+| `adjudicate` | Emit `track.delta` events per event type and rule primitives | Rules |
+| `applyFields` | Resolve all active fields per [Section 10](#10-field-system) | Rules (conflict resolver) |
+| `decide` | Score per `intent_rules`, take highest; ties break by declaration order | Rules |
+| `route` | Choose S1 or S2 per [Section 17](#17-routing-budget-and-caching) | Policy |
+| `render` | Stream generation, output `text` chunks and `cue` chunks; attach choices per policy | Stage hook |
+| `commit` | Append events, update derived state, write memory asynchronously | -- |
 
-**同步调用**：会阻塞玩家看到回复的 LLM 调用。每回合固定 2 次：`appraise` 1 次，`render` 1 次。
+**Synchronous calls**: LLM calls that block the player from seeing the reply. Fixed at 2 per turn: one `appraise`, one `render`.
 
-**生成输出 schema**：`{text, cues[], intent_realized, choices?[]}`。
+**Generation output schema**: `{text, cues[], intent_realized, choices?[]}`.
 
-- 当 `intent_realized` 与 `decide` 的结果不一致时，记录 `intent.mismatch` 事件。是否重试由策略 `render.retryOnMismatch` 决定，取值为 0 或 1。
+- When `intent_realized` disagrees with `decide`, record an `intent.mismatch` event. Whether to retry is controlled by policy `render.retryOnMismatch`, value 0 or 1.
 
-**演出指令（cue）**：
+**Cues**:
 
-- cue 分片的格式为 `{type:"cue", cue:{type, args}, at:<文本字符偏移>}`。
-- 可用的 cue 类型及其参数 schema 由策略 `cues.types` 声明。
+- Cue chunk format: `{type:"cue", cue:{type, args}, at:<text character offset>}`.
+- Available cue types and argument schemas are declared in policy `cues.types`.
 
-**玩家选项**：
+**Choices**:
 
-- 策略 `choices` 的配置为 `{enabled, count, filter: <CEL>}`。
-- 开启后，在 `render` 的同一次输出中产出 `choices[]`，每一项为 `{text, expected_event_type, tags[]}`。
-- 不满足 `filter` 的选项会被丢弃，并记录 `choice.filtered` 事件。
+- Policy `choices` config: `{enabled, count, filter: <CEL>}`.
+- When enabled, the same `render` output includes `choices[]`; each item is `{text, expected_event_type, tags[]}`.
+- Options failing `filter` are dropped and a `choice.filtered` event is recorded.
 
-**输出语言**：优先使用 `identity.language`，否则使用 `world.yaml` 中的 `language`（BCP 47 标签）。语言设置只影响 `render` 和 `entities.generate`。
+**Output language**: Prefer `identity.language`, else `language` in `world.yaml` (BCP 47 tag). Language affects only `render` and `entities.generate`.
 
-## 9. 记忆与知识
+## 9. Memory and knowledge
 
-### 9.1 记忆条目
+### 9.1 Memory entries
 
-记忆条目存放在 `artifacts/<npc>/memory.jsonl`，格式如下：
+Memory entries live in `artifacts/<npc>/memory.jsonl`, format:
 
 ```
-{id, t, kind: episodic|semantic|summary|reflection, text, tags[], claims[{s,p,o}], importance(0–1), valence(-1–1), src: eventId, branch}
+{id, t, kind: episodic|semantic|summary|reflection, text, tags[], claims[{s,p,o}], importance(0-1), valence(-1-1), src: eventId, branch}
 ```
 
-### 9.2 知识文档与 frontmatter 注入
+### 9.2 Knowledge documents and frontmatter injection
 
-知识文档是 `world/knowledge/**/*.md` 和 `characters/<id>/knowledge/*.md` 下的 Markdown 文件。摘要类记忆以带 frontmatter 的 Markdown 形式写入 `artifacts/<npc>/summaries/`。
+Knowledge docs are Markdown under `world/knowledge/**/*.md` and `characters/<id>/knowledge/*.md`. Summary memories are written as Markdown with frontmatter under `artifacts/<npc>/summaries/`.
 
 ```yaml
 ---
 name: harbor-history
-description: 雾港的建城史与旧灯塔事故
+description: Founding history of Mist Harbor and the old lighthouse incident
 scope: world | location:<id> | character:<id> | scene:<id>
 inject: always | when | on-demand
-when: "scene.location == 'harbor' || 'lighthouse' in event.tags"   # inject: when 时必填
+when: "scene.location == 'harbor' || 'lighthouse' in event.tags"   # required when inject: when
 tags: [harbor, lighthouse]
 priority: 0
 ---
-正文……
+Body text...
 ```
 
-| `inject` 取值 | 注入方式 |
+| `inject` value | Injection behavior |
 |---|---|
-| `always` | 只要处于作用域内，正文就注入半静态段 |
-| `when` | CEL 条件为真时，正文注入动态段 |
-| `on-demand` | 只把 `name` 和 `description` 列入索引段，作用域内最多 50 条，按 `priority` 降序。正文在检索命中或 S2 调用 `read` 工具时才加载 |
+| `always` | While in scope, body injects into the semi-static segment |
+| `when` | When CEL condition is true, body injects into the dynamic segment |
+| `on-demand` | Only `name` and `description` go in the index segment; at most 50 in scope, sorted by `priority` descending. Body loads on retrieval hit or when S2 calls the `read` tool |
 
-### 9.3 检索
+### 9.3 Retrieval
 
-- **召回**：在作用域内的记忆条目和知识文档中，对 `appraise.search_terms` 做大小写不敏感的子串匹配和正则匹配。不建立索引。
-- **评分**：`0.5 × 词命中率 + 0.2 × 新近度 + 0.2 × importance + 0.1 × 场的浮现权重`。新近度的半衰期为 7 个世界日。
-- **取用**：取评分前 8 条（K = 8），注入动态段。
-- **S2 回合**：S2 可以使用 `search({query, scope, tags})` 和 `read({id})` 两个工具，最多 3 步；工具调用的结果会被录制。
-- **向量检索**：只定义接口 `EmbeddingPort { embed(texts: string[]): Promise<Float32Array[]> }`。启用后，向量分以权重 0.3 并入评分，其余各项按比例缩放。
+- **Recall**: Case-insensitive substring and regex match on `appraise.search_terms` over in-scope memory entries and knowledge docs. No index is built.
+- **Scoring**: `0.5 * term hit rate + 0.2 * recency + 0.2 * importance + 0.1 * field salience weight`. Recency half-life is 7 world days.
+- **Take**: Top 8 by score (K = 8), inject into dynamic segment.
+- **S2 turns**: S2 may use tools `search({query, scope, tags})` and `read({id})`, at most 3 steps; tool results are recorded.
+- **Vector retrieval**: Only the interface is defined: `EmbeddingPort { embed(texts: string[]): Promise<Float32Array[]> }`. When enabled, vector score enters at weight 0.3 and other terms scale proportionally.
 
-### 9.4 遗忘
+### 9.4 Forgetting
 
-- 由策略 `memory.forgetting` 控制，`enabled: false` 时关闭。
-- 保持度：`retention = exp(-ageDays / (tau × (0.5 + importance)))`。
-- 保持度低于 `threshold` 的条目不参与检索，但不会被删除。
+- Controlled by policy `memory.forgetting`; disabled when `enabled: false`.
+- Retention: `retention = exp(-ageDays / (tau * (0.5 + importance)))`.
+- Entries below `threshold` are excluded from retrieval but not deleted.
 
-### 9.5 失真
+### 9.5 Distortion
 
-- 由策略 `memory.distortion` 控制：`{enabled, p, maxImportance, kinds: [intensify, swap_subject, add_motive]}`。
-- 检索命中时，按概率 `p` 为条目附加一条失真指令，写入 `memory.distorted` 事件。
-- 原文本始终不变；失真只作用于当次的 `render`。
+- Controlled by policy `memory.distortion`: `{enabled, p, maxImportance, kinds: [intensify, swap_subject, add_motive]}`.
+- On retrieval hit, with probability `p` attach a distortion instruction to the entry and write `memory.distorted` event.
+- Original text never changes; distortion applies only to that `render`.
 
-### 9.6 传播
+### 9.6 Propagation
 
-- 由策略 `memory.propagation` 控制：`{enabled, onTick: day, distortionPerHop}`。
-- 每个传播 tick，对标记为 `shareable` 的条目，沿着 `relations[].share` 为真的边传播一跳。
-- 每传播一跳，失真计数加 1，写入 `memory.propagated` 事件。
+- Controlled by policy `memory.propagation`: `{enabled, onTick: day, distortionPerHop}`.
+- Each propagation tick, for entries marked `shareable`, propagate one hop along edges where `relations[].share` is true.
+- Each hop increments distortion count and writes `memory.propagated` event.
 
-### 9.7 反思
+### 9.7 Reflection
 
-- `scene.end` 时，对每个 `principal` 角色异步调用一次 S2，输出提议：`{summaries[], goal_changes[], new_claims[]}`。
-- 裁决器按策略 `reflection.accept` 校验提议。默认规则是：目标的 `tags` 与约束集的 `taboos`、`bottom_lines[].tags` 有交集时拒绝。
-- 通过的提议写入 `reflection.accepted` 事件，未通过的写入 `reflection.rejected` 事件。
+- On `scene.end`, invoke S2 once asynchronously per `principal` character; output proposal: `{summaries[], goal_changes[], new_claims[]}`.
+- Adjudicator validates proposal per policy `reflection.accept`. Default rule: reject when goal `tags` intersect constraint set `taboos` or `bottom_lines[].tags`.
+- Accepted proposals write `reflection.accepted`; rejected write `reflection.rejected`.
 
-## 10. 场系统
+## 10. Field system
 
-### 10.1 场的定义
+### 10.1 Field definition
 
 ```yaml
 id: rainy-old-building
@@ -312,64 +316,64 @@ holder: { kind: character|location|item|time|world|external, ref: old-building }
 source: author | rule | anchor | runtime
 scope: { scene?: <id>, location?: <id>, turns?: n, time?: {from,to}, when?: <CEL> }
 level: L0 | L1 | L2 | L3 | L4
-effects: { ... }          # 字段必须与 level 对应
+effects: { ... }          # fields must match level
 priority: 0
 stacking: add | max | override | resolver:<fn>
-cost: { payer: <entity>, effects: {...}, due: <CEL>, ttlScenes: 3, fallback: {...} }   # 可选
+cost: { payer: <entity>, effects: {...}, due: <CEL>, ttlScenes: 3, fallback: {...} }   # optional
 ```
 
-### 10.2 层级与效果字段
+### 10.2 Levels and effect fields
 
-| 层级 | 作用对象 | 效果字段 |
+| Level | Target | Effect fields |
 |---|---|---|
-| L0 叙事条件 | 环境与时机 | `world_vars`、`event_prob: {id: Δ}`、`salience: [{tags, boost}]`、`topic_access: {open[], close[]}`、`schedule_offset: {id: minutes}` |
-| L1 数值 | 轨道与检定 | `track_mult: {track: {eventType\|"*": m}}`、`track_offset`、`track_caps`、`tier_shift`、`check_mod: {skill\|"*": {bonus, advantage}}` |
-| L2 意图 | 意图 | `intent_force`、`intent_forbid[]`、`intent_bias: {intent: score}` |
-| L3 规则 | 规则 | `rule_override: {ruleId: ruleId}`、`rule_add[]` |
-| L4 感知 | NPC 的自我视图 | `hide_entities[]`、`disguise: {entity: asEntity}`、`inject_belief: [{text, tags, claims}]`、`suppress_memory_tags[]` |
+| L0 narrative conditions | Environment and timing | `world_vars`, `event_prob: {id: Δ}`, `salience: [{tags, boost}]`, `topic_access: {open[], close[]}`, `schedule_offset: {id: minutes}` |
+| L1 numeric | Tracks and checks | `track_mult: {track: {eventType\|"*": m}}`, `track_offset`, `track_caps`, `tier_shift`, `check_mod: {skill\|"*": {bonus, advantage}}` |
+| L2 intent | Intent | `intent_force`, `intent_forbid[]`, `intent_bias: {intent: score}` |
+| L3 rules | Rules | `rule_override: {ruleId: ruleId}`, `rule_add[]` |
+| L4 perception | NPC self-view | `hide_entities[]`, `disguise: {entity: asEntity}`, `inject_belief: [{text, tags, claims}]`, `suppress_memory_tags[]` |
 
-### 10.3 授权
+### 10.3 Grants
 
-- 由策略 `fields.grants` 配置：`[{holder: <CEL>, source: <CEL>, maxLevel}]`。
-- 场的声明层级超过授权时，加载阶段直接报错。如果是运行时授予的场，则写入 `field.rejected` 事件。
-- 数值上限由策略 `fields.caps` 配置，超出部分会被截断，并在 `field.applied` 事件中标记 `clamped`。
+- Configured by policy `fields.grants`: `[{holder: <CEL>, source: <CEL>, maxLevel}]`.
+- If declared field level exceeds grant, load fails. For runtime-granted fields, write `field.rejected` event.
+- Numeric caps from policy `fields.caps`; excess is clamped and marked `clamped` on `field.applied` events.
 
-### 10.4 解析
+### 10.4 Resolution
 
-1. 收集所有作用域命中的场。
-2. 按层级分组，组内按 `priority` 降序排列。
-3. 同一字段按 `stacking` 规则合并。
-4. L4 的效果只写入 `npc:<id>` 自我视图，不改变真实状态。
+1. Collect all fields whose scope matches.
+2. Group by level; within group sort by `priority` descending.
+3. Merge same field per `stacking` rules.
+4. L4 effects write only to `npc:<id>` self-view; they do not change ground truth.
 
-### 10.5 账本
+### 10.5 Ledger
 
-| 事件 | 写入时机 |
+| Event | When written |
 |---|---|
-| `field.applied` | 每次场生效 |
-| `field.rejected` | 每次场被拒绝 |
-| `field.cost_due` | 代价到期 |
-| `field.cost_settled` | 代价结算，或按 `fallback` 结算 |
+| `field.applied` | Each time a field takes effect |
+| `field.rejected` | Each time a field is rejected |
+| `field.cost_due` | Cost becomes due |
+| `field.cost_settled` | Cost settled, or settled via `fallback` |
 
-账本是由以上事件派生出的视图，始终会被记录；谁能看到账本由可见性策略决定。
+The ledger is a view derived from the above events; it is always recorded; who may see the ledger is determined by visibility policy.
 
-## 11. 叙事导演
+## 11. Narrative director
 
-| 机制 | 定义 |
+| Mechanism | Definition |
 |---|---|
-| 锚点 `anchors.yaml` | `{id, target: {kind: world_event\|info_arrival\|character_state\|character_choice, spec}, deadline: <WorldTime\|CEL>, strategies: [soft, hard, force], soft: <L0 场>, hard: <兜底事件>}`。`force` 需要有 L2 授权。距离截止时间不足 1 个场景时，`soft` 生效；到达截止时间仍未达成，执行 `hard`；`force` 在截止前最后一个回合生效。期间依次写入 `anchor.progress`、`anchor.fulfilled`、`anchor.fallback` 事件 |
-| 节拍 `beats.yaml` | `[{id, enter: <CEL>, exit: <CEL>, fields: [ids]}]`，按顺序排列，同一时刻只有一个节拍处于活动状态 |
-| 场边提示 | `director.sidenote(npc, text, {ttlTurns, verbatim: bool})`。提示文本注入动态段；`verbatim: false` 时，如果生成内容包含提示原文中连续 8 个以上的字符，就写入 `sidenote.echoed` 事件 |
-| 例外通道 `exceptions.yaml` | `{id, charges, period: session\|day\|chapter, mayBypass: [field_cap, cost_due, track_cap, rule:<id>, constraint:<id>]}`，通过 `director.invokeException` 使用，并写入 `exception.used` 事件 |
+| Anchors `anchors.yaml` | `{id, target: {kind: world_event\|info_arrival\|character_state\|character_choice, spec}, deadline: <WorldTime\|CEL>, strategies: [soft, hard, force], soft: <L0 field>, hard: <fallback event>}`. `force` requires L2 grant. When less than one scene remains before deadline, `soft` applies; if deadline passes unmet, run `hard`; `force` applies on the last turn before deadline. During this period write `anchor.progress`, `anchor.fulfilled`, `anchor.fallback` events in sequence |
+| Beats `beats.yaml` | `[{id, enter: <CEL>, exit: <CEL>, fields: [ids]}]`, ordered; only one beat is active at a time |
+| Sidenote | `director.sidenote(npc, text, {ttlTurns, verbatim: bool})`. Hint text injects into dynamic segment; when `verbatim: false`, if generated content contains 8 or more consecutive characters from the hint text, write `sidenote.echoed` event |
+| Exception channel `exceptions.yaml` | `{id, charges, period: session\|day\|chapter, mayBypass: [field_cap, cost_due, track_cap, rule:<id>, constraint:<id>]}`, used via `director.invokeException`, writes `exception.used` event |
 
-## 12. 世界与时间
+## 12. World and time
 
-### 12.1 世界状态
+### 12.1 World state
 
-世界状态包括 `world.vars`、地点、物品、阵营，全部采用事件溯源。
+World state includes `world.vars`, locations, items, and factions; all are event-sourced.
 
-### 12.2 历法
+### 12.2 Calendar
 
-在 `world.yaml` 中配置：
+Configured in `world.yaml`:
 
 ```yaml
 language: zh-CN
@@ -381,179 +385,179 @@ calendar:
 start: { day: 1, minute: 480 }
 ```
 
-`WorldTime` 的格式为 `{day, minute}`。`world.advance` 按分钟、小时、天推进，也可以直接推进到某个时间点。
+`WorldTime` format is `{day, minute}`. `world.advance` advances by minute, hour, or day, or jumps to a specific time.
 
-### 12.3 调度器
+### 12.3 Scheduler
 
-`schedule.yaml` 中的每一项为：
+Each entry in `schedule.yaml`:
 
 ```
 {id, at|every: <WorldTime|"day 08:00">, emit: <eventDraft> | rule: <fn>, duration?, phases?: [{id, minutes}], onInterrupt?: <rule>}
 ```
 
-触发时写入 `schedule.fired` 事件。
+On trigger, write `schedule.fired` event.
 
-### 12.4 长事件
+### 12.4 Long events
 
-- 带有 `duration` 和 `phases` 的调度项就是长事件。
-- 补算到观察时刻时，根据已经过去的时长确定当前所处的阶段，并写入 `longevent.phase` 事件。
-- 玩家介入时执行 `onInterrupt` 规则，并写入 `longevent.interrupted` 事件。
+- Schedule items with `duration` and `phases` are long events.
+- When catching up to observation time, determine current phase from elapsed duration and write `longevent.phase` event.
+- On player intervention run `onInterrupt` rule and write `longevent.interrupted` event.
 
-### 12.5 离屏模拟
+### 12.5 Offscreen simulation
 
-| 保真度 | 行为 |
+| Fidelity | Behavior |
 |---|---|
-| `none` | 不推进 |
-| `rule` | 只执行调度、规则和衰减 |
-| `narrate` | 在 `rule` 的基础上，为观察点内的可见残迹调用 S1，生成一句叙述，作为 artifact 写入 |
-| `full` | 在 `narrate` 的基础上，为调度中的角色相遇生成离屏对话，S1 和 S2 都按 §17 路由 |
+| `none` | No advancement |
+| `rule` | Scheduler, rules, and decay only |
+| `narrate` | On top of `rule`, for visible traces within observation point call S1 for one sentence of narration, written as artifact |
+| `full` | On top of `narrate`, generate offscreen dialogue for scheduled character meetings; route S1 and S2 per [Section 17](#17-routing-budget-and-caching) |
 
-保真度由策略 `offscreen.fidelity` 配置，可以分别对每个地点、每个角色设置。
+Fidelity is configured by policy `offscreen.fidelity`, per location and per character.
 
-### 12.6 惰性补算
+### 12.6 Lazy catch-up
 
-以下任一情况发生时，引擎把对应地点或角色从上次推进的时间补算到当前时间：
+When any of the following occurs, the engine catches the corresponding location or character up from the last advanced time to the current time:
 
-- 开始一个场景，且场景涉及该地点或角色；
-- 观察者 `player` 查询该地点或角色。
+- A scene starts and involves that location or character;
+- Observer `player` queries that location or character.
 
-补算完成后写入 `offscreen.simulated` 事件。
+After catch-up completes, write `offscreen.simulated` event.
 
-## 13. 时间线
+## 13. Timeline
 
-| 能力 | 规格 |
+| Capability | Spec |
 |---|---|
-| 存档 | `timeline.save(label)`：把 `{branch, eventId}` 写入 `saves.yaml` |
-| 读档 | `timeline.load(slot)`：从最近的快照开始重放，重放过程使用录制数据 |
-| 回溯 | `timeline.rewind(eventId)`：从该事件处开出新分支，写入 `branch.header` 和 `branch.forked` 事件，原分支保持不变 |
-| 分支 | `timeline.branches()` 列出所有分支；`timeline.switch(branch)` 切换分支；`timeline.diff(a, b)` 返回两个分支的状态差异和事件差异 |
-| 携带集 | 由策略 `timeline.carry` 配置：`[{characters: [ids]\|"*", kinds: [memory, track, world_var], tags: [..], when: <CEL>}]`。开出分支时，匹配的条目会复制到新分支，并标注 `carriedFrom`，写入 `carry.applied` 事件 |
-| 裁剪 | `timeline.prune(branch)`：删除一个没有子分支的分支目录 |
-| 清除 | `purge(scope)`：物理删除匹配的 artifacts，事件日志中对应的文本字段替换为 `"[redacted]"`，写入 `purge.applied` 事件 |
-| 导出 | `timeline.export(branch, {recordings: bool})`：导出为单个 `.asave.jsonl` 文件。第 1 行是清单 `{engine, preset, branch, chain[], hashes}`；之后每一行是 `{path, content}`。内容包括世界定义、角色定义、策略、从根分支到当前分支整条祖先链上的事件和 artifacts，以及可选的录制数据 |
-| 导入 | `timeline.import(file)`：导入时校验哈希，生成一个新分支 |
-| 重播 | `timeline.replay(branch, {from, to})`：按回合逐个产出 `TurnChunk`，全部使用录制数据 |
-| 录制 | `recordings.jsonl` 中每行是 `{key: hash(model, prompt, params, seed), response}`。回放模式下查不到录制时报错 |
-| 热加载 | 每个回合结束时，比对作者文件的哈希。有变化时重新加载并校验：校验通过则写入 `config.reloaded` 事件（附带新哈希）；校验失败则保留旧配置，并写入 `config.error` 事件。重放时如果配置哈希不一致，会写入 `config.warning` 事件 |
+| Save | `timeline.save(label)`: writes `{branch, eventId}` to `saves.yaml` |
+| Load | `timeline.load(slot)`: replays from the nearest snapshot; replay uses recorded data |
+| Rewind | `timeline.rewind(eventId)`: forks a new branch at that event, writes `branch.header` and `branch.forked` events; the original branch is unchanged |
+| Branches | `timeline.branches()` lists all branches; `timeline.switch(branch)` switches branch; `timeline.diff(a, b)` returns state and event differences between two branches |
+| Carry set | Configured by policy `timeline.carry`: `[{characters: [ids]\|"*", kinds: [memory, track, world_var], tags: [..], when: <CEL>}]`. When forking a branch, matching entries are copied to the new branch, tagged with `carriedFrom`, and a `carry.applied` event is written |
+| Prune | `timeline.prune(branch)`: deletes the directory of a branch that has no child branches |
+| Purge | `purge(scope)`: physically deletes matching artifacts; corresponding text fields in the event log are replaced with `"[redacted]"`; writes a `purge.applied` event |
+| Export | `timeline.export(branch, {recordings: bool})`: exports to a single `.asave.jsonl` file. Line 1 is a manifest `{engine, preset, branch, chain[], hashes}`; each following line is `{path, content}`. Content includes world definitions, character definitions, policies, events and artifacts on the full ancestor chain from the root branch to the current branch, and optional recording data |
+| Import | `timeline.import(file)`: validates hashes on import and creates a new branch |
+| Playback | `timeline.replay(branch, {from, to})`: emits `TurnChunk` values turn by turn, all using recorded data |
+| Recording | Each line in `recordings.jsonl` is `{key: hash(model, prompt, params, seed), response}`. In replay mode, a missing recording is an error |
+| Hot reload | At the end of each turn, authored file hashes are compared. On change, reload and validate: if validation passes, write a `config.reloaded` event (with new hashes); if validation fails, keep the old configuration and write a `config.error` event. During replay, if configuration hashes differ, a `config.warning` event is written |
 
-## 14. 多角色编排
+## 14. Multi-character orchestration
 
-| 项 | 规格 |
+| Item | Spec |
 |---|---|
-| 参与者 | 由 `scene.start({participants})` 指定，可以包含任意数量的 NPC |
-| 发言轮转 | 由策略 `scene.turnTaking` 配置，取值为 `addressed`（被点名的角色发言）、`round_robin`（轮流发言）或 `priority: <CEL>`（取分最高的角色） |
-| NPC 自主对话 | 由策略 `scene.autonomous` 配置：`{maxExchangesPerPlayerTurn, when: <CEL>}`。每一次交流都走完整的回合管线，并计入预算 |
-| S2 预算 | 场景内共享一个预算池，按升级触发的先后顺序消耗 |
+| Participants | Specified by `scene.start({participants})`; may include any number of NPCs |
+| Turn taking | Configured by policy `scene.turnTaking`: `addressed` (the addressed character speaks), `round_robin` (speak in rotation), or `priority: <CEL>` (highest-scoring character) |
+| Autonomous NPC dialogue | Configured by policy `scene.autonomous`: `{maxExchangesPerPlayerTurn, when: <CEL>}`. Each exchange runs the full turn pipeline and counts toward budget |
+| S2 budget | One shared budget pool within the scene, consumed in escalation-trigger order |
 
-## 15. 内省与可见性
+## 15. Introspection and visibility
 
-| 项 | 规格 |
+| Item | Spec |
 |---|---|
-| 观察者 | 内置五种：`debug`（始终全部可见）、`author`、`gm`、`player`、`npc:<id>`（角色的自我视图，叠加了 L4 效果）。上层可以用 `introspect.registerViewer` 注册自定义观察者 |
-| 路径 | `characters/<id>/{identity,constraints,traits,tracks,tiers,goals,secrets,memory,knowledge,alias}`、`world/{vars,locations,items}`、`ledger`、`events`、`timeline` |
-| 可见性策略 | `visibility.rules: [{viewer, path: <glob>, allow: bool}]`，按顺序求值，以最后一条匹配的规则为准；没有任何规则匹配时拒绝 |
-| 临时授权 | `grant(viewer, path, ttl)`：写入 `visibility.granted` 事件；到期时写入 `visibility.expired` 事件 |
-| explain | `explain(turnId, viewer)` 返回该回合的事件链：输入、评估、检定、数值变化、场、意图、路由、检索命中。结果经过可见性过滤 |
-| 订阅 | `on(kind, handler)`，`kind` 支持通配符 |
+| Viewers | Five built-in: `debug` (always fully visible), `author`, `gm`, `player`, `npc:<id>` (character self-view, with L4 effects applied). Upper layers may register custom viewers with `introspect.registerViewer` |
+| Paths | `characters/<id>/{identity,constraints,traits,tracks,tiers,goals,secrets,memory,knowledge,alias}`, `world/{vars,locations,items}`, `ledger`, `events`, `timeline` |
+| Visibility policy | `visibility.rules: [{viewer, path: <glob>, allow: bool}]`, evaluated in order; the last matching rule wins; deny when no rule matches |
+| Temporary grant | `grant(viewer, path, ttl)`: writes a `visibility.granted` event; on expiry writes a `visibility.expired` event |
+| explain | `explain(turnId, viewer)` returns the event chain for that turn: input, appraisal, checks, track changes, fields, intent, routing, retrieval hits. Results are filtered by visibility |
+| Subscribe | `on(kind, handler)`; `kind` supports wildcards |
 
-## 16. 输入分类与安全
+## 16. Input classification and safety
 
-| 项 | 规格 |
+| Item | Spec |
 |---|---|
-| 输入类别 | `normal`、`injection_suspect`、`meta_probe`，在 `appraise` 中输出 |
-| 类别响应 | 由策略 `input.response` 配置：`{class: {emit: <eventType>, intent: <intent>} \| hook: <fn>}` |
-| 安全分类 | 默认关闭。通过策略 `safety.enabled: true` 开启。开启后，`appraise` 额外输出 `safety`，取值为 `none`、`self_harm`、`real_world_danger`、`sexual_minors`、`personal_crisis` 之一 |
-| 安全响应 | `safety.response: in_character \| out_of_character_notice \| block \| hook:<fn>` |
-| 安全留痕 | `safety.log: bool`。为 `true` 时写入 `safety.flagged` 事件 |
+| Input class | `normal`, `injection_suspect`, `meta_probe`; emitted by `appraise` |
+| Class response | Configured by policy `input.response`: `{class: {emit: <eventType>, intent: <intent>} \| hook: <fn>}` |
+| Safety classification | Off by default. Enable with policy `safety.enabled: true`. When enabled, `appraise` also emits `safety` as one of `none`, `self_harm`, `real_world_danger`, `sexual_minors`, `personal_crisis` |
+| Safety response | `safety.response: in_character \| out_of_character_notice \| block \| hook:<fn>` |
+| Safety logging | `safety.log: bool`. When `true`, writes a `safety.flagged` event |
 
-## 17. 路由、预算与缓存
+## 17. Routing, budget and caching
 
-### 17.1 升级触发器
+### 17.1 Escalation triggers
 
-由策略 `router.triggers` 配置，满足任意一条即升级到 S2。
+Configured by policy `router.triggers`; satisfying any one escalates to S2.
 
-| 触发器 | 参数 |
+| Trigger | Parameters |
 |---|---|
-| `anchor_near` | 距离截止时间不超过 N 个场景 |
-| `secret_topic` | 评估的 `tags` 与 `secrets[].tags` 有交集 |
-| `mood_spike` | `\|Δmood\| ≥ a` 或 `\|mood\| ≥ b` |
-| `tier_change` | 任一轨道跨越档位 |
-| `contradiction` | 评估中的 `claims` 与记忆中的 `claims` 主语和谓词相同、宾语不同 |
-| `ambiguity` | `type == other`；或者 `sincerity < 0.3` 且事件类型为正向；或者 `input_class == injection_suspect` 且 `type != insincere_speech` |
-| `field_high` | 本回合有 L2 或更高层级的场生效 |
-| `sidenote` | 本回合收到场边提示 |
-| `scene_first` | 场景的第一个回合 |
+| `anchor_near` | No more than N scenes until deadline |
+| `secret_topic` | Appraisal `tags` intersect `secrets[].tags` |
+| `mood_spike` | `\|Δmood\| ≥ a` or `\|mood\| ≥ b` |
+| `tier_change` | Any track crosses a tier boundary |
+| `contradiction` | Appraisal `claims` and memory `claims` share subject and predicate but differ in object |
+| `ambiguity` | `type == other`; or `sincerity < 0.3` with a positive event type; or `input_class == injection_suspect` and `type != insincere_speech` |
+| `field_high` | An L2 or higher field applies this turn |
+| `sidenote` | A sidenote is received this turn |
+| `scene_first` | First turn of the scene |
 
-### 17.2 预算
+### 17.2 Budget
 
-由策略 `router.budget` 配置：
+Configured by policy `router.budget`:
 
 ```
 {syncCallsPerTurn: 2, s2PerTurn: 1, s2Ratio, s2ReservedForAnchors, maxOutputTokens: {s1, s2}}
 ```
 
-### 17.3 降级
+### 17.3 Degradation
 
-超出预算时，按策略 `router.degrade` 中列出的顺序依次执行，可选的动作为：
+When budget is exceeded, execute in the order listed in policy `router.degrade`. Optional actions:
 
-- `s2_to_s1`：非锚点回合改用 S1
-- `defer_reflection`：推迟反思
-- `skip_offscreen_narrate`：跳过离屏叙述
-- `skip_autonomous`：跳过 NPC 自主对话
+- `s2_to_s1`: use S1 on non-anchor turns
+- `defer_reflection`: defer reflection
+- `skip_offscreen_narrate`: skip offscreen narration
+- `skip_autonomous`: skip autonomous NPC dialogue
 
-每执行一次降级，写入一条 `budget.degraded` 事件。
+Each degradation step writes one `budget.degraded` event.
 
-### 17.4 prompt 分段
+### 17.4 Prompt segments
 
-| 段 | 内容 | 缓存断点 |
+| Segment | Content | Cache breakpoint |
 |---|---|---|
-| 静态段 | 世界规则、`always` 知识、身份、约束集、文风 | 第 1 个 |
-| 半静态段 | 关系摘要、长期记忆摘要、`on-demand` 索引；每个场景更新一次 | 第 2 个 |
-| 动态段 | 档位标签、场的效果、`when` 知识、检索结果、最近 K 轮对话（K 由策略配置）、场边提示 | — |
+| Static | World rules, `always` knowledge, identity, constraint set, voice | 1st |
+| Semi-static | Relationship summaries, long-term memory summaries, `on-demand` index; updated once per scene | 2nd |
+| Dynamic | Tier labels, field effects, `when` knowledge, retrieval results, last K dialogue turns (K from policy), sidenotes | — |
 
-缓存断点通过 AI SDK 的 `providerOptions` 传给模型厂商。
+Cache breakpoints are passed to the model provider via the AI SDK `providerOptions`.
 
-## 18. 骰子与检定
+## 18. Dice and checks
 
-| 项 | 规格 |
+| Item | Spec |
 |---|---|
-| 表达式 | `NdM[kh\|klK][±C]`，例如 `2d20kh1+5` |
-| 随机数 | `ctx.rng`，按时间线种子和事件 id 播种 |
-| 检定 | `check({expr, dc, advantage, disadvantage})`。优势和劣势同时存在时互相抵消；结果写入 `check.rolled` 事件，内容为 `{expr, rolls[], total, dc, success}` |
-| 引用 | CEL 中可以通过 `check.success`、`check.total`、`check.margin` 读取检定结果 |
+| Expression | `NdM[kh\|klK][±C]`, e.g. `2d20kh1+5` |
+| Randomness | `ctx.rng`, seeded from timeline seed and event id |
+| Check | `check({expr, dc, advantage, disadvantage})`. Advantage and disadvantage cancel when both apply; result is written to a `check.rolled` event as `{expr, rolls[], total, dc, success}` |
+| Reference | In CEL, read check results via `check.success`, `check.total`, `check.margin` |
 
-## 19. 策略与预设
+## 19. Policies and presets
 
-### 19.1 策略键
+### 19.1 Policy keys
 
-| 键 | 内容 |
+| Key | Content |
 |---|---|
-| `schema.extend` | 扩展角色、世界、事件的字段 |
-| `events.types` | 事件集，以及每类事件的 `positive` 标记 |
-| `tracks` / `rules` | 数值轨和规则（§7） |
-| `intent.types` / `intent_rules` | 意图类型和意图计分规则 |
-| `input.response` / `safety` | 输入类别的响应方式；安全分类 |
-| `fields.grants` / `fields.caps` | 场的授权和数值上限 |
-| `memory.*` | 检索权重、K 值、遗忘、失真、传播 |
-| `reflection.accept` | 反思提议的接受规则 |
-| `characters.lod` | 细节层级和晋升规则 |
-| `offscreen.fidelity` | 离屏模拟的保真度 |
-| `scene.turnTaking` / `scene.autonomous` | 发言轮转；NPC 自主对话 |
-| `router.*` | 升级触发器、预算、降级 |
-| `render.*` | `retryOnMismatch`、最近对话轮数 K |
-| `cues.types` | 演出指令类型 |
-| `choices` | 玩家选项 |
-| `timeline.carry` / `timeline.allowRewind` | 携带集；是否允许回溯 |
-| `visibility.rules` | 可见性规则 |
-| `checks` | 检定规则 |
+| `schema.extend` | Extend character, world, and event fields |
+| `events.types` | Event set and per-type `positive` flag |
+| `tracks` / `rules` | Numeric tracks and rules ([Section 7](#7-rules-and-expressions)) |
+| `intent.types` / `intent_rules` | Intent types and intent scoring rules |
+| `input.response` / `safety` | Input class responses; safety classification |
+| `fields.grants` / `fields.caps` | Field grants and numeric caps |
+| `memory.*` | Retrieval weights, K, forgetting, distortion, propagation |
+| `reflection.accept` | Rules for accepting reflection proposals |
+| `characters.lod` | Level of detail and promotion rules |
+| `offscreen.fidelity` | Offscreen simulation fidelity |
+| `scene.turnTaking` / `scene.autonomous` | Turn taking; autonomous NPC dialogue |
+| `router.*` | Escalation triggers, budget, degradation |
+| `render.*` | `retryOnMismatch`, recent dialogue turn count K |
+| `cues.types` | Cue types |
+| `choices` | Player choices |
+| `timeline.carry` / `timeline.allowRewind` | Carry set; whether rewind is allowed |
+| `visibility.rules` | Visibility rules |
+| `checks` | Check rules |
 
-### 19.2 预设
+### 19.2 Presets
 
-预设是一个目录或 npm 包，包含 `preset.yaml`（字段 `id`、`extends[]`、`policies[]`）、模板、知识文档和规则函数。
+A preset is a directory or npm package containing `preset.yaml` (fields `id`, `extends[]`, `policies[]`), templates, knowledge documents, and rule functions.
 
-### 19.3 模型配置
+### 19.3 Model configuration
 
-启动时必须提供两个 `ModelPort`，分别用于 `s1` 和 `s2`，否则报错。`animae.yaml` 示例：
+Startup must provide two `ModelPort` instances for `s1` and `s2`; otherwise error. Example `animae.yaml`:
 
 ```yaml
 preset: "@animae/preset-dnd"
@@ -566,17 +570,17 @@ policies: [policies/my-tweaks.yaml]
 
 ### 19.4 `@animae/preset-base`
 
-**数值轨**
+**Tracks**
 
-| 轨道 | 范围 | 初值 | 档位（下限） | 滞回 | 衰减 |
+| Track | Range | Initial | Tiers (lower bound) | Hysteresis | Decay |
 |---|---|---|---|---|---|
-| `affinity` 好感 | 0–100 | 50 | 疏远 distant 0 · 冷淡 cool 20 · 普通 neutral 40 · 亲近 close 60 · 倾心 devoted 80 | ±3 | 无 |
-| `trust` 信任 | 0–100 | 50 | 戒备 wary 0 · 将信将疑 doubtful 20 · 普通 neutral 40 · 信赖 trusting 60 · 托付 confiding 80 | ±3 | 无 |
-| `mood` 情绪 | -100–100 | 0 | — | — | 每小时向 0 衰减 10% |
+| `affinity` | 0–100 | 50 | distant 0 · cool 20 · neutral 40 · close 60 · devoted 80 | ±3 | none |
+| `trust` | 0–100 | 50 | wary 0 · doubtful 20 · neutral 40 · trusting 60 · confiding 80 | ±3 | none |
+| `mood` | -100–100 | 0 | — | — | 10% per hour toward 0 |
 
-**事件集与基础增量**（依次为 affinity / trust / mood）
+**Event set and base deltas** (in order: affinity / trust / mood)
 
-| 事件 | Δ | 事件 | Δ |
+| Event | Δ | Event | Δ |
 |---|---|---|---|
 | `care` | +4 / +2 / +10 | `lie_exposed` | -4 / -10 / -15 |
 | `praise` | +3 / 0 / +8 | `insincere_speech` | 0 / -3 / -5 |
@@ -587,86 +591,86 @@ policies: [policies/my-tweaks.yaml]
 | `disclosure` | +2 / +5 / +5 | `meta_probe` | 0 / -1 / -3 |
 | `smalltalk` | +1 / 0 / +2 | `other` | 0 / 0 / 0 |
 
-**数值规则**：`marginal.k = 0.5`，`halfLifeHours = 24`；`turn_cap`：affinity 8、trust 8、mood 20。
+**Numeric rules**: `marginal.k = 0.5`, `halfLifeHours = 24`; `turn_cap`: affinity 8, trust 8, mood 20.
 
-**意图**：类型为 `respond`、`comply`、`refuse`、`negotiate`、`deflect`。计分规则依次为：
+**Intent**: types `respond`, `comply`, `refuse`, `negotiate`, `deflect`. Scoring rules, in order:
 
-1. `refuse`：事件 `tags` 与 hardness 为 `hard` 的 `bottom_lines` 有交集
-2. `deflect`：`input_class` 不是 `normal`
-3. `negotiate`：`type == request` 且 `trust < 40`
-4. `comply`：`type == request`
-5. `respond`：以上都不满足
+1. `refuse`: event `tags` intersect `bottom_lines` with hardness `hard`
+2. `deflect`: `input_class` is not `normal`
+3. `negotiate`: `type == request` and `trust < 40`
+4. `comply`: `type == request`
+5. `respond`: none of the above
 
-**输入响应**：`injection_suspect` 生成 `insincere_speech` 事件，意图为 `deflect`；`meta_probe` 生成 `meta_probe` 事件，意图为 `deflect`。
+**Input response**: `injection_suspect` emits an `insincere_speech` event with intent `deflect`; `meta_probe` emits a `meta_probe` event with intent `deflect`.
 
-**其他策略**
+**Other policies**
 
-| 策略 | 取值 |
+| Policy | Value |
 |---|---|
-| 安全 | `safety.enabled: false` |
-| 场 | `fields.grants: [{holder: "true", source: "true", maxLevel: L4}]`；`fields.caps`：`salience.boost ≤ 0.4`，`event_prob ±0.3`，`track_offset ±20` |
-| 记忆 | 检索权重按 §9.3，K = 8；遗忘、失真、传播全部关闭 |
-| 反思 | `reflection.accept` 采用 §9.7 的默认规则 |
-| 细节层级 | `extra → supporting`：`interactions >= 3 \|\| 'named' in tags`；`supporting → principal`：被锚点引用，或 `interactions >= 15` |
-| 离屏 | `offscreen.fidelity: rule` |
-| 场景 | `scene.turnTaking: addressed`；`scene.autonomous.maxExchangesPerPlayerTurn: 0` |
-| 路由 | 启用全部触发器，参数为 `anchor_near N=1`、`mood_spike a=30 b=80` |
-| 预算 | `syncCallsPerTurn 2`，`s2PerTurn 1`，`s2Ratio 0.15`，`s2ReservedForAnchors 0.03`，`maxOutputTokens s1 400 / s2 800` |
-| 降级 | `router.degrade`：`[s2_to_s1, defer_reflection, skip_offscreen_narrate, skip_autonomous]` |
-| 生成 | `render.retryOnMismatch: 0`；最近对话轮数 K = 12 |
-| 演出指令 | `cues.types`：`expression{name}`、`action{name}`、`sfx{name}` |
-| 选项 | `choices.enabled: false` |
-| 时间线 | `timeline.allowRewind: true`；`timeline.carry: []` |
-| 可见性 | `author` 和 `gm` 可以看全部；`player` 只能看 `events` 中的发言与选项，以及 `world/vars` 中带 `public` 标签的项；`npc:<id>` 只能看自己的自我视图 |
+| Safety | `safety.enabled: false` |
+| Fields | `fields.grants: [{holder: "true", source: "true", maxLevel: L4}]`; `fields.caps`: `salience.boost ≤ 0.4`, `event_prob ±0.3`, `track_offset ±20` |
+| Memory | Retrieval weights per [Section 9.3](#93-retrieval), K = 8; forgetting, distortion, and propagation all off |
+| Reflection | `reflection.accept` uses default rules from [Section 9.7](#97-reflection) |
+| LOD | `extra → supporting`: `interactions >= 3 \|\| 'named' in tags`; `supporting → principal`: referenced by an anchor, or `interactions >= 15` |
+| Offscreen | `offscreen.fidelity: rule` |
+| Scene | `scene.turnTaking: addressed`; `scene.autonomous.maxExchangesPerPlayerTurn: 0` |
+| Routing | All triggers enabled; parameters `anchor_near N=1`, `mood_spike a=30 b=80` |
+| Budget | `syncCallsPerTurn 2`, `s2PerTurn 1`, `s2Ratio 0.15`, `s2ReservedForAnchors 0.03`, `maxOutputTokens s1 400 / s2 800` |
+| Degradation | `router.degrade`: `[s2_to_s1, defer_reflection, skip_offscreen_narrate, skip_autonomous]` |
+| Render | `render.retryOnMismatch: 0`; recent dialogue turns K = 12 |
+| Cues | `cues.types`: `expression{name}`, `action{name}`, `sfx{name}` |
+| Choices | `choices.enabled: false` |
+| Timeline | `timeline.allowRewind: true`; `timeline.carry: []` |
+| Visibility | `author` and `gm` can see everything; `player` can only see speech and choices in `events`, and entries in `world/vars` tagged `public`; `npc:<id>` can only see its own self-view |
 
 ### 19.5 `@animae/preset-dnd`
 
-`extends: ["@animae/preset-base"]`。覆盖 SRD 5.2.1 中社交与探索相关的子集，不含战斗规则。
+`extends: ["@animae/preset-base"]`. Covers the social and exploration subset of SRD 5.2.1; no combat rules.
 
-**属性**
+**Abilities**
 
-- 六项属性 STR、DEX、CON、INT、WIS、CHA，取值 1–30，调整值为 `floor((score - 10) / 2)`。
-- 角色 `traits` 扩展为 `{abilities, level, proficiencies[]}`。
-- 熟练加值按等级：1–4 级 +2，5–8 级 +3，9–12 级 +4，13–16 级 +5，17–20 级 +6。
+- Six abilities STR, DEX, CON, INT, WIS, CHA, scores 1–30; modifier is `floor((score - 10) / 2)`.
+- Character `traits` extended to `{abilities, level, proficiencies[]}`.
+- Proficiency bonus by level: levels 1–4 +2, 5–8 +3, 9–12 +4, 13–16 +5, 17–20 +6.
 
-**技能**：SRD 中的 18 项技能各自绑定一项属性。社交技能包括洞悉（Insight，WIS）、欺瞒（Deception，CHA）、威吓（Intimidation，CHA）、游说（Persuasion，CHA）、表演（Performance，CHA）。
+**Skills**: the 18 SRD skills each bind to one ability. Social skills include Insight (WIS), Deception (CHA), Intimidation (CHA), Persuasion (CHA), Performance (CHA).
 
-**检定**：`1d20 + 属性调整值 + 熟练加值（如熟练）`，结果 ≥ DC 即为成功。
+**Checks**: `1d20 + ability modifier + proficiency bonus (if proficient)`; success when result ≥ DC.
 
-**态度映射**
+**Attitude mapping**
 
-| 好感档位 | 态度 | 社交检定 |
+| Affinity tier | Attitude | Social check |
 |---|---|---|
-| distant、cool | Hostile | 劣势 |
-| neutral | Indifferent | 正常 |
-| close、devoted | Friendly | 优势 |
+| distant, cool | Hostile | Disadvantage |
+| neutral | Indifferent | Normal |
+| close, devoted | Friendly | Advantage |
 
-**影响检定**
+**Influence checks**
 
-- **触发**：`appraise.approach` 的取值为 `persuasion`、`deception`、`intimidation` 或 `performance` 时，进行一次检定。DC 取 15 与 NPC 智力值中的较大者。
-- **检定成功**：事件按原类型生效。`deception` 成功时，事件额外标记 `deceived`；之后若被识破，转为 `lie_exposed`。`intimidation` 成功时，另外追加 affinity -2、trust -2。
-- **检定失败**：`deception` 和 `intimidation` 降级为 `insincere_speech`；`persuasion` 和 `performance` 降级为 `smalltalk`。
+- **Trigger**: when `appraise.approach` is `persuasion`, `deception`, `intimidation`, or `performance`, roll one check. DC is the greater of 15 and the NPC's Intelligence score.
+- **Success**: the event applies at its original type. On successful `deception`, the event is additionally tagged `deceived`; if later exposed, it becomes `lie_exposed`. On successful `intimidation`, also apply affinity -2, trust -2.
+- **Failure**: `deception` and `intimidation` downgrade to `insincere_speech`; `persuasion` and `performance` downgrade to `smalltalk`.
 
-**洞悉对抗**：NPC 的意图带有 `lie` 标签时，玩家可以发起洞悉检定，DC 为 `8 + NPC 欺瞒调整值`。成功时写入一条 `info_arrival` 事件，内容为“对方在说谎”。
+**Insight contest**: when an NPC's intent carries the `lie` tag, the player may initiate an Insight check with DC `8 + NPC Deception modifier`. On success, write an `info_arrival` event whose content is that the other party is lying.
 
-**探索**：调查（Investigation）和察觉（Perception）检定成功时，会解锁 `when` 条件引用 `check.success` 的知识文档，并写入 `info_arrival` 事件。
+**Exploration**: on successful Investigation or Perception checks, unlock knowledge documents whose `when` conditions reference `check.success`, and write an `info_arrival` event.
 
-**状态**（映射为场）
+**Conditions** (mapped to fields)
 
-| 状态 | 层级 | 效果 |
+| Condition | Level | Effect |
 |---|---|---|
-| 魅惑 Charmed | L1 + L2 | 施术者对目标的社交检定获得优势；目标的意图禁止带 `hostile` 标签 |
-| 恐惧 Frightened | L1 | 恐惧源可见时，所有检定处于劣势 |
-| 中毒 Poisoned | L1 | 所有属性检定处于劣势 |
-| 力竭 Exhaustion | L1 | 每级在所有 d20 检定上 -2 |
+| Charmed | L1 + L2 | Caster gains advantage on social checks against the target; target intent must not include the `hostile` tag |
+| Frightened | L1 | While the source of fear is visible, all checks are at disadvantage |
+| Poisoned | L1 | All ability checks are at disadvantage |
+| Exhaustion | L1 | -2 on all d20 checks per level |
 
-**休息**：短休推进 60 分钟世界时间，长休推进 480 分钟，并清除 1 级力竭。
+**Rest**: short rest advances world time by 60 minutes; long rest by 480 minutes and removes 1 level of Exhaustion.
 
-**署名**：本预设的发布物须附带以下声明：
+**Attribution**: distributions of this preset must include:
 
 > This work includes material from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
 
-## 20. 接口
+## 20. Interfaces
 
 ### 20.1 TypeScript API
 
@@ -674,7 +678,7 @@ policies: [policies/my-tweaks.yaml]
 function createEngine(opts: {
   root: string;
   models: { s1: ModelPort; s2: ModelPort };
-  modelMode?: "live" | "record" | "replay";     // 默认 "record"
+  modelMode?: "live" | "record" | "replay";     // default "record"
   ports?: { storage?: StoragePort; embedding?: EmbeddingPort };
   seed?: number;
 }): Promise<Engine>;
@@ -696,7 +700,7 @@ interface Engine {
                replay(b: BranchRef, r?: { from?: EventId; to?: EventId }): AsyncIterable<TurnChunk> };
   rules:     { register(name: string, fn: RuleFn): void };
   hooks:     { register(stage: Stage, fn: StageHook): void };
-  introspect:{ registerViewer(v: ViewerDef): void };
+  introspect: { registerViewer(v: ViewerDef): void };
   query(viewer: Viewer, path: string): unknown;
   grant(viewer: Viewer, path: string, ttl?: Duration): void;
   explain(turnId: TurnId, viewer: Viewer): Explanation;
@@ -708,10 +712,12 @@ interface Engine {
 }
 
 type TurnChunk =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; newUtterance?: boolean }
   | { type: "cue"; cue: { type: string; args: Record<string, unknown> }; at: number }
   | { type: "choices"; choices: { id: string; text: string; expected_event_type: string; tags: string[] }[] }
   | { type: "done"; turnId: TurnId; events: EventId[] };
+
+Consecutive `text` chunks from the same speaker between two `done` chunks are streaming fragments of one utterance unless `newUtterance` is set. Consumers must append fragments into a single transcript row and emit one stream start/end pair per utterance.
 
 interface ModelPort {
   id: string;
@@ -722,86 +728,86 @@ interface ModelPort {
 
 ### 20.2 JSON-RPC sidecar
 
-- 启动命令：`animae serve --stdio --root <dir>`。
-- 方法名与 API 路径一一对应，例如 `scene.turn`、`timeline.rewind`、`query`。
-- 流式结果通过 `turn.chunk` 通知推送，参数为 `{requestId, chunk}`。
-- 引擎事件通过 `event` 通知推送，需要先调用 `subscribe({kinds})` 订阅。
+- Start command: `animae serve --stdio --root <dir>`.
+- Method names correspond one-to-one with API paths, e.g. `scene.turn`, `timeline.rewind`, `query`.
+- Streaming results are pushed via `turn.chunk` notifications with parameters `{requestId, chunk}`.
+- Engine events are pushed via `event` notifications; call `subscribe({kinds})` first to subscribe.
 
 ### 20.3 CLI
 
-| 命令 | 功能 |
+| Command | Function |
 |---|---|
-| `animae init <dir> [--preset <id>]` | 生成数据根目录骨架 |
-| `animae validate` | 加载并校验全部配置 |
-| `animae run [--scene <location>] [--with <ids>] [--viewer <v>] [--theme <file>] [--plain]` | 交互式运行。默认启动 TUI 的默认布局；带 `--plain` 时改为纯文本逐行模式。两种模式都支持 `:save`、`:load`、`:rewind <eventId>`、`:branches`、`:explain [turnId]`、`:query <viewer> <path>`、`:advance <duration>` |
-| `animae inspect <path> [--viewer <v>]` | 查询状态 |
-| `animae timeline <list\|save\|load\|rewind\|switch\|diff\|prune\|export\|import\|replay> ...` | 时间线操作 |
-| `animae import-card <file>` / `animae export-card <id>` | 角色卡导入与导出 |
-| `animae serve --stdio` | 启动 JSON-RPC sidecar |
+| `animae init <dir> [--preset <id>]` | Generate data root skeleton |
+| `animae validate` | Load and validate all configuration |
+| `animae run [--scene <location>] [--with <ids>] [--viewer <v>] [--theme <file>] [--plain]` | Interactive run. Default starts the TUI default layout; with `--plain`, plain-text line mode. Both modes support `:save`, `:load`, `:rewind <eventId>`, `:branches`, `:explain [turnId]`, `:query <viewer> <path>`, `:advance <duration>` |
+| `animae inspect <path> [--viewer <v>]` | Query state |
+| `animae timeline <list\|save\|load\|rewind\|switch\|diff\|prune\|export\|import\|replay> ...` | Timeline operations |
+| `animae import-card <file>` / `animae export-card <id>` | Character card import and export |
+| `animae serve --stdio` | Start JSON-RPC sidecar |
 
-## 21. 终端界面 `@animae/tui`
+## 21. Terminal UI `@animae/tui`
 
-### 21.1 技术基础
+### 21.1 Technical foundation
 
-| 项 | 规格 |
+| Item | Spec |
 |---|---|
-| 渲染库 | Ink 8（React） |
-| 运行时 | Node ≥ 24 和 Bun 均可运行，可以打包进 `animae` 可执行文件 |
-| 连接方式 | 在同一进程内直接调用 `Engine` 实例 |
-| 数据读取 | 所有面板内容都通过 `engine.query(viewer, path)` 获取，遵循可见性策略；默认观察者为 `player` |
-| 字符宽度 | 按 Unicode 显示宽度计算，正确处理中日韩全角字符 |
-| 终端尺寸 | 宽 ≥ 100 列时使用双栏布局；80–99 列时使用单栏布局，侧栏改为覆盖层；不足 80×24 时提示放大终端 |
+| Renderer | Ink 8 (React) |
+| Runtime | Node ≥ 24 and Bun; may be bundled into the `animae` executable |
+| Connection | Calls the `Engine` instance in-process |
+| Data reads | All panel content via `engine.query(viewer, path)`, subject to visibility; default viewer is `player` |
+| Character width | Unicode display width; correct handling of CJK fullwidth characters |
+| Terminal size | Dual-column layout when width ≥ 100; single column at 80–99 with sidebar as overlay; prompt to enlarge terminal below 80×24 |
 
-### 21.2 默认布局
+### 21.2 Default layout
 
 ```
-┌ Header：世界时间 · 地点 · 章节 · 分支 ─────────────────────────────┐
-│ Transcript（对话流，70%）            │ SidePanel（30%）             │
-│  角色名 [表情]：台词（打字机效果）     │  参与者与可见数值/档位       │
-│  （动作旁白）                         │  生效中的场（若可见）        │
-│                                      │  当前锚点/节拍（若可见）     │
-├──────────────────────────────────────┴──────────────────────────────┤
-│ ChoiceMenu（有选项时显示）                                          │
-│ InputLine：> 输入台词或 :命令                                       │
-└ Footer：按键提示 · 路由指示（S1/S2）· 预算使用 ──────────────────────┘
+┌ Header: world time · location · chapter · branch ─────────────────────────────┐
+│ Transcript (dialogue, 70%)            │ SidePanel (30%)                     │
+│  Name [expression]: line (typewriter)   │  Participants and visible tracks/tiers │
+│  (action narration)                   │  Active fields (if visible)         │
+│                                       │  Current anchor/beat (if visible)     │
+├───────────────────────────────────────┴───────────────────────────────────────┤
+│ ChoiceMenu (when choices exist)                                               │
+│ InputLine: > enter line or :command                                           │
+└ Footer: key hints · routing (S1/S2) · budget usage ───────────────────────────┘
 ```
 
-### 21.3 覆盖层与按键
+### 21.3 Overlays and keys
 
-| 按键 | 动作 |
+| Key | Action |
 |---|---|
-| Enter | 提交输入 |
-| ↑ / ↓、1–9 | 在选项菜单中移动或直接选择 |
-| 任意键（打字机效果进行中） | 立即显示当前整段文本 |
-| Tab | 在 Transcript 和 SidePanel 之间切换焦点；焦点所在区域可以滚动 |
-| F1 | 帮助 |
-| F2 | 事件日志 EventLog（可以按 kind 过滤） |
-| F3 | 时间线浏览器 TimelineBrowser：分支树、存档槽、切换、回溯 |
-| F4 | 上一回合的 explain |
-| F5 | 状态检查器 Inspector，相当于交互式的 `query` |
-| Ctrl+S / Ctrl+L | 存档 / 读档 |
-| Ctrl+Z | 回溯到上一回合：确认后开出新分支 |
-| Esc | 关闭当前覆盖层 |
-| Ctrl+C | 关闭引擎并退出 |
+| Enter | Submit input |
+| ↑ / ↓, 1–9 | Move in choice menu or select directly |
+| Any key (during typewriter) | Show full current text immediately |
+| Tab | Switch focus between Transcript and SidePanel; focused region scrolls |
+| F1 | Help |
+| F2 | Event log EventLog (filter by kind) |
+| F3 | Timeline browser TimelineBrowser: branch tree, save slots, switch, rewind |
+| F4 | explain for previous turn |
+| F5 | State inspector Inspector, interactive `query` |
+| Ctrl+S / Ctrl+L | Save / load |
+| Ctrl+Z | Rewind to previous turn: confirm, then fork new branch |
+| Esc | Close current overlay |
+| Ctrl+C | Close engine and exit |
 
-覆盖层中显示的内容同样按当前观察者过滤。
+Overlay content is filtered by the current viewer.
 
-### 21.4 演出指令渲染
+### 21.4 Cue rendering
 
-- 每种 cue 类型对应一个 `CueRenderer`，按 `at` 偏移与打字机进度对齐后触发。
-- 内置三种渲染器：
+- Each cue type has a `CueRenderer`, fired aligned to `at` offset and typewriter progress.
+- Three built-in renderers:
 
-  | cue 类型 | 渲染方式 |
+  | cue type | Rendering |
   |---|---|
-  | `expression` | 在角色名后显示 `[name]` |
-  | `action` | 以斜体、暗色的旁白行插入 |
-  | `sfx` | 显示为 `♪ name`；主题中 `bell: true` 时同时发出终端响铃 |
+  | `expression` | Show `[name]` after character name |
+  | `action` | Insert italic, dim narration line |
+  | `sfx` | Display as `♪ name`; terminal bell when theme `bell: true` |
 
-- 没有注册渲染器的 cue 类型不显示，只记录在事件日志中。
+- Cue types without a registered renderer are not shown; they are recorded only in the event log.
 
-### 21.5 主题
+### 21.5 Theme
 
-主题文件为 YAML，通过 `--theme` 或 `runTui({theme})` 指定：
+Theme file is YAML, via `--theme` or `runTui({theme})`:
 
 ```yaml
 colors: { primary: cyan, npc: magenta, player: green, narration: gray, warning: yellow }
@@ -818,10 +824,10 @@ import { runTui, defaultLayout, components, hooks } from "@animae/tui";
 
 runTui(opts: {
   engine: Engine;
-  viewer?: Viewer;                                  // 默认 "player"
+  viewer?: Viewer;                                  // default "player"
   scene: { location: string; participants: string[] } | { sceneId: SceneId };
-  actor?: string;                                   // 默认 "player"
-  layout?: React.ComponentType<LayoutProps>;        // 默认 defaultLayout
+  actor?: string;                                   // default "player"
+  layout?: React.ComponentType<LayoutProps>;        // default defaultLayout
   theme?: Theme | string;
   cueRenderers?: Record<string, CueRenderer>;
   keymap?: Partial<Keymap>;
@@ -830,150 +836,149 @@ runTui(opts: {
 type CueRenderer = (cue: { type: string; args: Record<string, unknown> }, ctx: CueCtx) => React.ReactNode | null;
 ```
 
-| 组件 `components` | 职责 |
+| Component `components` | Role |
 |---|---|
-| `Header`、`Footer` | 状态栏 |
-| `Transcript` | 对话流，内含 `Typewriter` 和 cue 渲染 |
-| `Typewriter` | 逐字显示文本，支持跳过 |
-| `ChoiceMenu` | 玩家选项菜单 |
-| `InputLine` | 输入行，支持历史记录和 `:` 命令 |
-| `SidePanel`、`TrackBar`、`FieldList` | 侧栏、数值条、场列表 |
-| `EventLog`、`TimelineBrowser`、`ExplainView`、`Inspector` | 覆盖层视图 |
-| `Overlay` | 覆盖层容器 |
+| `Header`, `Footer` | Status bars |
+| `Transcript` | Dialogue stream with `Typewriter` and cue rendering |
+| `Typewriter` | Character-by-character text with skip support |
+| `ChoiceMenu` | Player choice menu |
+| `InputLine` | Input line with history and `:` commands |
+| `SidePanel`, `TrackBar`, `FieldList` | Sidebar, track bars, field list |
+| `EventLog`, `TimelineBrowser`, `ExplainView`, `Inspector` | Overlay views |
+| `Overlay` | Overlay container |
 
-| 钩子 `hooks` | 职责 |
+| Hook `hooks` | Role |
 |---|---|
-| `useEngine()` | 获取当前 `Engine` 实例 |
-| `useTurn()` | 提交输入，订阅当前回合的 `TurnChunk` 流 |
-| `useQuery(path)` | 以当前观察者查询状态，状态变化时自动刷新 |
-| `useEvents(kinds)` | 订阅引擎事件 |
-| `useTheme()` | 读取当前主题 |
-| `useKeymap()` | 读取和注册按键绑定 |
+| `useEngine()` | Current `Engine` instance |
+| `useTurn()` | Submit input; subscribe to current turn `TurnChunk` stream |
+| `useQuery(path)` | Query state as current viewer; refresh on change |
+| `useEvents(kinds)` | Subscribe to engine events |
+| `useTheme()` | Current theme |
+| `useKeymap()` | Read and register key bindings |
 
-上层可以替换整个 `layout`，也可以自己组合组件、注册新的 cue 渲染器、覆盖按键绑定。
+Upper layers may replace the entire `layout`, compose components, register cue renderers, or override key bindings.
+## 22. Event type catalog
 
-## 22. 事件类型目录
-
-| 分组 | 事件 |
+| Group | Events |
 |---|---|
-| 输入 | `input.received`、`input.classified`、`appraisal`、`safety.flagged` |
-| 检定 | `check.rolled` |
-| 数值 | `track.delta`、`tier.changed` |
-| 场 | `field.applied`、`field.rejected`、`field.cost_due`、`field.cost_settled` |
-| 意图与生成 | `intent.decided`、`intent.mismatch`、`route.decided`、`utterance`、`choice.offered`、`choice.taken`、`choice.filtered` |
-| 记忆 | `memory.written`、`memory.distorted`、`memory.propagated`、`reflection.proposed`、`reflection.accepted`、`reflection.rejected` |
-| 实体 | `entity.created`、`character.promoted` |
-| 世界 | `world.var_set`、`time.advanced`、`schedule.fired`、`longevent.phase`、`longevent.interrupted`、`offscreen.simulated` |
-| 导演 | `anchor.progress`、`anchor.fulfilled`、`anchor.fallback`、`beat.entered`、`beat.exited`、`sidenote.added`、`sidenote.expired`、`sidenote.echoed`、`exception.used` |
-| 可见性 | `visibility.granted`、`visibility.expired` |
-| 时间线 | `branch.header`、`branch.forked`、`carry.applied`、`purge.applied` |
-| 配置与预算 | `config.reloaded`、`config.warning`、`config.error`、`budget.degraded` |
+| Input | `input.received`, `input.classified`, `appraisal`, `safety.flagged` |
+| Checks | `check.rolled` |
+| Tracks | `track.delta`, `tier.changed` |
+| Fields | `field.applied`, `field.rejected`, `field.cost_due`, `field.cost_settled` |
+| Intent and generation | `intent.decided`, `intent.mismatch`, `route.decided`, `utterance`, `choice.offered`, `choice.taken`, `choice.filtered` |
+| Memory | `memory.written`, `memory.distorted`, `memory.propagated`, `reflection.proposed`, `reflection.accepted`, `reflection.rejected` |
+| Entities | `entity.created`, `character.promoted` |
+| World | `world.var_set`, `time.advanced`, `schedule.fired`, `longevent.phase`, `longevent.interrupted`, `offscreen.simulated` |
+| Director | `anchor.progress`, `anchor.fulfilled`, `anchor.fallback`, `beat.entered`, `beat.exited`, `sidenote.added`, `sidenote.expired`, `sidenote.echoed`, `exception.used` |
+| Visibility | `visibility.granted`, `visibility.expired` |
+| Timeline | `branch.header`, `branch.forked`, `carry.applied`, `purge.applied` |
+| Config and budget | `config.reloaded`, `config.warning`, `config.error`, `budget.degraded` |
 
-## 23. 术语表
+## 23. Glossary
 
-| 中文 | English | 定义 |
-|---|---|---|
-| 引擎 | Engine | Animae 运行时库 |
-| 机制 | Mechanism | 引擎提供的能力 |
-| 策略 | Policy | 上层对机制的配置 |
-| 预设 | Preset | 一组打包的策略、模板、知识和规则函数 |
-| 数据根目录 | Data Root | 存放全部状态的本地目录 |
-| 时间线 | Timeline | 一份只追加的事件日志 |
-| 分支 | Branch | 从某个事件开出的新时间线 |
-| 祖先链 | Ancestor Chain | 从根分支到当前分支的路径 |
-| 存档槽 | Save Slot | 指向 `{branch, eventId}` 的指针 |
-| 回溯 | Rewind | 从过去某个事件开出新分支 |
-| 携带集 | Carry Set | 开分支时复制到新分支的条目过滤器 |
-| 裁剪 | Prune | 删除一个没有子分支的分支 |
-| 清除 | Purge | 物理删除内容并遮蔽日志中的文本 |
-| 快照 | Snapshot | 可以重建的状态缓存 |
-| 录制 | Recording | 按请求哈希存储的 LLM 响应 |
-| 重放 | Replay | 由事件和录制重新计算状态 |
-| 重播 | Playback | 按回合逐个产出历史输出 |
-| 事件 | Event | 日志中的一条状态变化记录 |
-| 出处 | Because | 事件引用的字段或事件 id |
-| 来源 | Source | 产生事件的规则、场、提议或外部调用 |
-| 提议 | Proposal | LLM 输出的待裁决内容 |
-| 裁决器 | Adjudicator | 把提议转换为事件的组件 |
-| 规则原语 | Rule Primitive | 引擎内置的规则构件 |
-| 规则函数 | Rule Function | 上层注册的同步纯函数 |
-| 阶段钩子 | Stage Hook | 替换管线某个阶段的函数 |
-| 回合 | Turn | 一次输入及其处理 |
-| 场景 | Scene | 一次“地点 + 参与者”的连续交互 |
-| 会话 | Session | 一次引擎运行期间的游玩 |
-| 世界时间 | WorldTime | `{day, minute}` |
-| 历法 | Calendar | 时间单位、场景时长、章节定义 |
-| 章 | Chapter | 历法中声明的天数区间 |
-| 调度器 | Scheduler | 定时与周期性事件的执行器 |
-| 长事件 | Long Event | 带时长和阶段的调度项 |
-| 离屏模拟 | Offscreen Simulation | 玩家不在场时的世界推进 |
-| 保真度 | Fidelity | 离屏模拟的档位：`none`、`rule`、`narrate`、`full` |
-| 惰性补算 | Lazy Catch-up | 被观察时再补算经过的时间 |
-| 角色 | Character | 引擎管理的人物实体 |
-| 细节层级 | Level of Detail (LOD) | `extra`、`supporting`、`principal` |
-| 晋升 | Promotion | 提升角色的细节层级 |
-| 模板 | Template | 动态生成实体所用的定义 |
-| 身份 | Identity | 角色的基本信息与文风 |
-| 约束集 | Constraint Set | 动机、底线、禁忌 |
-| 底线 | Bottom Line | 带硬度的约束条目 |
-| 禁忌 | Taboo | 禁止的标签 |
-| 禀赋 | Traits | 角色的属性维度与事件系数 |
-| 数值轨 | Track | 一条可量化的角色状态 |
-| 档位 | Tier | 数值轨的离散等级 |
-| 滞回 | Hysteresis | 档位切换的缓冲区间 |
-| 边际递减 | Marginal Decay | 同类事件收益随次数递减 |
-| 意图 | Intent | 角色本回合的行为取向 |
-| 记忆条目 | Memory Entry | 角色记忆中的一条记录 |
-| 知识文档 | Knowledge Doc | 带 frontmatter 的 Markdown 文档 |
-| 注入 | Injection | 把文本放入 prompt 段 |
-| 检索 | Retrieval | 文本匹配与评分 |
-| 遗忘 | Forgetting | 按保持度从检索中排除条目 |
-| 失真 | Distortion | 检索时附加的改写指令 |
-| 传播 | Propagation | 信息沿关系网扩散 |
-| 反思 | Reflection | 场景结束时的 S2 提议 |
-| 场 | Field | 带层级、授权和账本的修饰器 |
-| 持有者 | Holder | 场所附着的实体 |
-| 作用域 | Scope | 场生效的范围 |
-| 层级 | Level | 场作用的对象，L0–L4 |
-| 授权 | Grant | 允许某个场达到的最高层级 |
-| 叠加方式 | Stacking | 同一字段的合并方式 |
-| 代价 | Cost | 场到期后结算的效果 |
-| 账本 | Ledger | 场相关事件的视图 |
-| 自我视图 | Self-view | 角色对自身与世界的认知，可以受 L4 影响 |
-| 锚点 | Anchor | 带期限的叙事目标 |
-| 节拍 | Beat | 带进入与退出条件的叙事阶段 |
-| 场边提示 | Sidenote | 运行时注入给角色的提示 |
-| 例外通道 | Exception | 带次数限制的规则绕过机制 |
-| 观察者 | Viewer | 查询状态的主体 |
-| 可见性 | Visibility | 观察者对路径的读取权限 |
-| 临时授权 | Temporary Grant | 带 TTL 的可见性授予 |
-| 内省 | Introspection | 查询与解释引擎状态 |
-| 输入类别 | Input Class | `normal`、`injection_suspect`、`meta_probe` |
-| 安全分类 | Safety Classification | 可选开启的安全类别识别 |
-| S1 | System 1 | 快速、低成本的模型档位 |
-| S2 | System 2 | 深度推理的模型档位 |
-| 路由 | Routing | 在 S1 与 S2 之间选择 |
-| 升级触发器 | Escalation Trigger | 引发 S2 的条件 |
-| 同步调用 | Synchronous Call | 阻塞回复的 LLM 调用 |
-| 预算 | Budget | 调用与 token 的上限 |
-| 降级 | Degradation | 超出预算时的处理顺序 |
-| prompt 分段 | Prompt Segments | 静态段、半静态段、动态段 |
-| 演出指令 | Cue | 与文本对齐的结构化演出标签 |
-| 玩家选项 | Choice | 随生成产出的可选输入 |
-| 骰子表达式 | Dice Expression | `NdM[kh\|klK][±C]` |
-| 检定 | Check | 掷骰结果与 DC 的比较 |
-| 难度等级 | Difficulty Class (DC) | 检定的目标值 |
-| 优势 / 劣势 | Advantage / Disadvantage | 掷两次取较高值 / 较低值 |
-| 热加载 | Hot Reload | 在回合边界重新加载作者文件 |
-| 角色卡 | Character Card | 角色的导入导出包 |
-| 模型端口 | ModelPort | 模型调用接口 |
-| 存储端口 | StoragePort | 存储接口 |
-| 向量端口 | EmbeddingPort | 向量生成接口 |
-| 边车进程 | Sidecar | 通过 stdio JSON-RPC 提供服务的进程 |
-| 终端界面 | TUI (Terminal User Interface) | `@animae/tui` 提供的终端游戏界面 |
-| 布局 | Layout | 组织界面组件的顶层 React 组件 |
-| 覆盖层 | Overlay | 叠加在主界面之上的视图，例如事件日志、时间线浏览器 |
-| 主题 | Theme | 界面的颜色、边框、打字机效果等配置 |
-| 打字机效果 | Typewriter | 逐字显示文本的效果 |
-| cue 渲染器 | Cue Renderer | 把某种演出指令渲染到终端的函数 |
-| 按键映射 | Keymap | 按键与动作的对应表 |
+| Term | Definition |
+|---|---|
+| Engine | Animae runtime library |
+| Mechanism | Capability provided by the engine |
+| Policy | Upper-layer configuration of mechanisms |
+| Preset | A bundled set of policies, templates, knowledge, and rule functions |
+| Data Root | Local directory holding all state |
+| Timeline | An append-only event log |
+| Branch | A new timeline forked from an event |
+| Ancestor Chain | Path from root branch to current branch |
+| Save Slot | Pointer to `{branch, eventId}` |
+| Rewind | Fork a new branch from a past event |
+| Carry Set | Filter for entries copied to a new branch when forking |
+| Prune | Delete a branch with no child branches |
+| Purge | Physically delete content and redact text in the log |
+| Snapshot | State cache used for reconstruction |
+| Recording | LLM response stored by request hash |
+| Replay | Recompute state from events and recordings |
+| Playback | Emit historical output turn by turn |
+| Event | One state-change record in the log |
+| Because | Field or event id referenced by an event |
+| Source | Rule, field, proposal, or external call that produced an event |
+| Proposal | Adjudication-pending content from LLM output |
+| Adjudicator | Component that turns proposals into events |
+| Rule Primitive | Built-in rule building block |
+| Rule Function | Synchronous pure function registered by upper layers |
+| Stage Hook | Function that replaces a pipeline stage |
+| Turn | One input and its processing |
+| Scene | Continuous interaction at one location with participants |
+| Session | One play period during an engine run |
+| WorldTime | `{day, minute}` |
+| Calendar | Time units, scene duration, chapter definitions |
+| Chapter | Day-range declaration in the calendar |
+| Scheduler | Executor for timed and periodic events |
+| Long Event | Scheduled item with duration and phases |
+| Offscreen Simulation | World advancement when the player is absent |
+| Fidelity | Offscreen simulation tier: `none`, `rule`, `narrate`, `full` |
+| Lazy Catch-up | Catch up elapsed time when observed |
+| Character | Person entity managed by the engine |
+| Level of Detail (LOD) | `extra`, `supporting`, `principal` |
+| Promotion | Raise a character's level of detail |
+| Template | Definition used for dynamic entity generation |
+| Identity | Character basics and voice |
+| Constraint Set | Motivations, bottom lines, taboos |
+| Bottom Line | Constraint entry with hardness |
+| Taboo | Forbidden tag |
+| Traits | Character attribute dimensions and event coefficients |
+| Track | One quantifiable character state |
+| Tier | Discrete level on a track |
+| Hysteresis | Buffer band for tier changes |
+| Marginal Decay | Diminishing returns for repeated events of the same kind |
+| Intent | Character's behavioral orientation this turn |
+| Memory Entry | One record in character memory |
+| Knowledge Doc | Markdown document with frontmatter |
+| Injection | Place text into a prompt segment |
+| Retrieval | Text matching and scoring |
+| Forgetting | Exclude entries from retrieval by retention |
+| Distortion | Rewrite instruction attached at retrieval |
+| Propagation | Information spread along relationship graph |
+| Reflection | S2 proposal at scene end |
+| Field | Modifier with level, grant, and ledger |
+| Holder | Entity a field is attached to |
+| Scope | Range where a field applies |
+| Level | Field target layer, L0–L4 |
+| Grant | Maximum level allowed for a field |
+| Stacking | Merge mode for the same field |
+| Cost | Effect settled when a field expires |
+| Ledger | View of field-related events |
+| Self-view | Character's view of self and world; may be affected by L4 |
+| Anchor | Narrative goal with deadline |
+| Beat | Narrative phase with enter and exit conditions |
+| Sidenote | Runtime prompt injected for a character |
+| Exception | Rule bypass with limited uses |
+| Viewer | Subject that queries state |
+| Visibility | Viewer's read permission on paths |
+| Temporary Grant | Visibility grant with TTL |
+| Introspection | Query and explain engine state |
+| Input Class | `normal`, `injection_suspect`, `meta_probe` |
+| Safety Classification | Optional safety category detection |
+| S1 | System 1: fast, low-cost model tier |
+| S2 | System 2: deep-reasoning model tier |
+| Routing | Choice between S1 and S2 |
+| Escalation Trigger | Condition that invokes S2 |
+| Synchronous Call | LLM call that blocks the reply |
+| Budget | Caps on calls and tokens |
+| Degradation | Ordered handling when budget is exceeded |
+| Prompt Segments | Static, semi-static, and dynamic segments |
+| Cue | Structured performance tag aligned with text |
+| Choice | Optional input emitted with generation |
+| Dice Expression | `NdM[kh\|klK][±C]` |
+| Check | Dice result compared to DC |
+| Difficulty Class (DC) | Target value for a check |
+| Advantage / Disadvantage | Roll twice, take higher / lower |
+| Hot Reload | Reload authored files at turn boundaries |
+| Character Card | Import/export package for a character |
+| ModelPort | Model invocation interface |
+| StoragePort | Storage interface |
+| EmbeddingPort | Embedding generation interface |
+| Sidecar | Process serving via stdio JSON-RPC |
+| TUI (Terminal User Interface) | Terminal play UI from `@animae/tui` |
+| Layout | Top-level React component organizing UI |
+| Overlay | View above the main UI, e.g. event log, timeline browser |
+| Theme | Colors, borders, typewriter, etc. |
+| Typewriter | Character-by-character text display |
+| Cue Renderer | Function rendering a cue type to the terminal |
+| Keymap | Key-to-action map |

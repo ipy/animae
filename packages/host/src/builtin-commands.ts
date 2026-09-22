@@ -1,5 +1,6 @@
 import type { LocalizableValue } from "@animae/i18n";
 import type { HostCommand, HostCommandApi } from "./types.ts";
+import { runLlmlogCommand } from "./llmlog-command.ts";
 
 function msg(key: string, params?: Record<string, string | number>): LocalizableValue {
   return params ? { i18n: { key, params } } : { i18n: { key } };
@@ -18,8 +19,9 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
   },
   save: {
     description: "command.desc.save",
-    run: async (_args, api) => {
-      const slot = await api.engine.timeline.save();
+    usage: ":save [label]",
+    run: async (args, api) => {
+      const slot = await api.engine.timeline.save(args[0]);
       api.notify(msg("command.saved", { label: slot.label, eventId: slot.eventId }));
     },
   },
@@ -96,6 +98,11 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
       await api.engine.world.advance(dur);
       api.notify(msg("command.advanced", { duration: dur }));
     },
+  },
+  llmlog: {
+    description: "command.desc.llmlog",
+    usage: ":llmlog [seq|dump]",
+    run: runLlmlogCommand,
   },
 };
 

@@ -129,6 +129,7 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     setUiLocale: () => {},
     display: { resolve: (v) => v, entityDisplayName: (id) => id },
     info: () => ({
+      root: "/tmp",
       language: "zh",
       locale: "en",
       promptLocale: "zh-CN",

@@ -175,7 +175,11 @@ export const generatedBundle = {
               emit: [
                 {
                   kind: "info_arrival",
-                  text: "对方在说谎",
+                  text: {
+                    i18n: {
+                      key: "dnd.check.insight_lie",
+                    },
+                  },
                   tags: [
                     "insight",
                     "deception",
@@ -194,7 +198,11 @@ export const generatedBundle = {
               emit: [
                 {
                   kind: "info_arrival",
-                  text: "调查有所发现",
+                  text: {
+                    i18n: {
+                      key: "dnd.check.investigation_found",
+                    },
+                  },
                   tags: [
                     "investigation",
                     "exploration",
@@ -213,7 +221,11 @@ export const generatedBundle = {
               emit: [
                 {
                   kind: "info_arrival",
-                  text: "察觉到了异常",
+                  text: {
+                    i18n: {
+                      key: "dnd.check.perception_unusual",
+                    },
+                  },
                   tags: [
                     "perception",
                     "exploration",
@@ -228,5 +240,17 @@ export const generatedBundle = {
   ],
   knowledge: {
     "exploration/example-clue.md": "---\nname: dnd-example-hidden-clue\ndescription: Example knowledge unlocked by a successful Investigation check (preset-dnd template).\nscope: location:example-room\ninject: when\nwhen: \"check.success && event.approach == \\\"investigation\\\"\"\ntags: [exploration, investigation, example]\npriority: 1\n---\nThe loose brick behind the tapestry hides a rusted key marked with a lighthouse sigil.\n",
+  },
+  displayStrings: {
+    en: {
+      "dnd.check.insight_lie": "They seem to be lying.",
+      "dnd.check.investigation_found": "The investigation turns up something.",
+      "dnd.check.perception_unusual": "You notice something unusual.",
+    },
+    "zh-CN": {
+      "dnd.check.insight_lie": "对方在说谎",
+      "dnd.check.investigation_found": "调查有所发现",
+      "dnd.check.perception_unusual": "察觉到了异常",
+    },
   },
 } as PresetBundle;

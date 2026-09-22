@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Resolves **fields** (§10): scoped modifiers at levels L0–L4, grant/revoke at runtime, caps, costs, and a ledger view over `field.*` events.
+Resolves **fields** ([Section 10](../spec.md#10-field-system)): scoped modifiers at levels L0–L4, grant/revoke at runtime, caps, costs, and a ledger view over `field.*` events.
 
 ## Public API
 
@@ -38,7 +38,7 @@ A field applies only when its **holder** is involved in the scene (after scope f
 - `scene`, `location`, `turns` (TTL while active), `time` window, `when` (CEL; `scope.characters` exposed on CEL context)
 - Sources: authored catalog, `declare()`, and active entries in `EngineState.fields` (runtime / rule / anchor / beat grants)
 
-## Merge (§10.4)
+## Merge ([Section 10.4](../spec.md#104-resolution))
 
 Per level: sort by `priority` desc, then fold each top-level effect key using that field’s `stacking`:
 

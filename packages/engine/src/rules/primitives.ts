@@ -64,7 +64,7 @@ export interface DeltaFactors {
   trackMult: number;
 }
 
-/** architecture §4.2 */
+/** Shared rule primitive helpers (see docs/architecture.md). */
 export function computeDelta(f: DeltaFactors): number {
   const sincerityFactor = f.base > 0 ? f.sincerity : 1;
   const raw = f.base * f.intensity * sincerityFactor * f.traitMult * f.marginal * f.trackMult;

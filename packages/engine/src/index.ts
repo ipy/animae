@@ -1,5 +1,13 @@
 // Public surface of @animae/engine. Modules append their exports here (owners: see docs/architecture.md).
 export * from "./types.ts";
+export {
+  applyTextTurnChunk,
+  closeUtteranceStream,
+  createUtteranceStreamState,
+  type TextChunkApplyResult,
+  type TextTurnChunk,
+  type UtteranceStreamState,
+} from "./turn-chunk-accumulate.ts";
 export * from "./ports.ts";
 export * from "./events.ts";
 export * from "./state.ts";

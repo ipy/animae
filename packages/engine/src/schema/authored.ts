@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Cel, CelOrBool, CelOrNumber, EntityRefSchema, EventDraftSchema, Id, LevelSchema, LodSchema, Tags, WorldTimeSchema } from "./common.ts";
 
 /**
- * Zod schemas of AUTHORED files (spec §5, §6, §10, §11, §12). CONTRACT file.
+ * Zod schemas of AUTHORED files (config, characters, fields, director, schedule). CONTRACT file.
  * YAML field names are snake_case where the spec uses them (bottom_lines, style_examples ...).
  */
 
@@ -21,6 +21,8 @@ export const ModelSpecSchema = z.strictObject({
   options: z.record(z.string(), z.unknown()).optional(),
   /** openai-compatible: provider display name */
   name: z.string().optional(),
+  /** Capability tags forwarded to the model port (CEL `model.tags`). */
+  tags: z.array(z.string()).optional(),
 });
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 
@@ -103,7 +105,7 @@ export const ItemDefSchema = z.strictObject({
 });
 export type ItemDef = z.infer<typeof ItemDefSchema>;
 
-// ───────────────────────── fields (§10) ─────────────────────────
+// ───────────────────────── fields ─────────────────────────
 export const FIELD_EFFECT_KEYS_BY_LEVEL = {
   L0: ["world_vars", "event_prob", "salience", "topic_access", "schedule_offset"],
   L1: ["track_mult", "track_offset", "track_caps", "tier_shift", "check_mod"],
@@ -180,7 +182,7 @@ export const FieldDefSchema = z
   });
 export type FieldDef = z.infer<typeof FieldDefSchema>;
 
-// ───────────────────────── director (§11) ─────────────────────────
+// ───────────────────────── director ─────────────────────────
 export const AnchorDefSchema = z.strictObject({
   id: Id,
   title: z.string().optional(),
@@ -223,7 +225,7 @@ export const ExceptionDefSchema = z.strictObject({
 export type ExceptionDef = z.infer<typeof ExceptionDefSchema>;
 export const ExceptionsFileSchema = z.array(ExceptionDefSchema);
 
-// ───────────────────────── schedule (§12.3) ─────────────────────────
+// ───────────────────────── schedule ─────────────────────────
 export const ScheduleItemSchema = z
   .strictObject({
     id: Id,
@@ -250,7 +252,7 @@ export const ScheduleItemSchema = z
 export type ScheduleItem = z.infer<typeof ScheduleItemSchema>;
 export const ScheduleFileSchema = z.array(ScheduleItemSchema);
 
-// ───────────────────────── knowledge (§9.2) ─────────────────────────
+// ───────────────────────── knowledge ─────────────────────────
 export const KnowledgeFrontmatterSchema = z
   .strictObject({
     name: z.string(),
@@ -277,7 +279,7 @@ export interface KnowledgeDoc extends KnowledgeFrontmatter {
   owner?: string;
 }
 
-// ───────────────────────── characters (§6) ─────────────────────────
+// ───────────────────────── characters ─────────────────────────
 export const BottomLineSchema = z.strictObject({ id: Id, text: z.string(), tags: Tags, hardness: z.enum(["hard", "soft"]).default("soft") });
 
 export const CardFrontmatterSchema = z.looseObject({
@@ -353,7 +355,7 @@ export interface CharacterDef {
   knowledge: KnowledgeDoc[];
 }
 
-// ───────────────────────── templates (§6.3) ─────────────────────────
+// ───────────────────────── templates ─────────────────────────
 export const TemplateSchema = z.strictObject({
   id: Id.optional(),
   kind: z.enum(["character", "location", "item"]).optional(),

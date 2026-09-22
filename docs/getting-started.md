@@ -61,7 +61,7 @@ models:
 # anthropic baseURL optional; else env ANTHROPIC_BASE_URL
 ```
 
-Use `openai-compatible` with `baseURL` + `name` for OpenRouter, vLLM, LM Studio, etc. API keys are optional at config time; missing keys log once to `ModelWarningSink` (example-game: `~/.local/share/example-game/root/model-warnings.log`).
+Use `openai-compatible` with `baseURL` + `name` for OpenRouter, vLLM, LM Studio, etc. API keys are optional at config time; missing keys log once via `ModelWarningSink` (hosts may append warnings to a file under `$XDG_DATA_HOME/<app>/`).
 
 ## 4. Validate
 
@@ -73,7 +73,7 @@ Use `openai-compatible` with `baseURL` + `name` for OpenRouter, vLLM, LM Studio,
 
 Exit code `0` prints `OK`. Failures list `file:path: message` lines.
 
-Optional **content mods** (`mods/<id>/`, `animae.yaml` `mods:` list) overlay authored files; see [mods.md](./mods.md). Host games can override the enabled set via `createEngine({ mods, modBundles })` without editing the data root.
+Optional **content mods** (`mods/<id>/`, `animae.yaml` `mods:` list) overlay authored files; see [mods.md](./mods.md). A host application can override the enabled set via `createEngine({ mods, modBundles })` without editing the data root.
 
 From repo source (without rebuilding):
 
@@ -126,7 +126,7 @@ See [rpc-reference.md](./rpc-reference.md) and [embedding.md](./embedding.md).
 
 ## 7. Inspect state
 
-`validate` only checks authored data; **`inspect` / `run` / `serve` open a full engine** and require `models.s1` + `models.s2` in `animae.yaml` (or provider API keys in the environment). Uncomment the model block in §3 or copy from the tutorial tree after adding keys.
+`validate` only checks authored data; **`inspect` / `run` / `serve` open a full engine** and require `models.s1` + `models.s2` in `animae.yaml` (or provider API keys in the environment). Uncomment the model block in [Section 3](#3-configure-models) or copy from the tutorial tree after adding keys.
 
 ```bash
 export ANTHROPIC_API_KEY=...   # or your provider env

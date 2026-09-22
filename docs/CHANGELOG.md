@@ -2,7 +2,24 @@
 
 ## Unreleased
 
+### Documentation
+
+- English [spec.md](./spec.md) is canonical; [spec.zh-CN.md](./spec.zh-CN.md) is the Chinese edition.
+- Removed legacy section-reference marks from engine markdown; cross-doc links use relative paths and heading anchors.
+- Initial build conformance audits and the multi-agent team brief removed from `animae/docs/` (historical copies kept elsewhere in the workspace).
+- [cel-reference.md](./cel-reference.md) documents CEL missing map-key semantics (`world.vars` / character `vars`).
+
 ### `@animae/engine`
+
+- **TurnChunk utterance contract:** optional `newUtterance` on `text` chunks; shared accumulator (`createUtteranceStreamState`, `applyTextTurnChunk`, `closeUtteranceStream`); timeline replay marks utterance boundaries for playback.
+- **Player line chunk:** a non-autonomous turn streams the player's own line (typed text, or the text of the chosen option) as its first `text` chunk, marked `newUtterance`; `replayChunks` reproduces the same stream from the timeline, so a replayed scene reads like the live one.
+- **Model call log:** in-memory ring buffer (`createModelCallLog`, `withModelCallLog`, `writeModelCallLogJsonl`, `redactSecrets`); opt-in via `createEngine({ modelCallLog })`.
+- **CEL `model` context:** `model.slot` and `model.tags` (from `ModelPort.tags`) for knowledge `when:` and prompt assembly (`modelCelExtra`).
+- **Preset display strings:** `collectPresetDisplayStrings` merges locale tables from the preset extends chain for server-side snapshot localization.
+- **Prompt language fixes:** the autonomous exchange after a player turn now inherits that turn's `outputLocale` (it used to fall back to the engine default, so English clients got every second reply in the content language); cue and event descriptions written as `$t:key` resolve in the prompt locale instead of reaching the model as raw markers (`Kernel.displayText`, `StringTableCache.lookup`); style examples are labelled as voice references when the output language differs; an optional name glossary (`character.<id>.name` / `.nickname` string keys) keeps names consistent with the interface.
+- **Multi-character prompts:** the render user message names the speaker, and history lines of other characters are sent as named `user` messages instead of `assistant` messages (see [modules/pipeline.md](./modules/pipeline.md)).
+
+### `@animae/engine` (earlier)
 
 - **`Engine.scene.active()`** (and the `scene.active` RPC method): the scene that is open on the current timeline right now, or `null`. Hosts re-sync from it instead of trusting a cached scene id, which went stale when a scene ended, a timeline was loaded / rewound / switched, or a second client ended the scene.
 - Mutation gate: the single-writer gate re-opens when the **last** joined caller releases, whatever the release order. Overlapping flows no longer leave it stuck busy.
@@ -17,6 +34,13 @@
 
 ### `@animae/host`
 
+- **`consumeTurnStream`:** one transcript entry and one Web stream start/end pair per utterance; `onStreamDelta` emits fragment deltas.
+- **`localizeSnapshot`:** per-viewer localization of snapshot/events before Web wire transfer; preserves optional `i18n` refs on transcript and actions.
+- **Late-bound keys:** preset and host keys resolve against the merged catalogs (preset `strings`, then host copy) through an optional `has` probe, so a key never logs a missing-key warning for the namespaces it is not in; a key nobody knows is shown humanized, never as a raw `<namespace>:<key>` marker. `bindLocalizeTranslator` is exported for event and toast localization.
+- Built-in **`:llmlog`** command when `modelCallLog` is enabled (`llmlog-command.ts`).
+
+### `@animae/host` (earlier)
+
 - `syncSceneFromEngine(engine, state, actor)`: every scene read re-aligns the host's cached scene with the engine's (engines without `scene.active`, such as test doubles and thin RPC proxies, keep the cached value). `timeline.load` / `rewind` / `switch` / `import` can no longer leave a stale id that fails every later turn with `SCENE_INVALID`.
 - Colon commands, palette actions and player turns run under one exclusive control (`TURN_IN_PROGRESS` when busy); `endday` has an in-flight guard (a double click warns instead of ending two days); `cancelActive` also clears a pending command.
 - Free text is capped at `SessionHost.maxPlayerInputChars` (4096; colon commands exempt) → `INPUT_TOO_LONG`.
@@ -28,6 +52,12 @@
 - `animae run` without `--scene` starts in the world's start location (`world/location`); it silently fell back to `home` before because the lookup used a dotted path.
 
 ### `@animae/web`
+
+- Protocol messages **`llm_log`** / **`llm_log_clear`** for the in-memory model call log (when enabled on the engine).
+- **`stream` frames** follow utterance boundaries (fragment deltas, one start/end per utterance).
+- The frame timing contract for clients (when `busy` is reported, how far the transcript can trail `busy: false`, why turn controls should lock at the click) is written down in [modules/web.md](./modules/web.md).
+
+### `@animae/web` (earlier)
 
 - Protocol `error` frames carry `localized`: `true` means `message` was rendered in the client's locale and can be shown as-is; otherwise it is a diagnostic and clients present their own copy for `code`.
 - Engine events forwarded to clients are localized field-by-field and keep their shape (a root-level `i18n` field no longer collapses a whole event into a string).
@@ -60,7 +90,7 @@
 
 ## 1.0.0
 
-First production release of the Animae monorepo and example host game.
+First production release of the Animae engine monorepo.
 
 ### `@animae/engine`
 
@@ -77,10 +107,6 @@ First production release of the Animae monorepo and example host game.
 - `@animae/preset-dnd` — SRD 5.2.1 social/exploration checks and trait schema (CC BY 4.0 attribution via `notice` export).
 - `@animae/tui` — Ink 8 default layout, theme, keymap, colon commands hook.
 - `animae` CLI — `init`, `validate`, `run`, `inspect`, `timeline`, `serve --stdio`, compiled `dist/animae` binary.
-
-### example-game (`games/<host>`)
-
-- Shipped TUI game on preset-dnd + `policies/example-game.yaml`, embedded data, `dist/example-game` binary.
 
 ### Docs
 

@@ -1,5 +1,9 @@
 import { useCallback, useRef } from "react";
-import type { TurnChunk } from "@animae/engine";
+import {
+  applyTextTurnChunk,
+  createUtteranceStreamState,
+  type TurnChunk,
+} from "@animae/engine";
 import { useEngineContext } from "../context/engine-context.tsx";
 import { useAppState } from "../context/app-state-context.tsx";
 import { useTuiI18n } from "../i18n/context.tsx";
@@ -83,34 +87,47 @@ async function consumeTurnStream(
   stream: AsyncIterable<TurnChunk>,
   dispatch: ReturnType<typeof useAppState>["dispatch"],
 ) {
-  let textBuffer = "";
-  let speaker: string | undefined;
-  let cues: Array<{ type: string; args: Record<string, unknown>; at: number; speaker?: string }> =
-    [];
-  let entryId: string | undefined;
+  let utterance = createUtteranceStreamState();
+  let cues: Array<{ type: string; args: Record<string, unknown>; at: number; speaker?: string }> = [];
 
-  for await (const chunk of stream) {
+  const completeOpen = () => {
+    if (utterance.entryId) {
+      dispatch({ type: "patchTranscript", id: utterance.entryId, patch: { complete: true } });
+    }
+    utterance = createUtteranceStreamState();
+    cues = [];
+  };
+
+  try {
+    for await (const chunk of stream) {
     switch (chunk.type) {
       case "text": {
-        if (entryId) {
-          dispatch({ type: "patchTranscript", id: entryId, patch: { complete: true } });
+        const applied = applyTextTurnChunk(utterance, chunk);
+        if (applied.completePrior) completeOpen();
+        utterance = applied.state;
+
+        if (applied.newUtterance) {
+          const entryId = `dlg_${++entrySeq}`;
+          utterance = { ...utterance, entryId };
+          dispatch({ type: "setSpeaking", speaking: true });
+          dispatch({
+            type: "appendTranscript",
+            entry: {
+              id: entryId,
+              kind: "dialogue",
+              speaker: utterance.speaker,
+              text: applied.delta,
+              cues: [],
+              complete: false,
+            },
+          });
+        } else if (utterance.entryId) {
+          dispatch({
+            type: "patchTranscript",
+            id: utterance.entryId,
+            patch: { text: utterance.text },
+          });
         }
-        textBuffer = chunk.text;
-        speaker = chunk.speaker;
-        cues = [];
-        entryId = `dlg_${++entrySeq}`;
-        dispatch({ type: "setSpeaking", speaking: true });
-        dispatch({
-          type: "appendTranscript",
-          entry: {
-            id: entryId,
-            kind: "dialogue",
-            speaker,
-            text: textBuffer,
-            cues: [],
-            complete: false,
-          },
-        });
         break;
       }
       case "cue": {
@@ -120,10 +137,10 @@ async function consumeTurnStream(
           at: chunk.at,
           speaker: chunk.speaker,
         });
-        if (entryId) {
+        if (utterance.entryId) {
           dispatch({
             type: "patchTranscript",
-            id: entryId,
+            id: utterance.entryId,
             patch: { cues: [...cues] },
           });
         } else if (chunk.cue.type === "action") {
@@ -138,7 +155,7 @@ async function consumeTurnStream(
               complete: false,
             },
           });
-          entryId = id;
+          utterance = { ...utterance, entryId: id, open: true, text: String(chunk.cue.args["text"] ?? "") };
         }
         break;
       }
@@ -154,22 +171,24 @@ async function consumeTurnStream(
         break;
       }
       case "done": {
-        if (entryId) {
+        if (utterance.entryId) {
           dispatch({
             type: "patchTranscript",
-            id: entryId,
+            id: utterance.entryId,
             patch: { complete: true, turnId: chunk.turnId },
           });
         }
         dispatch({ type: "setLastTurnId", turnId: chunk.turnId });
         dispatch({ type: "setSpeaking", speaking: false });
-        entryId = undefined;
-        textBuffer = "";
+        utterance = createUtteranceStreamState();
         cues = [];
         break;
       }
       default:
         break;
     }
+    }
+  } finally {
+    completeOpen();
   }
 }

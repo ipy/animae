@@ -28,9 +28,11 @@ export function createModelPort(spec: ModelSpec, opts: ModelPortOptions = {}): M
     opts.model ?? createLanguageModel(spec, { env, fetch: opts.fetch, warningSink: portOpts.warningSink });
   const id = modelPortId(spec);
   const tracker = new UsageTracker();
+  const tags = spec.tags?.length ? [...spec.tags] : [];
 
   return {
     id,
+    tags,
     object<T>(req: ModelRequestBase & { schema: import("zod").ZodType<T> }) {
       return runObjectWithRepair(model, spec, req, tracker, portOpts);
     },

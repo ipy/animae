@@ -9,7 +9,7 @@ export interface SceneSlice {
 }
 
 /**
- * Holder involvement (§10): a field applies only when its holder is involved in the current scene.
+ * Holder involvement: a field applies only when its holder is involved in the current scene.
  * - character: holder.ref is a scene participant
  * - location: holder.ref equals the scene location (or player location when no scene)
  * - item: the item is held by a scene participant

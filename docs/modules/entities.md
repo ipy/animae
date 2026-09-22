@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Runtime entity generation, LOD promotion, and SillyTavern card import/export (spec §6.3–§6.4).
+Runtime entity generation, LOD promotion, and SillyTavern card import/export ([6.3](../spec.md#63-dynamic-generation)–[6.4](../spec.md#64-import-and-export)).
 
 ## Public API
 
 - `createEntityService(kernel): EntityService`
-  - `generate({ kind, template, hints? })` — S1/S2 (`template.lod === principal` → S2), prompt includes world language (§8), validates template zod schema, adjudicates id/uniqueness/defaults/LOD, persists under `timelines/<branch>/entities/`, emits `entity.created`.
+  - `generate({ kind, template, hints? })` — S1/S2 (`template.lod === principal` → S2), prompt includes world language ([Section 8](../spec.md#8-cognitive-pipeline)), validates template zod schema, adjudicates id/uniqueness/defaults/LOD, persists under `timelines/<branch>/entities/`, emits `entity.created`.
   - `promote(id, to)` — one LOD step up only; model fill via target LOD template; emits `character.promoted` with optional `data` payload.
   - `checkPromotions(ids)` — policy `characters.lod.promote` + template `promote` CEL rules (`anchor_ref` extra via director).
   - `importCard(file)` — ST V2/V3 JSON, PNG (`chara`/`ccv3`), or `.acard.jsonl`.

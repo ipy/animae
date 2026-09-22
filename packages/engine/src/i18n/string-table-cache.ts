@@ -12,16 +12,45 @@ import { localizeValue } from "@animae/i18n";
 export class StringTableCache {
   private readonly tables = new Map<string, StringTableResolver>();
   private readonly pending = new Map<string, Promise<StringTableResolver>>();
+  /** Per-locale tables without the fallback locale (see `lookup`). */
+  private readonly strictTables = new Map<string, StringTableResolver>();
+  private readonly strictPending = new Map<string, Promise<void>>();
   private readonly storage: StoragePort;
   private readonly fallbackLocale: string;
+  private readonly presetStrings: Record<string, Record<string, string>>;
 
-  constructor(storage: StoragePort, fallbackLocale: string) {
+  constructor(
+    storage: StoragePort,
+    fallbackLocale: string,
+    presetStrings: Record<string, Record<string, string>> = {},
+  ) {
     this.storage = storage;
     this.fallbackLocale = fallbackLocale;
+    this.presetStrings = presetStrings;
   }
 
   async warm(localeChain: readonly string[]): Promise<void> {
-    for (const loc of localeChain) await this.ensure(loc);
+    for (const loc of localeChain) {
+      await this.ensure(loc);
+      await this.ensureStrict(loc);
+    }
+  }
+
+  private async ensureStrict(locale: string): Promise<void> {
+    if (this.strictTables.has(locale)) return;
+    let p = this.strictPending.get(locale);
+    if (!p) {
+      p = loadStringTables(this.storage, [locale]).then((r) => {
+        const own = this.presetStrings[locale];
+        this.strictTables.set(locale, {
+          warnings: r.warnings,
+          resolve: (key: string) => own?.[key] ?? r.resolve(key),
+        });
+        this.strictPending.delete(locale);
+      });
+      this.strictPending.set(locale, p);
+    }
+    await p;
   }
 
   private async ensure(locale: string): Promise<StringTableResolver> {
@@ -30,9 +59,21 @@ export class StringTableCache {
     let p = this.pending.get(locale);
     if (!p) {
       p = loadStringTables(this.storage, [locale, this.fallbackLocale]).then((r) => {
-        this.tables.set(locale, r);
+        const presetStrings = this.presetStrings;
+        const fallbackLocale = this.fallbackLocale;
+        const merged: StringTableResolver = {
+          warnings: r.warnings,
+          resolve(key: string) {
+            for (const loc of [locale, fallbackLocale]) {
+              const hit = presetStrings[loc]?.[key];
+              if (hit !== undefined) return hit;
+            }
+            return r.resolve(key);
+          },
+        };
+        this.tables.set(locale, merged);
         this.pending.delete(locale);
-        return r;
+        return merged;
       });
       this.pending.set(locale, p);
     }
@@ -46,6 +87,14 @@ export class StringTableCache {
     const hit = tables?.resolve(key);
     if (hit !== undefined) return hit;
     return engineI18n.t(key, params);
+  }
+
+  /**
+   * Sync lookup of one key in exactly `locale`'s tables after `warm()`; `undefined` when that locale has no such
+   * string. Unlike `t`, this never falls back to another locale or to the catalog.
+   */
+  lookup(locale: string, key: string): string | undefined {
+    return this.strictTables.get(locale)?.resolve(key);
   }
 
   resolveValue(locale: string, value: unknown): unknown {

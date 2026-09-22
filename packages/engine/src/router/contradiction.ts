@@ -2,7 +2,7 @@ import type { Kernel } from "../contracts.ts";
 import type { CharacterId } from "../types.ts";
 import { memorySyncList } from "../memory/service.ts";
 
-/** Same subject+predicate, different object → contradiction (§17). */
+/** Same subject+predicate, different object → contradiction. */
 export function detectContradiction(
   k: Kernel,
   owner: CharacterId,

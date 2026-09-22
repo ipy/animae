@@ -12,9 +12,9 @@ CEL evaluation, dice, rule-function registry, track math primitives, and synchro
 | `celCheck(expr)` | Compile-only check; wired into zod `Cel` via `setCelValidator` |
 | `adaptCelContext` / `adaptCelResult` | cel-js 8.x numeric bridge (see below) |
 | `createRuleEngine(cel)` | Register/sync `RuleFn`; `run` validates drafts and seeds RNG from `rngKey` |
-| `buildCelContext(deps, params)` | architecture.md §4.4 table (+ L1 `track_offset` / `tier_shift`) |
-| `tierFor`, `marginal`, `decayedCounter`, `computeDelta`, `applyTurnCap`, `decayStep` | §4.2 primitives |
-| `parseDice`, `rollDice`, `rollCheck` | §18 dice |
+| `buildCelContext(deps, params)` | [CEL context table](../architecture.md#44-cel-context-buildcelcontext) (+ L1 `track_offset` / `tier_shift`) |
+| `tierFor`, `marginal`, `decayedCounter`, `computeDelta`, `applyTurnCap`, `decayStep` | [Tracks, tiers, deltas](../architecture.md#42-tracks-tiers-deltas) |
+| `parseDice`, `rollDice`, `rollCheck` | [Dice and checks](../spec.md#18-dice-and-checks) |
 | `runChecks`, `adjudicate`, `decideIntent`, `runStageRules`, `decayTicks` | Pipeline stages |
 
 `RulesDeps`: `{ state, authored, policy, cel, rules, catalog, celContext }`.
@@ -38,7 +38,7 @@ Reducer owner should fold these into `state.windows` / `state.firedThresholds` i
 ## Edge cases
 
 - Advantage + disadvantage on checks cancel before rolling.
-- d20 advantage/disadvantage: roll twice keep high/low when expression is `1d20` (§18).
+- d20 advantage/disadvantage: roll twice keep high/low when expression is `1d20` ([Section 18](../spec.md#18-dice-and-checks)).
 - `decayTicks(deps, from, to)` uses closed-form hourly decay over the whole span; skips `|Δ| < 0.01`. World invokes it via `kernelRulesDeps` (not via `RuleEngine` methods).
 - Zero track deltas are not emitted from `adjudicate`.
 - `adjudicate` returns nothing for an event type that has no `delta_table` row, so its windows, thresholds and custom rules are skipped for that type too: give every event type a row (an empty `{}` is fine).

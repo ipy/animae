@@ -50,7 +50,7 @@ Build models from config:
 
 ```typescript
 import { createModelsFromConfig } from "@animae/engine";
-const models = await createModelsFromConfig(animaeYaml.models, process.env);
+const models = createModelsFromConfig(animaeYaml.models, process.env);
 ```
 
 Wrap with record/replay:
@@ -61,6 +61,25 @@ const s1 = withRecording(liveS1, { mode: "record", dir: recordingsDir });
 ```
 
 Modes: `live` | `record` | `replay`. Replay reads prior recordings keyed by call site; **same seed + branch + recordings → byte-identical event logs** (invariant I6).
+
+### Model call log (debug)
+
+Enable an in-memory ring buffer of every `ModelPort` `object` / `stream` call (after record/replay wrapping):
+
+```typescript
+const engine = await createEngine({
+  root,
+  models: { s1, s2 },
+  modelCallLog: true, // or pass createModelCallLog({ capacity: 400 })
+});
+// engine.modelCallLog?.list(), .get(seq), .clear(), writeModelCallLogJsonl(log, root)
+```
+
+Wrapping order: `withRecording` (inner) then `withModelCallLog` (outer). Full API, redaction rules, Web `llm_log` messages, and TUI `:llmlog`: [model-call-log.md](./model-call-log.md).
+
+### Turn stream consumption
+
+When bridging `engine.scene.turn` or `timeline.replay` to UI, use `applyTextTurnChunk` so transcript rows and stream callbacks stay **one row per utterance** (see [pipeline-and-events.md](./pipeline-and-events.md#turnchunk-streaming-render-step)). `@animae/host` exports `consumeTurnStream` with `onStreamStart` once per utterance, `onStreamDelta(requestId, fragment)` for true deltas, and `onStreamEnd` on `done` or abort.
 
 ## Determinism checklist
 
@@ -80,7 +99,7 @@ Compare `authored.hash` across reloads in your tooling. Mod directory changes ar
 
 ## Content mods (spec-compat)
 
-Not in the Chinese product spec v1.0 text; shipped as an **additive** engine feature (architecture §9 changelog, [mods.md](./mods.md)):
+Not in the v1.0 product spec text; shipped as an **additive** engine feature ([Contract changelog](./architecture.md#9-contract-changelog-append-only), [mods.md](./mods.md)):
 
 - `animae.yaml` field `mods: string[]` (default `[]`).
 - `CreateEngineOptions.mods` / `modBundles`, `Engine.mods()` with `drift` when timeline mod record differs.
@@ -137,8 +156,8 @@ call("scene.turn", {
 
 Subscribe before turns if you need streaming on stdout while the request is in flight.
 
-## example-game
+## Host integration pattern
 
-The game uses the same pattern: `openexample-gameEngine` → `runTui` / plain / `serve`. See `games/<host>/src/game/bootstrap.ts`.
+A typical host wraps `createEngine({ root, presets, modBundles, … })`, then calls `runTui` from `@animae/tui`, the CLI plain mode, or `animae serve --stdio`. Register presets, optional `ModBundle.setup()` hooks, and custom TUI actions in one bootstrap module.
 
 Further reading: [rpc-reference.md](./rpc-reference.md), [modules/engine.md](./modules/engine.md).

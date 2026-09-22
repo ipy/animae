@@ -18,7 +18,7 @@ export function isAmbiguous(appraisal: Appraisal, policy: ResolvedPolicy): boole
   return false;
 }
 
-/** Evaluate §17.1 triggers; returns reason keys (sorted). */
+/** Evaluate router escalation triggers; returns reason keys (sorted). */
 export function evaluateTriggers(input: RouteInput, policy: ResolvedPolicy): string[] {
   const reasons: string[] = [];
   const tr = routerTriggers(policy);

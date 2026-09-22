@@ -148,7 +148,7 @@ test("rng deterministic", () => {
   expect(a.int(1, 6)).toBe(b.int(1, 6));
 });
 
-test("on() wildcard subscription (§15)", async () => {
+test("on() wildcard subscription", async () => {
   const tl = makeTimeline();
   await tl.open();
   const seen: string[] = [];

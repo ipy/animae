@@ -151,16 +151,23 @@
       "advance": "Advance world time",
       "quit": "Exit TUI",
       "lang": "Set UI language",
-      "mouse": "Toggle terminal mouse capture (on|off|status)"
+      "mouse": "Toggle terminal mouse capture (on|off|status)",
+      "llmlog": "Inspect recent model calls (debug)"
     },
+    "llmlog_disabled": "Model call log is not enabled for this session.",
+    "llmlog_empty": "No model calls recorded yet.",
+    "llmlog_not_found": "No log entry with seq {seq}.",
+    "llmlog_dumped": "Wrote LLM log to {path}",
     "usage": {
+      "save": ":save [label]",
       "load": ":load [slot]",
       "rewind": ":rewind <eventId>",
       "explain": ":explain [turnId]",
       "query": ":query <viewer> <path>",
       "advance": ":advance <duration>",
       "lang": ":lang <locale>",
-      "mouse": ":mouse [on|off|status]"
+      "mouse": ":mouse [on|off|status]",
+      "llmlog": ":llmlog [seq|dump]"
     }
   }
 }

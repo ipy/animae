@@ -19,7 +19,6 @@ Integration tests for `createEngine` on real `FsStorage` temp dirs with `Scripte
 
 Run: `cd animae/packages/engine && bun test test/e2e`.
 
-## example-game real data (`games/<host>/test/e2e/real-data.test.ts`)
+## Host-level e2e (outside this package)
 
-- Decay + schedule/daily on `:endday` advances; anchors (`anvil-ultimatum`, `hansheng-rescue`) fire on `world.advance` before the next scene.
-- **I6**: long scripted session in `record` mode, filesystem copy of the data root, `replay` mode asserts identical event logs (ids/payloads/order), `rebuildState` equality, and `timeline.replay` chunks vs live `TurnChunk`s.
+Hosts often add integration tests on a full authored data root (decay, schedule, anchors on `world.advance`, long `record` → copy → `replay` I6 checks). Keep those tests in the host repository; engine e2e stays fixture-based under `test/e2e/`.

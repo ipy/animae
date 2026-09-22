@@ -4,9 +4,8 @@ Package overview and install: [../README.md](../README.md).
 
 | Document | Audience | Contents |
 |----------|----------|----------|
-| [spec.md](./spec.md) | Product (Chinese) | Normative product specification |
+| [spec.md](./spec.md) | Product | Product specification (English; [Chinese edition](./spec.zh-CN.md)) |
 | [architecture.md](./architecture.md) | Engineers | Repo layout, pinned decisions, contract changelog |
-| [team-brief.md](./team-brief.md) | Contributors | Working agreements before coding |
 | [getting-started.md](./getting-started.md) | Authors / integrators | Minimal game, models, TUI / plain / RPC |
 | [authoring-guide.md](./authoring-guide.md) | Content authors | Every authored file format + validated examples |
 | [policy-reference.md](./policy-reference.md) | Game designers | Policy keys, defaults, merge, CEL sites |
@@ -18,14 +17,6 @@ Package overview and install: [../README.md](../README.md).
 | [rpc-reference.md](./rpc-reference.md) | Tooling | JSON-RPC sidecar (`animae serve --stdio`) |
 | [embedding.md](./embedding.md) | Library users | `createEngine`, ports, determinism, sidecar |
 | [CHANGELOG.md](./CHANGELOG.md) | Release | v1.0.0 summary |
-
-## Conformance audits
-
-| Audit | Scope |
-|-------|--------|
-| [conformance-a.md](./conformance-a.md) | Invariants I1–I8, data root, timeline, events |
-| [conformance-b.md](./conformance-b.md) | Policy, rules, fields, memory, router |
-| [conformance-c.md](./conformance-c.md) | Pipeline, scene, model, introspect, RPC |
 
 ## Module notes (`modules/`)
 
@@ -39,6 +30,7 @@ Implementation-facing notes (purpose, public API, edge cases):
 | Rules & CEL | [modules/rules.md](./modules/rules.md) |
 | Timeline | [modules/timeline.md](./modules/timeline.md) |
 | Model (AI SDK) | [modules/model.md](./modules/model.md) |
+| Model call log | [model-call-log.md](./model-call-log.md) |
 | Fields | [modules/fields.md](./modules/fields.md) |
 | Director | [modules/director.md](./modules/director.md) |
 | World | [modules/world.md](./modules/world.md) |

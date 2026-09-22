@@ -1,6 +1,6 @@
 # Animae
 
-Gameplay-agnostic character and world runtime for interactive narrative (TypeScript). Games ship as separate workspace packages (see the host monorepo `games/` tree) that depend only on the public `@animae/*` packages.
+Gameplay-agnostic character and world runtime for interactive narrative (TypeScript). Host applications depend only on the public `@animae/*` packages published from this repository.
 
 ## Packages
 
@@ -19,10 +19,10 @@ Gameplay-agnostic character and world runtime for interactive narrative (TypeScr
 
 ## Install (development)
 
-From the repo root (see [root README](../README.md)):
+From the workspace root that lists this package:
 
 ```bash
-bun install   # once, at example-game-monorepo root
+bun install   # once, from the workspace root that lists `animae` as a package
 ```
 
 Work inside `animae/` for engine-only changes:
@@ -84,6 +84,4 @@ Full text is in `packages/preset-dnd/NOTICE` and the `notice` export.
 
 - Index: [docs/README.md](docs/README.md)
 - [Getting started](docs/getting-started.md) · [Authoring](docs/authoring-guide.md) · [Embedding](docs/embedding.md)
-- [Product spec (中文)](docs/spec.md) · [Architecture](docs/architecture.md)
-
-Module ownership: [docs/team-brief.md](docs/team-brief.md).
+- [Product specification](docs/spec.md) · [Chinese edition](docs/spec.zh-CN.md) · [Architecture](docs/architecture.md)

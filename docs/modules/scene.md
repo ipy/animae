@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Serial scene lifecycle: start → turns → end (spec §3, §14).
+Serial scene lifecycle: start → turns → end ([invariants](../spec.md#3-engine-invariants), [multi-character orchestration](../spec.md#14-multi-character-orchestration)).
 
 ## Public API
 

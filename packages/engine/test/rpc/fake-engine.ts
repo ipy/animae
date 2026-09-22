@@ -93,6 +93,7 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
       entityDisplayName: (id) => id,
     },
     info: () => ({
+      root: "/tmp",
       language: "en",
       locale: "en",
       promptLocale: "zh-CN",

@@ -8,15 +8,17 @@ Operator-facing binary: scaffold data roots, validate config, run interactive se
 
 | Export | Description |
 |---|---|
-| `runCli(argv, env): Promise<number>` | Testable entry (spec §20.3) |
+| `runCli(argv, env): Promise<number>` | Testable entry ([CLI](../spec.md#203-cli)) |
 | `parseCli`, `helpText` | Argument parsing |
 | `validateDataRoot`, `openEngine` | Load helpers with built-in presets |
 
 ## Commands
 
-`init`, `validate`, `run`, `inspect`, `timeline`, `import-card`, `export-card`, `serve --stdio` — global flags `--root`, `--model-mode`, `--seed`, `--version`, `--help` (accepted before **or after** the subcommand, e.g. `animae validate --root ./data`).
+`init`, `validate`, `run`, `inspect`, `timeline`, `import-card`, `export-card`, `serve --stdio` — global flags `--root`, `--model-mode`, `--seed`, `--lang`, `--version`, `--help` (accepted before **or after** the subcommand, e.g. `animae validate --root ./data`).
 
 **Mods:** `mods list`, `mods validate [--mods a,b]`, `mods explain <path> [--mods a,b]`; `validate [--mods a,b]` loads layered authored data + policy. See [mods.md](../mods.md).
+
+**i18n:** `i18n check`, `i18n pseudo`, `i18n extract` — catalog parity and pseudo-localization tooling. See [i18n.md](../i18n.md).
 
 Built-in presets are loaded from `@animae/preset-base` and `@animae/preset-dnd` when those packages export `preset`.
 
@@ -36,7 +38,7 @@ Produces:
 
 Do not add a direct `react-devtools-core` dependency (it creates a second `ink@8` peer tree in Bun’s store). Compiled binaries set `process.env.DEV='false'` via `ink-compile-options.ts` so Ink never loads devtools at runtime.
 
-The compile script writes `--metafile=…` and runs `bundle-singleton-guard.ts`: more than one physical `react` / `ink` / `react-reconciler` path in the graph fails the build (prevents invalid hook calls in compiled TUI binaries). When the engine repo is embedded in a host monorepo, that host should hoist dependencies from its root (`animae/node_modules` must not coexist with the host’s root `node_modules`).
+The compile script writes `--metafile=…` and runs `bundle-singleton-guard.ts`: more than one physical `react` / `ink` / `react-reconciler` path in the graph fails the build (prevents invalid hook calls in compiled TUI binaries). When `@animae/*` is linked into a larger workspace, hoist shared dependencies from one root `node_modules` so Ink/React resolve to a single physical copy.
 
 Release smoke from repo root: `bun run build:all && bun run smoke` (see `scripts/smoke.ts`, `scripts/animae-stdio-smoke.ts`). Ink packaging gate (unreachable LLM, base panel, `:help`/`:quit`): `python3 scripts/packaging-tui-verify.py`. PTY session with stub LLM: `python3 scripts/pty-smoke.py`.
 
