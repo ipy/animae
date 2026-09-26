@@ -6,12 +6,13 @@ import { FieldDescriptorSchema } from "./authored.ts";
  * Policy schema (tracks, checks, rules, retrieval, models). CONTRACT file.
  * A "policy" document is a (partial) policy; the loader deep-merges many documents into one validated `Policy`.
  * Merge conventions (implemented by policy/merge): records merge by key; arrays REPLACE, unless written as
- * `{ $append: [...] }` / `{ $prepend: [...] }` which concatenate to the earlier layer's array.
+ * `{ $append: [...] }` / `{ $prepend: [...] }` which concatenate to the earlier layer's array. The same markers with a
+ * string payload concatenate to the earlier layer's string (for prompt prose blocks).
  */
 
 const Rec = <T extends z.ZodType>(v: T) => z.record(z.string(), v);
 
-export const TierSchema = z.strictObject({ name: z.string(), from: z.number() });
+export const TierSchema = z.strictObject({ name: z.string(), from: z.number(), label: z.string().optional() });
 
 export const TrackDefSchema = z.strictObject({
   /** "relation": value is stored per (owner → target) and the default target is the acting character (usually the player).
@@ -205,12 +206,46 @@ export const PolicySchema = z.strictObject({
       retryOnMismatch: z.union([z.literal(0), z.literal(1)]).default(0),
       recentTurns: z.number().int().positive().default(12),
       temperature: z.number().optional(),
-      /** Optional per-segment character caps (truncate with marker); unlimited when omitted. */
+      /** Optional per-segment character caps (section-aware drop); unlimited when omitted. */
       maxSegmentChars: z
         .strictObject({
           static: z.number().int().positive().optional(),
           semiStatic: z.number().int().positive().optional(),
           dynamic: z.number().int().positive().optional(),
+        })
+        .optional(),
+      /** Max lines in the on-demand knowledge index (S2 with tools only). */
+      knowledgeIndexMax: z.number().int().positive().optional(),
+      /**
+       * How the compact relation line in prompts is built. All keys are optional: by default every relation-scope track
+       * is a candidate (in policy order) and every tier is shown.
+       */
+      relation: z
+        .strictObject({
+          /** Ordered track ids the line may show (others are ignored). */
+          tracks: z.array(z.string()).optional(),
+          /** At most this many tracks per line (default 3). */
+          maxTracks: z.number().int().positive().optional(),
+          /** Track id to tier names left out of the line; by default the tier a track starts in (the one holding `initial`) is left out. */
+          silentTiers: Rec(z.array(z.string())).optional(),
+          /** Tracks consulted for behavioral directives (`x.tier_directives`); defaults to `tracks`. Tracks that moved furthest from their starting tier win. */
+          directiveTracks: z.array(z.string()).optional(),
+          /** At most this many directives per relation line (default 1). */
+          maxDirectives: z.number().int().positive().optional(),
+        })
+        .optional(),
+      /**
+       * How much recalled material the dynamic prompt segment carries. Retrieval can return many loosely related
+       * documents; these caps keep the prompt to what the turn needs.
+       */
+      recall: z
+        .strictObject({
+          /** At most this many recalled knowledge documents (default 3); recalled memories are not capped here. */
+          maxKnowledge: z.number().int().nonnegative().optional(),
+          /** Each recalled knowledge document is cut at a sentence boundary near this many characters (default 280). */
+          knowledgeChars: z.number().int().positive().optional(),
+          /** Each recalled memory is cut near this many characters (default 400). */
+          memoryChars: z.number().int().positive().optional(),
         })
         .optional(),
     })

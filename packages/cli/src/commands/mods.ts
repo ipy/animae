@@ -13,6 +13,10 @@ import {
   resolveEngineI18n,
   resolveMods,
   validateContentLocalePresence,
+  warnUnknownNameRefs,
+  warnUnknownNameRefsInPolicy,
+  warnUnknownNameRefsInStrings,
+  loadStringTables,
 } from "@animae/engine";
 import { fullPresetRegistry } from "../engine-open.ts";
 
@@ -102,9 +106,27 @@ export async function validateWithMods(
     }));
     const allLocale = [...localeIssues, ...contentIssues];
     if (allLocale.length) return { ok: false, issues: allLocale };
-    await loadPolicy(readStorage, authored.config, registry, {
+    const policyResult = await loadPolicy(readStorage, authored.config, registry, {
       authoredFields: Object.fromEntries(Object.entries(authored.fields).map(([id, f]) => [id, { level: f.level }])),
     });
+    const characterIds = new Set(Object.keys(authored.characters));
+    characterIds.add("player");
+    const nameRefWarnings: { file: string; path: string; message: string }[] = [];
+    const warnNameRef = (code: string, message: string, extra?: Record<string, unknown>) => {
+      if (code !== "NAME_REF_UNKNOWN") return;
+      nameRefWarnings.push({
+        file: String(extra?.file ?? "authored"),
+        path: String(extra?.path ?? code),
+        message,
+      });
+    };
+    warnUnknownNameRefs(authored, warnNameRef);
+    warnUnknownNameRefsInPolicy(policyResult.policy, characterIds, warnNameRef);
+    const stringTables = await loadStringTables(readStorage, i18n.fallbackChain);
+    warnUnknownNameRefsInStrings(stringTables.entries(), characterIds, warnNameRef);
+    for (const w of nameRefWarnings) {
+      process.stderr.write(`warn: ${w.file}:${w.path}: ${w.message}\n`);
+    }
     return { ok: true, issues: [] };
   } catch (err) {
     const { AnimaeError } = await import("@animae/engine");

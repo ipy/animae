@@ -42,6 +42,8 @@ export interface PromptSegments {
   history?: { role: "user" | "assistant"; content: string }[];
   /** the current input / task statement (final user message) */
   user: string;
+  /** Assembly diagnostics (never sent to the model). */
+  diagnostics?: { droppedSections?: string[] };
 }
 
 export interface ToolDef {
@@ -86,3 +88,45 @@ export interface ModelPort {
 }
 
 export type ModelMode = "live" | "record" | "replay";
+
+export type ImageMime = "image/png" | "image/webp" | "image/jpeg";
+
+export interface ImageRequest {
+  /** purpose for logs, e.g. "cg" */
+  label: string;
+  /** fully composed generator prompt */
+  prompt: string;
+  negativePrompt?: string;
+  width: number;
+  height: number;
+  seed?: number;
+  /** resolved rating id (generators may switch safety profiles on it) */
+  rating: string;
+  /** gallery.generator.options merged with per-call overrides */
+  options?: Record<string, unknown>;
+}
+
+export interface ImageResult {
+  bytes: Uint8Array;
+  mime: ImageMime;
+  width: number;
+  height: number;
+  seed?: number;
+  /** generator facts kept in the record (model id, steps...) */
+  meta?: Record<string, unknown>;
+}
+
+export interface ImageGenerateOptions {
+  /** cancellation: the generator must stop work and reject with the abort reason */
+  signal?: AbortSignal;
+  /** best effort, 0..1 */
+  onProgress?(fraction: number): void;
+}
+
+export interface ImagePort {
+  /** e.g. "drawthings-cli/beyondreality_v30" */
+  readonly id: string;
+  /** Host-defined capability tags exposed to CEL as `image.tags`, mirroring ModelPort.tags. */
+  readonly tags?: readonly string[];
+  generate(req: ImageRequest, opts?: ImageGenerateOptions): Promise<ImageResult>;
+}

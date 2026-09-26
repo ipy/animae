@@ -26,7 +26,7 @@ export async function applyDistortion(k: Kernel, hits: RetrievalHit[], rngKey: s
     }
     const kind = rng.pick(cfg.kinds);
     const instruction = INSTRUCTIONS[kind] ?? INSTRUCTIONS.intensify!;
-    const distorted: RetrievalHit = { ...hit, distortion: instruction };
+    const distorted: RetrievalHit = { ...hit, distortion: instruction, distortionKind: kind };
     out.push(distorted);
     await k.emit([
       {

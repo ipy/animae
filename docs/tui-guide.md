@@ -101,6 +101,8 @@ Pass `cueRenderers` to `runTui`.
 
 Built-in when the engine was created with `modelCallLog`: **`:llmlog`** — last 10 calls; **`:llmlog <seq>`** — prompt + response for one entry; **`:llmlog dump`** — JSONL under `<data root>/llm-log/`. Disabled sessions show a localized warning. See [model-call-log.md](./model-call-log.md).
 
+Built-in **`:gallery`** opens the CG gallery overlay (or subcommands `list`, `show`, `capture`, `render`, … — same as `@animae/host`). In the overlay: ↑↓ select, Enter reveal masked rows, `c` capture, `r` render, `x` cancel job, `o` open image path, `p` pin captured entry, `d` delete captured (confirm), Esc close. Pass `galleryPresentation: (item) => ({ blur: item.rating !== "general" })` and `openFile` on `RunTuiOptions` for restricted masking and OS viewing. See [gallery.md](./gallery.md).
+
 `CommandApi`: `engine`, `viewer`, `actor`, `sceneId()`, `startScene`, `endScene`, `notify`, overlays.
 
 `useTurn` accumulates `TurnChunk` text with `applyTextTurnChunk` (one transcript/typewriter row per utterance, matching `@animae/host` stream semantics).

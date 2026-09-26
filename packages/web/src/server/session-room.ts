@@ -10,6 +10,10 @@ import { WEB_SUPPORTED_LOCALES, createWebI18n, localeDisplayNames } from "../i18
 
 export type ClientRole = "controller" | "spectator";
 
+export interface SessionRoomGalleryOptions {
+  allowGalleryUnlock?: boolean;
+}
+
 export interface WebSessionHooks {
   configGet?(keys?: string[]): Promise<Record<string, unknown>>;
   configSet?(
@@ -20,8 +24,10 @@ export interface WebSessionHooks {
     slot?: "s1" | "s2",
     draft?: Record<string, unknown>,
   ): Promise<Record<string, unknown>>;
+  imagesProbe?(draft?: Record<string, unknown>): Promise<Record<string, unknown>>;
   ollamaModels?(baseURL?: string): Promise<{ ok: boolean; models?: string[]; error?: string }>;
   contentPackNotice?(packId: string): Promise<{ notice: string; noticeVersion?: string }>;
+  protagonistSet?(name: string): Promise<{ ok: boolean; error?: string }>;
 }
 
 interface WsData {
@@ -68,13 +74,29 @@ export class SessionRoom {
   private snapshotRun?: Promise<void>;
   private snapshotRerun = false;
   private snapshotRerunFull = false;
+  private readonly allowGalleryUnlock: boolean;
 
-  constructor(sessionId: string, host: SessionHost, security: WebSecurityConfig, hooks: WebSessionHooks = {}) {
+  constructor(
+    sessionId: string,
+    host: SessionHost,
+    security: WebSecurityConfig,
+    hooks: WebSessionHooks = {},
+    gallery: SessionRoomGalleryOptions = {},
+  ) {
     this.sessionId = sessionId;
     this.host = host;
     this.security = security;
     this.hooks = hooks;
+    this.allowGalleryUnlock = gallery.allowGalleryUnlock ?? false;
     this.host.setStreamCallbacks({
+      onGalleryNotice: (notice) => {
+        this.broadcast({
+          v: WEB_PROTOCOL_VERSION,
+          type: "gallery_notice",
+          seq: this.nextSeq(),
+          notice,
+        });
+      },
       onStreamStart: (requestId, segment, speaker) => {
         this.broadcast({
           v: WEB_PROTOCOL_VERSION,
@@ -146,6 +168,7 @@ export class SessionRoom {
   }
 
   close(): void {
+    this.host.dispose?.();
     for (const u of this.engineUnsubs) u();
     this.engineUnsubs = [];
     for (const ws of this.clients.values()) {
@@ -181,6 +204,16 @@ export class SessionRoom {
     for (const ws of this.clients.values()) {
       ws.send(raw);
     }
+  }
+
+  /** Push a gallery notice to every connected client (e.g. after host-side availability changes). */
+  emitGalleryNotice(notice: import("@animae/engine").GalleryNotice): void {
+    this.broadcast({
+      v: WEB_PROTOCOL_VERSION,
+      type: "gallery_notice",
+      seq: this.nextSeq(),
+      notice,
+    });
   }
 
   private broadcastLocalized(build: (i18n: WebI18n) => ServerMessage): void {
@@ -569,7 +602,14 @@ export class SessionRoom {
       "config_set",
       "cancel",
       "models_probe",
+      "images_probe",
       "ollama_models",
+      "gallery_capture",
+      "gallery_render",
+      "gallery_cancel",
+      "gallery_remove",
+      "gallery_pin",
+      "gallery_unlock",
     ]);
     if (needsControl.has(m.type) && data.role !== "controller") {
       this.err(ws, "READ_ONLY", "error.read_only", undefined, "id" in m ? m.id : undefined);
@@ -685,6 +725,15 @@ export class SessionRoom {
             this.ok(ws, m.id, result);
             break;
           }
+          case "images_probe": {
+            if (!this.hooks.imagesProbe) {
+              this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
+              break;
+            }
+            const result = await this.hooks.imagesProbe(m.draft);
+            this.ok(ws, m.id, result);
+            break;
+          }
           case "ollama_models": {
             if (!this.hooks.ollamaModels) {
               this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
@@ -701,6 +750,16 @@ export class SessionRoom {
             }
             const notice = await this.hooks.contentPackNotice(m.packId);
             this.ok(ws, m.id, notice);
+            break;
+          }
+          case "protagonist_set": {
+            if (!this.hooks.protagonistSet) {
+              this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
+              break;
+            }
+            const result = await this.hooks.protagonistSet(m.name);
+            this.ok(ws, m.id, result);
+            if (result.ok) await this.pushSnapshot();
             break;
           }
           case "cancel":
@@ -728,6 +787,76 @@ export class SessionRoom {
             const log = this.host.engine.modelCallLog;
             if (log) log.clear();
             this.ok(ws, m.id, { cleared: true });
+            break;
+          }
+          case "gallery_list": {
+            const items = await this.host.galleryList({
+              locale: ws.data.locale,
+              includeLocked: m.includeLocked,
+              includeUnavailable: m.includeUnavailable,
+              debug: m.debug,
+            });
+            this.ok(ws, m.id, { gallery: items });
+            break;
+          }
+          case "gallery_get": {
+            const item = await this.host.galleryGet(m.entryId, {
+              locale: ws.data.locale,
+              includeLocked: m.includeLocked,
+              includeUnavailable: m.includeUnavailable,
+              debug: m.debug,
+            });
+            this.ok(ws, m.id, { gallery: item ?? null });
+            break;
+          }
+          case "gallery_ratings": {
+            this.ok(ws, m.id, { ratings: this.host.galleryRatings() });
+            break;
+          }
+          case "gallery_jobs": {
+            this.ok(ws, m.id, { jobs: this.host.galleryJobs() });
+            break;
+          }
+          case "gallery_capture": {
+            const out = await this.host.galleryCapture(m.req);
+            this.ok(ws, m.id, out);
+            await this.pushSnapshot();
+            break;
+          }
+          case "gallery_render": {
+            const out = await this.host.galleryRender(m.entryId, {
+              reroll: m.reroll,
+              seed: m.seed,
+            });
+            this.ok(ws, m.id, out);
+            await this.pushSnapshot();
+            break;
+          }
+          case "gallery_cancel": {
+            const cancelled = await this.host.galleryCancel(m.job);
+            this.ok(ws, m.id, { cancelled });
+            break;
+          }
+          case "gallery_remove": {
+            await this.host.galleryRemove(m.entryId);
+            this.ok(ws, m.id, { removed: true });
+            await this.pushSnapshot();
+            break;
+          }
+          case "gallery_pin": {
+            await this.host.galleryPin(m.entryId, m.pinned);
+            this.ok(ws, m.id, { pinned: m.pinned });
+            await this.pushSnapshot();
+            break;
+          }
+          case "gallery_unlock": {
+            if (!this.allowGalleryUnlock) {
+              this.err(ws, "UNSUPPORTED", "error.unsupported", undefined, m.id);
+              break;
+            }
+            const item = await this.host.galleryUnlock(m.entryId, m.source ? { source: m.source } : undefined);
+            this.ok(ws, m.id, { gallery: item });
+            await this.pushSnapshot();
             break;
           }
           default:

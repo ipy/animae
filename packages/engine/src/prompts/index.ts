@@ -29,6 +29,8 @@ export function promptLocaleParityKeys(): { en: PromptSectionKey[]; zh: PromptSe
   return { en: enKeys, zh: zhKeys, missing };
 }
 
+export { getGalleryPromptSection, galleryPromptLocaleParityKeys } from "./gallery-sections.ts";
+
 export function displayLanguageName(tag: string, uiLocale: string): string {
   try {
     const dn = new Intl.DisplayNames([normalizeLocaleTag(uiLocale)], { type: "language" });

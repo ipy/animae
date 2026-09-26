@@ -104,6 +104,27 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
       models: { s1: "s1", s2: "s2" },
       modelMode: "record",
     }),
+    gallery: {
+      generatorAvailable: () => false,
+      ratings: () => [],
+      list: async () => [],
+      get: async () => undefined,
+      unlock: async () => {
+        throw new Error("gallery stub");
+      },
+      capture: async () => {
+        throw new Error("gallery stub");
+      },
+      render: async () => {
+        throw new Error("gallery stub");
+      },
+      cancel: async () => false,
+      remove: async () => {},
+      pin: async () => {},
+      image: async () => undefined,
+      jobs: () => [],
+      subscribe: () => () => {},
+    },
     close: async () => {},
   };
 

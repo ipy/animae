@@ -1,5 +1,6 @@
 import type { I18nConfig } from "./schema/authored.ts";
-import type { EmbeddingPort, ModelMode, ModelPort, StoragePort } from "./ports.ts";
+import type { EmbeddingPort, ImagePort, ModelMode, ModelPort, StoragePort } from "./ports.ts";
+import type { GalleryService } from "./gallery/types.ts";
 import type { ModelCallLog, ModelCallLogOptions } from "./model/call-log.ts";
 import type { PresetBundle } from "./preset.ts";
 import type { ModBundle, ModSelection, ModProvenanceEntry, ResolvedMod } from "./mod.ts";
@@ -13,7 +14,7 @@ export interface CreateEngineOptions {
   /** required unless `modelSpecs` in animae.yaml can be built from env (then engine builds AI SDK ports) */
   models?: { s1: ModelPort; s2: ModelPort };
   modelMode?: ModelMode; // default "record"
-  ports?: { storage?: StoragePort; embedding?: EmbeddingPort };
+  ports?: { storage?: StoragePort; embedding?: EmbeddingPort; image?: ImagePort };
   seed?: number;
   /** extra presets available to `animae.yaml: preset:` (built-ins are registered automatically only by the CLI/game; the engine package has none) */
   presets?: PresetBundle[];
@@ -149,6 +150,8 @@ export interface Engine {
   };
   /** Present when `createEngine({ modelCallLog: … })` enabled the in-memory call log. */
   modelCallLog?: ModelCallLog;
+  /** CG gallery (collection, jobs, capture/render when an ImagePort is wired). Hosts use this surface; turn pipeline hooks live on the kernel module slot. */
+  gallery: GalleryService;
   /** enabled mods with provenance; `drift` when timeline record differs from current set */
   mods(): { mods: ResolvedMod[]; drift: boolean; driftMessage?: string; provenance: Record<string, ModProvenanceEntry> };
   close(): Promise<void>;

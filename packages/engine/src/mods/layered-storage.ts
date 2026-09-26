@@ -1,4 +1,5 @@
 import type { StoragePort } from "../ports.ts";
+import { mergeMarkdownAppend } from "../prose/for-prompt.ts";
 import { parseFrontmatter, stringifyYaml, parseYaml } from "../store/util.ts";
 import { applyPatchMerge } from "./patch-merge.ts";
 import type { ModProvenanceEntry } from "../mod.ts";
@@ -12,7 +13,7 @@ export interface ModStorageLayer {
 export interface LayeredStorageOptions {
   base: StoragePort;
   modLayers: ModStorageLayer[];
-  /** BCP-47 chain for `mods/<id>/locales/<locale>/…` overlays (after mod file merge). */
+  /** BCP-47 chain (most preferred first) for `mods/<id>/locales/<locale>/…` overlays (after mod file merge). */
   contentLocaleChain?: readonly string[];
   /** filled on read: logical path -> winning layer */
   provenance?: Map<string, ModProvenanceEntry>;
@@ -86,21 +87,22 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
   ): Promise<string | undefined> {
     if (content === undefined) return undefined;
     let out = content;
+    const appendRel = appendPathFor(logicalPath);
+    // Most preferred locale first; the first one that localizes this path wins and later tags only fill gaps.
     for (const locale of contentLocaleChain) {
       const full = await readModLocaleFile(prefix, locale, logicalPath);
-      if (full !== undefined) out = full;
       const patchText = await readModLocaleFile(prefix, locale, patchPathFor(logicalPath));
+      const append = appendRel ? await readModLocaleFile(prefix, locale, appendRel) : undefined;
+      if (full === undefined && patchText === undefined && append === undefined) continue;
+      if (full !== undefined) out = full;
       if (patchText !== undefined) {
         if (logicalPath.endsWith(".md")) out = mergeMarkdownWithPatch(out, patchText);
         else if (logicalPath.endsWith(".yaml")) {
           out = stringifyYaml(applyPatchMerge(parseYaml(out), parseYaml(patchText)));
         }
       }
-      const appendRel = appendPathFor(logicalPath);
-      if (appendRel) {
-        const append = await readModLocaleFile(prefix, locale, appendRel);
-        if (append !== undefined) out = `${out.trimEnd()}\n\n${append.trim()}\n`;
-      }
+      if (append !== undefined) out = mergeMarkdownAppend(out, append);
+      break;
     }
     return out;
   }
@@ -150,10 +152,9 @@ export function createLayeredStorage(opts: LayeredStorageOptions): StoragePort {
 
     if (content === undefined) return undefined;
     if (appends.length) {
-      const { data, body } = parseFrontmatter(content);
-      const mergedBody = body + appends.map((a) => (a.startsWith("\n") ? a : `\n${a}`)).join("");
-      const fm = stringifyYaml(data).trimEnd();
-      content = `---\n${fm}\n---\n${mergedBody}`;
+      for (const append of appends) {
+        content = mergeMarkdownAppend(content!, append);
+      }
     }
     setProv(logicalPath, layer);
     return content;

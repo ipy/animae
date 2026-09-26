@@ -73,8 +73,8 @@ Same as policy merge, plus:
 
 | Operator | Meaning |
 |----------|---------|
-| `$append: [...]` | append to array |
-| `$prepend: [...]` | prepend to array |
+| `$append: [...]` | append to array, or concatenate after an existing **string** |
+| `$prepend: [...]` | prepend to array, or concatenate before an existing **string** |
 | `$replace: [...]` | replace entire array |
 | `$remove: [...]` | remove by value or `{ id }` |
 | `{ $delete: true }` | delete object key |

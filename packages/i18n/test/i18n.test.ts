@@ -18,6 +18,9 @@ test("negotiate locale from env and accept-language", () => {
   expect(negotiateLocale({ env: { LANG: "zh_CN.UTF-8" } })).toBe("zh-CN");
   expect(parseAcceptLanguage("en-US, en;q=0.9, zh-CN;q=0.8")[0]).toBe("en-US");
   expect(buildFallbackChain("zh-TW")).toContain("zh-CN");
+  expect(buildFallbackChain("en-US")).toEqual(["en-US", "en"]);
+  expect(buildFallbackChain("en")).toEqual(["en"]);
+  expect(buildFallbackChain("zh-CN")).toEqual(["zh-CN", "zh-Hans", "en"]);
 });
 
 test("createI18n translates with fallback", () => {

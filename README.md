@@ -6,7 +6,7 @@ Gameplay-agnostic character and world runtime for interactive narrative (TypeScr
 
 | Package | npm name | Role |
 |---------|----------|------|
-| Engine | `@animae/engine` | Kernel: timeline, pipeline, rules, world, memory, RPC |
+| Engine | `@animae/engine` | Kernel: timeline, pipeline, rules, world, memory, RPC, optional CG gallery (`ImagePort`) |
 | Preset base | `@animae/preset-base` | Default policy bundle (`id: "@animae/preset-base"`) |
 | Preset DnD | `@animae/preset-dnd` | SRD 5.2.1 overlay + social checks (`extends` base) |
 | TUI | `@animae/tui` | Ink 8 components, default layout, theme, keymap |
@@ -83,5 +83,5 @@ Full text is in `packages/preset-dnd/NOTICE` and the `notice` export.
 ## Documentation
 
 - Index: [docs/README.md](docs/README.md)
-- [Getting started](docs/getting-started.md) · [Authoring](docs/authoring-guide.md) · [Embedding](docs/embedding.md)
+- [Getting started](docs/getting-started.md) · [Authoring](docs/authoring-guide.md) · [Embedding](docs/embedding.md) · [CG gallery](docs/gallery.md)
 - [Product specification](docs/spec.md) · [Chinese edition](docs/spec.zh-CN.md) · [Architecture](docs/architecture.md)

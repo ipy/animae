@@ -79,6 +79,11 @@ Merged from `celContext({ extra: { ... } })`:
 | `goal`, `conflict`, `proposal` | Reflection / memory |
 | `thresholdId` | Threshold rules |
 | `anchor_ref` | Promotion hints |
+| `gallery.unlocked` | Preset ids already unlocked (gallery unlock / rating CEL) |
+| `turn.kinds` | Event kinds committed in the current turn (gallery unlock after turn) |
+| `image.tags` | `ImagePort.tags` strings (empty when no port); e.g. `'tier:restricted' in image.tags` |
+
+Gallery-specific usage is documented in [gallery.md](./gallery.md#cel-context-gallery-hooks).
 
 ## Registered functions (engine)
 

@@ -9,8 +9,8 @@ A **policy document** is a partial YAML object validated by `PolicySchema` (`sch
 | Objects | Deep merge by key |
 | Scalars | Incoming replaces; prior value → `POLICY_OVERRIDE` warning |
 | Arrays | **Replace** entirely |
-| `{ $append: [...] }` | Concatenate after existing array |
-| `{ $prepend: [...] }` | Concatenate before existing array |
+| `{ $append: [...] }` | Concatenate after existing array, or after existing **string** |
+| `{ $prepend: [...] }` | Concatenate before existing array, or before existing **string** |
 
 ---
 
@@ -159,6 +159,23 @@ Each trigger: `{ enabled: true, ...params }`:
 | `recentTurns` | `12` |
 | `temperature` | optional |
 | `maxSegmentChars` | optional `{ static, semiStatic, dynamic }` caps |
+| `knowledgeIndexMax` | optional cap on lines in the on-demand knowledge index (S2 with tools only) |
+| `relation` | optional display config for the compact relation line, see below |
+| `recall.maxKnowledge` | `3` — max recalled knowledge docs in the dynamic segment |
+| `recall.knowledgeChars` | `280` — per-doc trim near this length (sentence boundary) |
+| `recall.memoryChars` | `400` — per recalled memory trim |
+
+#### `render.relation`
+
+Controls the `- <name>: <track> <tier>, ... — <directive>` line that every prompt carries per other participant. Every key is optional.
+
+| Field | Default |
+|-------|---------|
+| `tracks` | every relation-scope track, in policy order; the line may show only these, in this order |
+| `maxTracks` | `3` |
+| `silentTiers` | `{ <track>: [tier, ...] }` tiers left out of the line; by default the tier a track starts in (the one holding `initial`) is left out because it is not news |
+| `directiveTracks` | same as `tracks`; consulted for `x.tier_directives` |
+| `maxDirectives` | `1`; directives come from the tracks that moved furthest from their starting tier, ties keep the configured order |
 
 ### `cues.types`
 
@@ -196,6 +213,21 @@ Array of `{ id, when, expr, dc, advantage?, disadvantage?, skill?, onSuccess?, o
 ### `x`
 
 Free-form map; readable in rule functions as `ctx.policy.x` (via kernel). Hosts store balance tables here (e.g. `policy.x.jobs` in a host policy overlay).
+
+#### `x.prompt` (host conventions)
+
+Games often nest prompt tuning under `policy.x.prompt`:
+
+| Key | Role |
+|-----|------|
+| `world_facts` | Static world tone and safety defaults (merged into the **static** render segment) |
+| `render` | Render-only narration guidance (choices wording, scene voice) |
+| `choices` | Event-type and tag vocabulary for the choices block in the output contract |
+| `appraise_static` | Appraise-only static block (no world rules or render narration partials) |
+| `appraise_examples` | Few-shot appraise examples |
+| `template_partials` | Template ids merged into **render** prompts only; appraise assembly skips their narration bodies |
+
+Knowledge docs use frontmatter `inject: always | when | on-demand`; `when` is CEL over `event.type`, `scene.participants`, `world.vars`, and `model.tags` / `model.slot`.
 
 ---
 

@@ -36,6 +36,7 @@ export * from "./entities/index.ts";
 export * from "./pipeline/index.ts";
 export * from "./scene/index.ts";
 export * from "./engine/index.ts";
+export * from "./gallery/index.ts";
 export * from "./rpc/index.ts";
 export * from "./i18n/index.ts";
 export { getPromptSection, PROMPT_LOCALES, promptLocaleParityKeys } from "./prompts/index.ts";

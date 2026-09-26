@@ -61,6 +61,12 @@ export function createRpcServer(engine: Engine, io: RpcIo): RpcServer {
     },
   });
 
+  unsubEngine.push(
+    engine.gallery.subscribe((notice) => {
+      notify("gallery.notice", notice);
+    }),
+  );
+
   handlers.set("subscribe", (params) => {
     const p = paramsObject(params, ["kinds"]);
     const kinds = p.kinds;

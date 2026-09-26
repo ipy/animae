@@ -84,6 +84,17 @@ Kinds are listed in `EVENT_KINDS`. Payload interfaces below; envelopes also carr
 | `field.age` | `{ field, scenes?, turns? }` |
 | `info_arrival` | `{ tags?, claim?, knowledge?, text? }` — anchor / knowledge injection |
 
+### Gallery (collection provenance)
+
+| Kind | Payload |
+|------|---------|
+| `gallery.unlocked` | `{ item, source? }` — first preset unlock only |
+| `gallery.captured` | `{ item, rating }` |
+| `gallery.rendered` | `{ item, imageId, job }` |
+| `gallery.removed` | `{ item }` |
+
+Reducer: no-op for gameplay state; authoritative data lives in `gallery/collection.json`. See [gallery.md](./gallery.md).
+
 ### Intent & generation
 
 | Kind | Payload |

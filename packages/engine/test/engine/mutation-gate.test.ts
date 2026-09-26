@@ -8,9 +8,15 @@ import { FsStorage } from "../../src/store/fs.ts";
 import { createScriptedModel } from "../../src/model/scripted.ts";
 import { e2ePreset, seedE2eAuthored } from "../e2e/fixture.ts";
 
+// Each call gets the answer its label asks for: a render call answered with an appraisal has no reply text and fails.
+const answer = (req: { label: string }): unknown => {
+  if (req.label === "render") return { text: "hi", cues: [], intent_realized: "talk" };
+  if (req.label === "reflect") return { summaries: [], goal_changes: [], new_claims: [] };
+  return { type: "chat", intensity: 0.5, sincerity: 0.9, claims: [], search_terms: [], tags: [], input_class: "normal" };
+};
 const models = {
-  s1: createScriptedModel("gate/s1", () => ({ text: "hi", cues: [], intent_realized: "talk" })),
-  s2: createScriptedModel("gate/s2", () => ({ type: "chat", intensity: 0.5, sincerity: 0.9, claims: [], search_terms: [], tags: [], input_class: "normal" })),
+  s1: createScriptedModel("gate/s1", answer),
+  s2: createScriptedModel("gate/s2", answer),
 };
 
 /** Resolve to "timeout" when `p` does not settle within `ms` (a wedged gate never settles). */

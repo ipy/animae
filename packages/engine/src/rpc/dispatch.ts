@@ -211,6 +211,66 @@ export function buildHandlerMap(
 
   bind("info", () => engine.info());
 
+  bind("gallery.list", async (params) => {
+    const p = paramsObject(params, ["opts"]);
+    return engine.gallery.list(p.opts as never);
+  });
+
+  bind("gallery.get", async (params) => {
+    const p = paramsObject(params, ["id", "opts"]);
+    return engine.gallery.get(requireString(p.id, "id"), p.opts as never);
+  });
+
+  bind("gallery.ratings", () => engine.gallery.ratings());
+
+  bind("gallery.unlock", async (params) => {
+    const p = paramsObject(params, ["id", "why"]);
+    return engine.gallery.unlock(requireString(p.id, "id"), p.why as never);
+  });
+
+  bind("gallery.capture", async (params) => {
+    const p = paramsObject(params, ["req"]);
+    return engine.gallery.capture(p.req as never);
+  });
+
+  bind("gallery.render", async (params) => {
+    const p = paramsObject(params, ["id", "opts"]);
+    return engine.gallery.render(requireString(p.id, "id"), p.opts as never);
+  });
+
+  bind("gallery.cancel", async (params) => {
+    const p = paramsObject(params, ["job"]);
+    return engine.gallery.cancel(requireString(p.job, "job"));
+  });
+
+  bind("gallery.remove", async (params) => {
+    const p = paramsObject(params, ["id"]);
+    await engine.gallery.remove(requireString(p.id, "id"));
+    return null;
+  });
+
+  bind("gallery.pin", async (params) => {
+    const p = paramsObject(params, ["id", "pinned"]);
+    await engine.gallery.pin(requireString(p.id, "id"), Boolean(p.pinned));
+    return null;
+  });
+
+  bind("gallery.jobs", () => engine.gallery.jobs());
+
+  bind("gallery.image", async (params) => {
+    const p = paramsObject(params, ["id"]);
+    const result = await engine.gallery.image(requireString(p.id, "id"));
+    if (!result) return null;
+    const { MAX_GALLERY_IMAGE_BYTES } = await import("../gallery/util.ts");
+    if (result.bytes.length > MAX_GALLERY_IMAGE_BYTES) {
+      throw new AnimaeError("GALLERY_GENERATION_FAILED", "Gallery image exceeds RPC size cap");
+    }
+    return {
+      ref: result.ref,
+      base64: Buffer.from(result.bytes).toString("base64"),
+    };
+  });
+
   for (const blocked of BLOCKED) {
     if (map.has(blocked)) map.delete(blocked);
   }

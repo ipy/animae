@@ -7,6 +7,9 @@ export interface GlobalCliOptions {
   seed?: number;
   /** BCP-47 UI locale (overrides env negotiation for engine-owned CLI/TUI output). */
   lang?: string;
+  /** External ImagePort adapter executable (JSON stdin, image bytes stdout). */
+  imageCommand?: string;
+  imageCommandArgs?: string[];
   help?: boolean;
   version?: boolean;
 }
@@ -23,6 +26,7 @@ export type ParsedCli =
   | { kind: "import-card"; global: GlobalCliOptions; file: string }
   | { kind: "export-card"; global: GlobalCliOptions; id: string }
   | { kind: "serve"; global: GlobalCliOptions; stdio: boolean }
+  | { kind: "gallery"; global: GlobalCliOptions; sub: string; rest: string[]; json?: boolean }
   | { kind: "i18n"; global: GlobalCliOptions; sub: string; rest: string[] };
 
 const COMMANDS = new Set([
@@ -35,6 +39,7 @@ const COMMANDS = new Set([
   "import-card",
   "export-card",
   "serve",
+  "gallery",
   "i18n",
   "help",
 ]);
@@ -56,6 +61,7 @@ Commands:
   import-card <file>             Import a character card
   export-card <id>               Export a character card
   serve --stdio                  JSON-RPC sidecar on stdin/stdout
+  gallery <sub> ...              Gallery list/show/capture/render (headless)
   i18n check|pseudo|extract      Locale catalog / prompt hygiene
 
 Global flags:
@@ -63,6 +69,8 @@ Global flags:
   --model-mode live|record|replay
   --seed <n>
   --lang <locale>                UI locale (BCP-47, e.g. en, zh-CN)
+  --image-command <path>         External ImagePort (JSON stdin, image stdout)
+  --image-command-arg <arg>      Extra argv for --image-command (repeatable)
   --version
   --help
 `;
@@ -81,7 +89,16 @@ function splitCommand(argv: string[]): { globalArgv: string[]; command: string; 
   return { globalArgv: argv, command: "", rest: [] };
 }
 
-const GLOBAL_FLAG_TOKENS = new Set(["--root", "--model-mode", "--seed", "--lang", "--version", "--help"]);
+const GLOBAL_FLAG_TOKENS = new Set([
+  "--root",
+  "--model-mode",
+  "--seed",
+  "--lang",
+  "--image-command",
+  "--image-command-arg",
+  "--version",
+  "--help",
+]);
 
 /** Move global flags (and their values) out of a subcommand argument list. */
 export function peelGlobalFlags(argv: string[]): { globalArgv: string[]; rest: string[] } {
@@ -89,7 +106,14 @@ export function peelGlobalFlags(argv: string[]): { globalArgv: string[]; rest: s
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i]!;
-    if (t === "--root" || t === "--model-mode" || t === "--seed" || t === "--lang") {
+    if (
+      t === "--root" ||
+      t === "--model-mode" ||
+      t === "--seed" ||
+      t === "--lang" ||
+      t === "--image-command" ||
+      t === "--image-command-arg"
+    ) {
       globalArgv.push(t, argv[i + 1] ?? "");
       i++;
       continue;
@@ -111,6 +135,8 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
       "model-mode": { type: "string" },
       seed: { type: "string" },
       lang: { type: "string" },
+      "image-command": { type: "string" },
+      "image-command-arg": { type: "string", multiple: true },
       version: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -128,11 +154,15 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
     throw new Error(`Invalid --seed: ${seedRaw}`);
   }
 
+  const imageCommandArgs = values["image-command-arg"] as string[] | undefined;
+
   return {
     root: values.root as string | undefined,
     modelMode,
     seed,
     lang: values.lang as string | undefined,
+    imageCommand: values["image-command"] as string | undefined,
+    imageCommandArgs: imageCommandArgs?.length ? imageCommandArgs : undefined,
     help: values.help as boolean,
     version: values.version as boolean,
   };
@@ -258,6 +288,23 @@ export function parseCli(argv: string[]): ParsedCli {
       });
       if (!values.stdio) throw new Error("serve requires --stdio");
       return { kind: "serve", global, stdio: true };
+    }
+    case "gallery": {
+      const sub = rest[0];
+      if (!sub) throw new Error("gallery requires a subcommand (list|show|capture|render|cancel|remove|pin|ratings|jobs)");
+      const tail = rest.slice(1);
+      const { values } = parseArgs({
+        args: tail,
+        options: { json: { type: "boolean", default: false } },
+        allowPositionals: true,
+      });
+      return {
+        kind: "gallery",
+        global,
+        sub,
+        rest: tail,
+        json: values.json as boolean,
+      };
     }
     case "i18n": {
       const sub = rest[0] ?? "check";

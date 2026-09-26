@@ -4,6 +4,7 @@ import type { Choice, EventDraft } from "../types.ts";
 import { AnimaeError } from "../types.ts";
 import { z } from "zod";
 import { descriptorToZod } from "../entities/descriptor.ts";
+import { getPromptSection } from "../prompts/index.ts";
 import { buildRenderSchema } from "./schemas.ts";
 import { buildPromptSegments } from "./prompt.ts";
 import { routerBudgetK } from "../router/policy-access.ts";
@@ -40,7 +41,8 @@ async function resolveHits(k: Kernel, i: RenderInput, t: TurnCtx): Promise<Retri
   return k.m.memory.distort(raw, rngKey);
 }
 
-function buildS2Tools(k: Kernel, speaker: string): ToolDef[] {
+export function buildS2Tools(k: Kernel, speaker: string): ToolDef[] {
+  const ploc = k.i18n.promptLocale;
   const searchInput = z.strictObject({
     query: z.string(),
     scope: z.string().optional(),
@@ -51,7 +53,7 @@ function buildS2Tools(k: Kernel, speaker: string): ToolDef[] {
   return [
     {
       name: "search",
-      description: "Search memories and knowledge by query",
+      description: getPromptSection(ploc, "tool_search_description"),
       input: searchInput,
       execute: async (input) => {
         const q = input as { query: string; scope?: string; tags?: string[] };
@@ -74,7 +76,7 @@ function buildS2Tools(k: Kernel, speaker: string): ToolDef[] {
     },
     {
       name: "read",
-      description: "Read full knowledge document by id",
+      description: getPromptSection(ploc, "tool_read_description"),
       input: readInput,
       execute: (input) => {
         const id = (input as { id: string }).id;
@@ -254,6 +256,8 @@ async function runRenderStream(
   if (!finalValue) throw new AnimaeError("RENDER_FAILED", "Render stream ended without final value");
 
   const text = String(finalValue.text ?? "").trim() || longestPartialText.trim();
+  // Never commit a blank utterance (it would also be written to memory); the turn fails and the player can resend.
+  if (!text) throw new AnimaeError("RENDER_FAILED", "Render model returned no text");
   const intent_realized = String(finalValue.intent_realized ?? "");
   const cues = (finalValue.cues as { type: string; args: Record<string, unknown>; at?: number }[]) ?? [];
   const choices = finalValue.choices as { text: string; expected_event_type: string; tags: string[] }[] | undefined;

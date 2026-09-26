@@ -10,6 +10,7 @@ import {
   resolvePresetChain,
   type CreateEngineOptions,
   type Engine,
+  type ImagePort,
   type ModelMode,
   type PresetBundle,
   type PresetRegistry,
@@ -24,6 +25,7 @@ export interface OpenEngineOptions {
   models?: CreateEngineOptions["models"];
   /** extra presets registered for lookup (extends chain) */
   presets?: PresetBundle[];
+  ports?: { image?: ImagePort };
 }
 
 export async function fullPresetRegistry(extra: PresetBundle[] = []): Promise<PresetRegistry> {
@@ -88,5 +90,6 @@ export async function openEngine(opts: OpenEngineOptions): Promise<Engine> {
     seed: opts.seed,
     models: opts.models,
     i18n: opts.lang ? { locale: opts.lang } : undefined,
+    ports: opts.ports,
   });
 }

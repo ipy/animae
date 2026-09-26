@@ -52,7 +52,9 @@ export function buildRenderSchema(policy: ResolvedPolicy) {
   });
 
   const base = {
-    text: z.string(),
+    // A reply without any text is not a reply: rejecting it lets the model adapter retry once with the repair hint
+    // instead of committing an empty utterance (a JSON object with other keys used to coerce into exactly that).
+    text: z.string().refine((s) => s.trim().length > 0, { message: "text must not be empty" }),
     cues: z.array(cueUnion).default([]),
     intent_realized: z.string(),
   };

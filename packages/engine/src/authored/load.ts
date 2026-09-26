@@ -19,6 +19,7 @@ import { loadCharacterFromFiles } from "./characters.ts";
 import { type ConfigIssue, throwConfigInvalid, zodIssues } from "./errors.ts";
 import { parseKnowledgeMarkdown } from "./knowledge.ts";
 import { crossReferenceAuthored } from "./validate.ts";
+import { validateGalleryAuthored } from "./gallery-validate.ts";
 import type { ModProvenanceEntry, ResolvedMod } from "../mod.ts";
 import { modFingerprint } from "../mods/resolve.ts";
 import { liftStringRefs, loadStringTables, resolveStringRefs } from "../i18n/string-resolve.ts";
@@ -256,6 +257,9 @@ export async function loadAuthored(
 
   const xrefIssues = crossReferenceAuthored(authored, () => {});
   if (xrefIssues.length) throwConfigInvalid(xrefIssues);
+
+  const galleryIssues = await validateGalleryAuthored(authored, (p) => storage.exists(p));
+  if (galleryIssues.length) throwConfigInvalid(galleryIssues);
 
   return authored;
 }

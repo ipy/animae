@@ -1,6 +1,7 @@
 import type { LocalizableValue } from "@animae/i18n";
 import type { HostCommand, HostCommandApi } from "./types.ts";
 import { runLlmlogCommand } from "./llmlog-command.ts";
+import { createGalleryCommand } from "./gallery-command.ts";
 
 function msg(key: string, params?: Record<string, string | number>): LocalizableValue {
   return params ? { i18n: { key, params } } : { i18n: { key } };
@@ -104,6 +105,7 @@ export const hostBuiltinCommands: Record<string, HostCommand> = {
     usage: ":llmlog [seq|dump]",
     run: runLlmlogCommand,
   },
+  gallery: createGalleryCommand(),
 };
 
 export async function runHostCommandLine(

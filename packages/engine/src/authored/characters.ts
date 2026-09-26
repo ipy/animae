@@ -1,4 +1,5 @@
 import type { BottomLineSchema, CardFrontmatter, CharacterDef } from "../schema/authored.ts";
+import { isNonPromptBody, stripHtmlComments } from "../prose/for-prompt.ts";
 import type { z } from "zod";
 import {
   CardFrontmatterSchema,
@@ -107,7 +108,12 @@ export function loadCharacterFromFiles(
     id: charId,
     origin: "authored",
     card: cardParsed.data,
-    persona: body.trim(),
+    persona: (() => {
+      const cleaned = stripHtmlComments(body).trim();
+      const stubTail = /\n---\n\{\}\n---[\s\S]*$/;
+      const withoutStub = cleaned.replace(stubTail, "").trim();
+      return isNonPromptBody(withoutStub) ? "" : withoutStub;
+    })(),
     traits,
     tracks,
     goals,

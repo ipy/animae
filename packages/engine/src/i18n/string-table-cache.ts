@@ -45,6 +45,7 @@ export class StringTableCache {
         this.strictTables.set(locale, {
           warnings: r.warnings,
           resolve: (key: string) => own?.[key] ?? r.resolve(key),
+          entries: () => ({ ...r.entries(), ...own }),
         });
         this.strictPending.delete(locale);
       });
@@ -70,6 +71,7 @@ export class StringTableCache {
             }
             return r.resolve(key);
           },
+          entries: () => ({ ...r.entries(), ...presetStrings[locale], ...presetStrings[fallbackLocale] }),
         };
         this.tables.set(locale, merged);
         this.pending.delete(locale);
@@ -80,9 +82,17 @@ export class StringTableCache {
     return p;
   }
 
+  /**
+   * The warmed table for `locale`, or for its bare language when only that was warmed (a viewer asking for `en-US`
+   * is served by the `en` tables instead of silently falling through to the UI catalogs).
+   */
+  private nearest<T>(byLocale: Map<string, T>, locale: string): T | undefined {
+    return byLocale.get(locale) ?? byLocale.get(locale.split("-")[0]!);
+  }
+
   /** Sync translate after `warm()` for that locale. */
   t(locale: string, key: string, params?: FormatParams): string {
-    const tables = this.tables.get(locale);
+    const tables = this.nearest(this.tables, locale);
     const engineI18n = createEngineI18n(locale, [this.fallbackLocale]);
     const hit = tables?.resolve(key);
     if (hit !== undefined) return hit;
@@ -94,7 +104,7 @@ export class StringTableCache {
    * string. Unlike `t`, this never falls back to another locale or to the catalog.
    */
   lookup(locale: string, key: string): string | undefined {
-    return this.strictTables.get(locale)?.resolve(key);
+    return this.nearest(this.strictTables, locale)?.resolve(key);
   }
 
   resolveValue(locale: string, value: unknown): unknown {

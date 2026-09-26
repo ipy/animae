@@ -12,6 +12,11 @@ import {
   type WebSecurityConfig,
 } from "./security.ts";
 import { SessionRoom, type WebSessionHooks } from "./session-room.ts";
+import {
+  defaultGalleryImagePolicy,
+  serveGalleryImageRequest,
+  type GalleryImagePolicyFn,
+} from "./gallery-image.ts";
 
 interface WsData {
   id: string;
@@ -22,6 +27,15 @@ interface WsData {
   locale: string;
 }
 
+export interface WebGalleryServerOptions {
+  /** Authored default rating id (Cache-Control policy fallback). */
+  defaultRating?: string;
+  /** Per-item cache policy for HTTP image responses. */
+  galleryImagePolicy?: GalleryImagePolicyFn;
+  /** Allow `gallery_unlock` over the WebSocket (debug / dev). */
+  allowGalleryUnlock?: boolean;
+}
+
 export interface CreateWebServerOptions {
   host: SessionHost;
   port: number;
@@ -30,6 +44,7 @@ export interface CreateWebServerOptions {
   authToken?: string;
   extraOrigins?: string[];
   hooks?: WebSessionHooks;
+  gallery?: WebGalleryServerOptions;
   version?: string;
   onListen?: (info: { url: string; token?: string }) => void;
 }
@@ -40,6 +55,7 @@ export interface WebServerHandle {
   room: SessionRoom;
   url: string;
   stop(): void;
+  pushGalleryNotice(notice: import("@animae/engine").GalleryNotice): void;
 }
 
 export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
@@ -52,7 +68,11 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
   });
 
   const sessionId = randomUUID();
-  const room = new SessionRoom(sessionId, opts.host, security, opts.hooks ?? {});
+  const defaultRating = opts.gallery?.defaultRating ?? "general";
+  const imagePolicy = opts.gallery?.galleryImagePolicy ?? defaultGalleryImagePolicy(defaultRating);
+  const room = new SessionRoom(sessionId, opts.host, security, opts.hooks ?? {}, {
+    allowGalleryUnlock: opts.gallery?.allowGalleryUnlock ?? false,
+  });
 
   const heartbeatMs = 30_000;
   const server = Bun.serve<WsData>({
@@ -78,6 +98,10 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
           package: "@animae/web",
           app: opts.version ?? "unknown",
         });
+      }
+
+      if (url.pathname.startsWith("/api/gallery/image/")) {
+        return serveGalleryImageRequest(req, url, opts.host, imagePolicy);
       }
 
       const origin = req.headers.get("origin");
@@ -153,6 +177,9 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
     security,
     room,
     url: url + tokenQuery,
+    pushGalleryNotice(notice) {
+      room.emitGalleryNotice(notice);
+    },
     stop() {
       room.close();
       server.stop();

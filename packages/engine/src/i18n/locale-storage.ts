@@ -4,7 +4,7 @@ import { parseFrontmatter, parseYaml, stringifyYaml } from "../store/util.ts";
 
 export interface LocaleStorageLayerOptions {
   base: StoragePort;
-  /** ordered BCP-47 tags (primary first) */
+  /** ordered BCP-47 tags, most preferred first; the first tag that localizes a path wins (see resolveLogicalText) */
   localeChain: readonly string[];
 }
 
@@ -38,10 +38,16 @@ export function createLocaleOverlayStorage(opts: LocaleStorageLayerOptions): Sto
 
   async function resolveLogicalText(logicalPath: string): Promise<string | undefined> {
     let content = await base.readText(logicalPath);
+    const appendPath = logicalPath.endsWith("card.md") ? logicalPath.replace(/card\.md$/, "card.append.md") : undefined;
+    // The chain lists the most preferred locale first. A logical path is localized by the FIRST locale that provides
+    // anything for it (full file, patch or card append); later tags only fill gaps, so a fallback translation never
+    // overrides or doubles up the preferred one.
     for (const locale of localeChain) {
       const full = await readLocaleFile(locale, logicalPath);
-      if (full !== undefined) content = full;
       const patchText = await readLocaleFile(locale, patchPathFor(logicalPath));
+      const append = appendPath ? await readLocaleFile(locale, appendPath) : undefined;
+      if (full === undefined && patchText === undefined && append === undefined) continue;
+      if (full !== undefined) content = full;
       if (patchText !== undefined && content !== undefined) {
         if (logicalPath.endsWith(".md")) content = mergeMarkdownWithPatch(content, patchText);
         else if (logicalPath.endsWith(".yaml")) {
@@ -49,11 +55,8 @@ export function createLocaleOverlayStorage(opts: LocaleStorageLayerOptions): Sto
           content = stringifyYaml(applyPatchMerge(baseDoc, parseYaml(patchText)));
         }
       }
-      const appendPath = logicalPath.endsWith("card.md") ? logicalPath.replace(/card\.md$/, "card.append.md") : undefined;
-      if (appendPath) {
-        const append = await readLocaleFile(locale, appendPath);
-        if (append !== undefined && content !== undefined) content = `${content.trimEnd()}\n\n${append.trim()}\n`;
-      }
+      if (append !== undefined && content !== undefined) content = `${content.trimEnd()}\n\n${append.trim()}\n`;
+      break;
     }
     return content;
   }

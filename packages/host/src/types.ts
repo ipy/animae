@@ -54,6 +54,8 @@ export interface HostCommandApi {
   locale?(): string;
   /** Translate host catalog keys for the current viewer locale. */
   t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
+  /** Open a gallery image path (OS viewer); set by SessionHost when configured. */
+  openFile?(path: string): void | Promise<void>;
 }
 
 export interface HostCommandUiBridge {
@@ -165,6 +167,8 @@ export interface StreamCallbacks {
   onToast?(level: "info" | "warn" | "error", text: string): void;
   onBusy?(active: boolean, requestId?: string): void;
   onStateChange?(): void;
+  /** Gallery job/unlock/changed notices (mirrors engine `GalleryNotice`). */
+  onGalleryNotice?(notice: import("@animae/engine").GalleryNotice): void;
 }
 
 export type TurnChunkHandler = (chunk: TurnChunk) => void;

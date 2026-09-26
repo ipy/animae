@@ -59,6 +59,7 @@ class PtySession:
     screen: object | None = None
     _stream: Callable[..., object] | None = None
     draft_file: str | None = None
+    _master_open: bool = True
 
     def __enter__(self) -> PtySession:
         return self
@@ -110,7 +111,16 @@ class PtySession:
             self._thread.join(timeout=2.0)
 
     def write(self, data: bytes) -> None:
-        os.write(self.master, data)
+        if not self._master_open:
+            return
+        try:
+            os.write(self.master, data)
+        except OSError:
+            self._master_open = False
+
+    @property
+    def master_writable(self) -> bool:
+        return self._master_open
 
     def plain(self) -> str:
         with self._lock:
@@ -379,6 +389,7 @@ class PtySession:
             os.close(self.master)
         except OSError:
             pass
+        self._master_open = False
 
     def close(self) -> None:
         self.stop()
@@ -396,6 +407,7 @@ class PtySession:
             os.close(self.master)
         except OSError:
             pass
+        self._master_open = False
 
 
 def spawn_host_dist(

@@ -20,6 +20,7 @@ Implementation: `packages/engine/src/rpc/`.
 |--------|--------|
 | `turn.chunk` | `{ requestId, chunk: TurnChunk }` — during `scene.turn` / `timeline.replay` (see utterance rules below) |
 | `event` | `{ kind, event }` — after `subscribe` |
+| `gallery.notice` | `GalleryNotice` — unlock / job progress / item changed ([gallery.md](./gallery.md)) |
 
 Client notifications are rejected (except ignored `ping`).
 
@@ -145,5 +146,23 @@ Response:
 ```json
 {"jsonrpc":"2.0","id":3,"result":{"events":["evt_..."], "chunks":[...], "summary":{"turnId":"turn_0001"}}}
 ```
+
+### Gallery
+
+| Method | Params | Result |
+|--------|--------|--------|
+| `gallery.list` | `{ opts?: GalleryListOptions }` | `GalleryItemView[]` |
+| `gallery.get` | `{ id, opts? }` | `GalleryItemView \| null` |
+| `gallery.ratings` | — | `GalleryRatingView[]` |
+| `gallery.unlock` | `{ id, why? }` | `GalleryItemView` |
+| `gallery.capture` | `{ req?: GalleryCaptureRequest }` | `{ item, job }` |
+| `gallery.render` | `{ id, opts? }` | `{ job }` |
+| `gallery.cancel` | `{ job }` | `boolean` |
+| `gallery.remove` | `{ id }` | `null` |
+| `gallery.pin` | `{ id, pinned }` | `null` |
+| `gallery.jobs` | — | `GalleryJobView[]` |
+| `gallery.image` | `{ id }` | `{ ref, base64 } \| null` (decoded cap 12 MiB; null when locked/unavailable) |
+
+See [gallery.md](./gallery.md) for types and gating rules.
 
 See [embedding.md](./embedding.md) for Python stdio example.

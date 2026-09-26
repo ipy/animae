@@ -24,6 +24,12 @@ export function validateAliasLabel(label: string): void {
   if (/[\u0000-\u001f\u007f]/.test(t)) {
     throw new AnimaeError("ENTITY_INVALID", "alias label must not contain control characters");
   }
+  if (t.includes("{{") || t.includes("}}")) {
+    throw new AnimaeError("ENTITY_INVALID", "alias label must not contain name-reference markers");
+  }
+  if (t.startsWith("$t:")) {
+    throw new AnimaeError("ENTITY_INVALID", "alias label must not be a string-table reference");
+  }
 }
 
 /** Plain string for matching when authored fields use `$t:` / `{ i18n: { key } }` (late UI binding). */
@@ -42,6 +48,13 @@ export interface DisplayNameOptions {
   viewer?: CharacterId;
   /** Speaker addressing viewer (enables per-addressee labels). */
   speaker?: CharacterId;
+  /**
+   * Spelling in the language the text is shown in, for UI text shown in another language than the cards are written
+   * in. Consulted after runtime aliases (a name the player chose always wins) and before the card's own label; `field`
+   * says which card label is being replaced (`nickname` when the card has one, otherwise `name`). Return `undefined`
+   * to keep the card's label.
+   */
+  localized?: (id: CharacterId, field: "name" | "nickname") => string | undefined;
 }
 
 /** Resolved display string for prompts and UI (nickname-aware, optional address-as). */
@@ -66,6 +79,8 @@ export function entityDisplayName(
   if (def?.card?.identity) {
     const nick = authoredFieldPlain(def.card.identity.nickname);
     const name = authoredFieldPlain(def.card.identity.name);
+    const localized = opts?.localized?.(entityId, nick ? "nickname" : "name")?.trim();
+    if (localized) return localized;
     return nick || name || entityId;
   }
   return st?.name ?? entityId;

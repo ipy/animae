@@ -2,12 +2,12 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-function isAppendMarker(v: unknown): v is { $append: unknown[] } {
-  return isPlainObject(v) && Array.isArray(v.$append) && Object.keys(v).length === 1;
+function isAppendMarker(v: unknown): v is { $append: unknown[] | string } {
+  return isPlainObject(v) && (Array.isArray(v.$append) || typeof v.$append === "string") && Object.keys(v).length === 1;
 }
 
-function isPrependMarker(v: unknown): v is { $prepend: unknown[] } {
-  return isPlainObject(v) && Array.isArray(v.$prepend) && Object.keys(v).length === 1;
+function isPrependMarker(v: unknown): v is { $prepend: unknown[] | string } {
+  return isPlainObject(v) && (Array.isArray(v.$prepend) || typeof v.$prepend === "string") && Object.keys(v).length === 1;
 }
 
 function isReplaceMarker(v: unknown): v is { $replace: unknown[] } {
@@ -44,10 +44,12 @@ function applyRemove(base: unknown[], incoming: unknown[]): unknown[] {
 export function applyPatchMerge(base: unknown, patch: unknown): unknown {
   if (patch === null || patch === undefined) return base;
   if (isAppendMarker(patch)) {
+    if (typeof patch.$append === "string") return `${typeof base === "string" ? base : ""}${patch.$append}`;
     const arr = Array.isArray(base) ? base : [];
     return [...arr, ...patch.$append];
   }
   if (isPrependMarker(patch)) {
+    if (typeof patch.$prepend === "string") return `${patch.$prepend}${typeof base === "string" ? base : ""}`;
     const arr = Array.isArray(base) ? base : [];
     return [...patch.$prepend, ...arr];
   }

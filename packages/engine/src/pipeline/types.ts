@@ -40,6 +40,8 @@ export interface PromptInput {
   tiers?: Record<string, string | null>;
   /** Current actor utterance (appraise user message). */
   actorText?: string;
+  /** Extra instructions that stay the same from turn to turn: part of the static (cacheable) segment. */
+  extraStatic?: string;
   /** Extra dynamic instructions (e.g. mismatch retry). */
   extraDynamic?: string;
   /** Per-turn player-facing generation language (defaults to engine `outputLocale`). */

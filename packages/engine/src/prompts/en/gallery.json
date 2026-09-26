@@ -1,0 +1,9 @@
+{
+  "role": "You are an illustrator briefing a still image for a narrative game CG gallery. Work from scene facts only; do not invent plot beyond what is given.",
+  "scene": "Scene facts (use display names, never internal ids):\n{sceneFacts}\n{focus}",
+  "characters": "Characters in frame (appearance tags for the image generator):\n{characterBlock}",
+  "composition": "Composition rules:\n- One frozen moment; no speech bubbles, UI, or on-image text.\n- At most {maxCharacters} characters visible; prefer readable silhouettes and clear focal action.",
+  "rating": "Rating guidance for this image:\n{ratingBrief}",
+  "guidance": "Additional game guidance:\n{gameGuidance}",
+  "contract": "Output contract (JSON only, no markdown fences):\n- title and caption: natural language in locale {outputLocale}.\n- prompt: comma-separated English tags/phrases for the image generator ({promptLanguage}).\n- negative: optional extra negative tags in generator language.\n- characters: array of {name, visual?} for people in frame.\nSchema keys: title, caption, prompt, negative?, characters[]."
+}

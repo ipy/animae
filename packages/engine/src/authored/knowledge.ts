@@ -1,4 +1,5 @@
 import { KnowledgeFrontmatterSchema, type KnowledgeDoc } from "../schema/authored.ts";
+import { cleanMarkdownBodyForPrompt, isNonPromptBody } from "../prose/for-prompt.ts";
 import { parseFrontmatter } from "../store/util.ts";
 import { type ConfigIssue, zodIssues } from "./errors.ts";
 
@@ -29,10 +30,11 @@ export function parseKnowledgeMarkdown(
       ? knowledgeDocId("world", relPath.replace(/^world\/knowledge\//, ""))
       : knowledgeDocId(`character:${docOwner ?? owner ?? "unknown"}`, relPath.split("/").pop() ?? relPath);
 
+  const cleanedBody = cleanMarkdownBodyForPrompt(text);
   const doc: KnowledgeDoc = {
     ...parsed.data,
     id,
-    body,
+    body: isNonPromptBody(cleanedBody) ? "" : cleanedBody,
     path: relPath,
     owner: docOwner,
   };

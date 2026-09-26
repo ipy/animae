@@ -1,6 +1,7 @@
 import { localizeError, type FormatParams } from "@animae/i18n";
 import { writeModelCallLogJsonl, type ModelCallLogEntry } from "@animae/engine";
 import type { CommandApi, CustomCommand } from "../types.ts";
+import { runGalleryCommand } from "./gallery.ts";
 
 type TFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -153,6 +154,11 @@ export const builtinCommands: Record<string, CustomCommand> = {
         })
         .join("\n");
     },
+  },
+  gallery: {
+    description: "command.desc.gallery",
+    usage: "command.usage.gallery",
+    run: runGalleryCommand,
   },
   mouse: {
     description: "command.desc.mouse",

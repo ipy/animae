@@ -10,6 +10,7 @@ import { printError } from "./errors.ts";
 import { helpText, parseCli, type GlobalCliOptions } from "./args.ts";
 import { readPackageVersion } from "./version.ts";
 import { runI18n } from "./commands/i18n.ts";
+import { runGallery } from "./commands/gallery.ts";
 
 function engineOpts(global: GlobalCliOptions) {
   return {
@@ -17,6 +18,8 @@ function engineOpts(global: GlobalCliOptions) {
     modelMode: global.modelMode,
     seed: global.seed,
     lang: global.lang,
+    imageCommand: global.imageCommand,
+    imageCommandArgs: global.imageCommandArgs,
   };
 }
 
@@ -58,6 +61,11 @@ export async function runCli(argv: string[], _env: Record<string, string | undef
         return runExportCard(parsed.id, engineOpts(parsed.global));
       case "serve":
         return runServe({ ...engineOpts(parsed.global), stdio: parsed.stdio });
+      case "gallery":
+        return runGallery(parsed.sub, parsed.rest, {
+          ...engineOpts(parsed.global),
+          json: parsed.json,
+        });
       case "i18n":
         return runI18n(parsed.sub, parsed.rest);
       default:

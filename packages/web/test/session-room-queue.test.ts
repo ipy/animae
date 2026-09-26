@@ -3,15 +3,10 @@ import { SessionHost } from "@animae/host";
 import { SessionRoom } from "../src/server/session-room.ts";
 import type { Engine } from "@animae/engine";
 
+import { baseStubEngine } from "./helpers/stub-engine.ts";
+
 function stubEngine(): Engine {
-  return {
-    world: { now: () => ({ day: 1, minute: 0 }) },
-    query: () => ({}),
-    timeline: { current: () => ({ name: "main" }) },
-    scene: { start: async () => "s", end: async () => {}, turn: async function* () {} },
-    mods: () => null,
-    on: () => () => {},
-  } as unknown as Engine;
+  return baseStubEngine();
 }
 
 type FakeWs = {

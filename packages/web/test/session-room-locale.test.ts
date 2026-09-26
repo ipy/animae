@@ -3,6 +3,7 @@ import { SessionHost } from "@animae/host";
 import { getRequestLocale } from "@animae/i18n";
 import { SessionRoom } from "../src/server/session-room.ts";
 import type { Engine } from "@animae/engine";
+import { galleryStub } from "./helpers/stub-engine.ts";
 
 function stubEngine(): Engine {
   return {
@@ -12,6 +13,7 @@ function stubEngine(): Engine {
     scene: { start: async () => "s", end: async () => {}, turn: async function* () {} },
     mods: () => null,
     on: () => () => {},
+    gallery: galleryStub(),
   } as unknown as Engine;
 }
 
@@ -168,6 +170,7 @@ describe("SessionRoom request locale scope", () => {
       scene: { start: async () => "s", end: async () => {}, turn: async function* () {} },
       mods: () => null,
       on: () => () => {},
+      gallery: galleryStub(),
     } as unknown as Engine;
   }
 

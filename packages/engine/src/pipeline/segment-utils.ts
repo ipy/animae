@@ -15,13 +15,20 @@ export function estimateTokensForText(text: string): number {
   return Math.ceil(cjk / 1.6 + other / 4);
 }
 
-const TRUNC_MARKER = "\n\n[…truncated to segment budget…]";
+import { assembleBudgetSections, type BudgetSection } from "./section-budget.ts";
 
+/** @deprecated Prefer section-aware {@link assembleBudgetSections}; kept for callers that pass one blob. */
 export function truncateToCharBudget(text: string, maxChars: number | undefined): string {
   if (!maxChars || text.length <= maxChars) return text;
-  const keep = Math.max(0, maxChars - TRUNC_MARKER.length);
-  return `${text.slice(0, keep).trimEnd()}${TRUNC_MARKER}`;
+  return assembleBudgetSections([{ id: "body", priority: 0, text }], maxChars).text;
 }
+
+export function budgetSingleSection(id: string, text: string, maxChars: number | undefined): { text: string; dropped: string[] } {
+  return assembleBudgetSections([{ id, priority: 0, text }], maxChars);
+}
+
+export type { BudgetSection };
+export { assembleBudgetSections };
 
 export function segmentMetrics(text: string): { chars: number; tokensEst: number } {
   const chars = text.length;

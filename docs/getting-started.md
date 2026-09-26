@@ -73,6 +73,8 @@ Use `openai-compatible` with `baseURL` + `name` for OpenRouter, vLLM, LM Studio,
 
 Exit code `0` prints `OK`. Failures list `file:path: message` lines.
 
+Optional **CG gallery**: add a `gallery:` block to `animae.yaml` (preset entries, ratings) and wire an `ImagePort` when you want on-demand captures or generated preset art. Shipped images under `gallery/art/` validate with the rest of the data root. See [gallery.md](./gallery.md).
+
 Optional **content mods** (`mods/<id>/`, `animae.yaml` `mods:` list) overlay authored files; see [mods.md](./mods.md). A host application can override the enabled set via `createEngine({ mods, modBundles })` without editing the data root.
 
 From repo source (without rebuilding):

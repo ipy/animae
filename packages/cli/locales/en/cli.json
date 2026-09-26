@@ -12,5 +12,32 @@
     "advance_usage": "Usage: :advance <duration>",
     "advanced": "Advanced {duration}",
     "unknown": "Unknown command: {name}"
+  },
+  "gallery": {
+    "help": "Usage: animae gallery list|show|capture|render|cancel|remove|pin|ratings|jobs [--json]",
+    "list_empty": "Gallery is empty.",
+    "show_usage": "Usage: animae gallery show <id>",
+    "not_found": "No gallery entry: {id}",
+    "capture_started": "Capture queued: {item} (job {job})",
+    "render_usage": "Usage: animae gallery render <id> [--reroll]",
+    "render_started": "Render queued for {id} (job {job})",
+    "no_job": "No active gallery job.",
+    "cancelled": "Cancelled job {job}",
+    "cancel_failed": "Could not cancel job {job}",
+    "remove_usage": "Usage: animae gallery remove <id>",
+    "removed": "Removed {id}",
+    "pin_usage": "Usage: animae gallery pin <id> [--unpin]",
+    "pinned": "Pinned {id}",
+    "unpinned": "Unpinned {id}",
+    "unknown_sub": "Unknown gallery subcommand: {sub}"
+  },
+  "error": {
+    "gallery_no_generator": "No image generator is configured (GALLERY_NO_GENERATOR).",
+    "gallery_unknown_entry": "Unknown gallery entry (GALLERY_UNKNOWN_ENTRY).",
+    "gallery_locked": "That entry is still locked (GALLERY_LOCKED).",
+    "gallery_rating_unavailable": "That rating is not available right now (GALLERY_RATING_UNAVAILABLE).",
+    "gallery_busy": "Gallery queue is full; try again later (GALLERY_BUSY).",
+    "gallery_brief_invalid": "Could not build a valid image brief (GALLERY_BRIEF_INVALID).",
+    "gallery_generation_failed": "Image generation failed (GALLERY_GENERATION_FAILED)."
   }
 }

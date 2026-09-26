@@ -35,7 +35,9 @@ import { message as systemMessage } from "../i18n/system-message.ts";
 import { collectPresetDisplayStrings } from "../i18n/preset-display-strings.ts";
 import { StringTableCache } from "../i18n/string-table-cache.ts";
 import { liftStringRefs } from "../i18n/string-resolve.ts";
+import { expandNameRefs } from "../entities/name-refs.ts";
 import { normalizeLocaleTag } from "@animae/i18n";
+import { createGalleryService } from "../gallery/service.ts";
 
 function sessionId(opts: CreateEngineOptions): string {
   return opts.sessionId ?? `sess_${Date.now().toString(36)}`;
@@ -174,8 +176,18 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       ].map(normalizeLocaleTag),
     ),
   ]);
+  const contentTag = normalizeLocaleTag(engineLocale.contentLocale);
   const displayText: DisplayText = {
-    resolve: (locale, value) => stringTables.resolveValue(normalizeLocaleTag(locale), liftStringRefs(value)),
+    resolve: (locale, value, resolveOpts) => {
+      const tag = normalizeLocaleTag(locale);
+      const resolved = stringTables.resolveValue(tag, liftStringRefs(value));
+      if (typeof resolved !== "string" || !resolved.includes("{{")) return resolved;
+      const localized =
+        resolveOpts?.localizeNames && tag !== contentTag
+          ? (id: string, field: "name" | "nickname") => stringTables.lookup(tag, `character.${id}.${field}`)
+          : undefined;
+      return expandNameRefs(resolved, { state: timeline.state(), catalog }, localized ? { localized } : undefined);
+    },
     lookup: (locale, key) => stringTables.lookup(normalizeLocaleTag(locale), key),
     prepare: (locales) => stringTables.warm([...new Set(locales.map(normalizeLocaleTag))]),
   };
@@ -194,6 +206,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     timeline,
     models,
     embedding: opts.ports?.embedding,
+    image: opts.ports?.image,
     catalog,
     emit: (drafts, ctx) => timeline.append(drafts, ctx),
     celContext: (p) =>
@@ -214,8 +227,11 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
   const introspect = createIntrospect(kernel);
   const router = createRouter(kernel);
   const entities = createEntityService(kernel);
+  const gallery = createGalleryService(kernel, opts.ports?.image, {
+    now: opts.now ? () => opts.now!().toISOString() : undefined,
+  });
 
-  kernel.m = { fields, director, world, memory, introspect, router, entities };
+  kernel.m = { fields, director, world, memory, introspect, router, entities, gallery };
 
   await timeline.open();
 
@@ -249,6 +265,9 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       const r = await checkHotReload(kernel, live, presets, { knownRuleFns, modCtx });
       if (r.modCtx) modCtx = r.modCtx;
     },
+    afterSceneEnd: async () => {
+      await gallery.afterSceneEnd?.();
+    },
   });
 
   async function afterTimelineMutation(): Promise<void> {
@@ -259,7 +278,12 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     world: {
       now: () => world.now(),
       advance: (by) => mutationGate.withLock(() => world.advance(by)),
-      set: (path, value) => mutationGate.withLock(() => world.set(path, value)),
+      set: (path, value) =>
+        mutationGate.withLock(async () => {
+          const ev = await world.set(path, value);
+          await gallery.afterWorldChange?.();
+          return ev;
+        }),
       move: (who, location) => mutationGate.withLock(() => world.move(who, location)),
     },
     scene: {
@@ -412,8 +436,10 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       modelMode,
     }),
     modelCallLog,
+    gallery,
     close: async () => {
       await mutationGate.drain();
+      await gallery.close?.();
       await timeline.close();
       await storage.releaseLock();
     },

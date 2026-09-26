@@ -134,7 +134,7 @@
     "mouse_on": "Mouse capture enabled (Shift+drag still selects text in most terminals).",
     "mouse_off": "Mouse capture disabled — native selection restored.",
     "mouse_usage": "Usage: :mouse on|off|status · shortcut Ctrl+M",
-    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :gallery :help :quit",
     "rewind_usage": "Usage: :rewind <eventId>",
     "query_usage": "Usage: :query <viewer> <path>",
     "advance_usage": "Usage: :advance <duration>",
@@ -152,7 +152,8 @@
       "quit": "Exit TUI",
       "lang": "Set UI language",
       "mouse": "Toggle terminal mouse capture (on|off|status)",
-      "llmlog": "Inspect recent model calls (debug)"
+      "llmlog": "Inspect recent model calls (debug)",
+      "gallery": "CG gallery panel and commands"
     },
     "llmlog_disabled": "Model call log is not enabled for this session.",
     "llmlog_empty": "No model calls recorded yet.",
@@ -167,7 +168,39 @@
       "advance": ":advance <duration>",
       "lang": ":lang <locale>",
       "mouse": ":mouse [on|off|status]",
-      "llmlog": ":llmlog [seq|dump]"
+      "llmlog": ":llmlog [seq|dump]",
+      "gallery": ":gallery [list|show|capture|render|...]"
+    },
+    "gallery": {
+      "list_empty": "Gallery is empty.",
+      "show_usage": "Usage: :gallery show <id>",
+      "not_found": "No gallery entry: {id}",
+      "delegated_hint": "Use the gallery panel for capture/render actions."
     }
+  },
+  "gallery": {
+    "title": "CG Gallery",
+    "empty": "No gallery entries yet.",
+    "locked_tag": "(locked)",
+    "masked_title": "Restricted entry",
+    "reveal_hint": "Press Enter to reveal title.",
+    "image_line": "{path} ({w}x{h})",
+    "keys_footer": "↑↓ select · Enter reveal · c capture · r render · x cancel · o open · p pin · d delete · Esc close",
+    "no_image": "No image available for this entry.",
+    "delete_confirm": "Press d again to remove this captured entry.",
+    "notice": {
+      "unlocked": "Gallery unlocked: {item}",
+      "job_done": "Gallery image ready: {item}",
+      "job_failed": "Gallery job failed: {item} ({code})"
+    }
+  },
+  "error": {
+    "gallery_no_generator": "No image generator is configured (GALLERY_NO_GENERATOR).",
+    "gallery_unknown_entry": "Unknown gallery entry (GALLERY_UNKNOWN_ENTRY).",
+    "gallery_locked": "That entry is still locked (GALLERY_LOCKED).",
+    "gallery_rating_unavailable": "That rating is not available right now (GALLERY_RATING_UNAVAILABLE).",
+    "gallery_busy": "Gallery queue is full; try again later (GALLERY_BUSY).",
+    "gallery_brief_invalid": "Could not build a valid image brief (GALLERY_BRIEF_INVALID).",
+    "gallery_generation_failed": "Image generation failed (GALLERY_GENERATION_FAILED)."
   }
 }

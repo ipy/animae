@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### `@animae/engine`
+
+- **CG gallery:** optional `ImagePort`, `Engine.gallery` (`GalleryService`), authored ratings and preset/captured entries, CEL unlocks, model brief (`cg_brief`), job queue (cancel, retry), profile-scoped `gallery/collection.json`, events `gallery.*`, RPC `gallery.*` + `gallery.notice`. Gallery display strings resolve with `display.resolve(..., { localizeNames: true })`.
+- **Name references:** `{{name:<id>}}` in authored text; string-table keys `character.<id>.name|nickname`; prompt glossary uses the **nickname** string when the card defines one, otherwise `name`; `DisplayText.resolve(..., { localizeNames })` for UI in another language than card prose.
+- **Locale overlays:** first locale in the content chain that provides a file/patch/append wins for that path (fallback locales do not override).
+- **Patch merge:** `$append` / `$prepend` on string values in policy and mod patches.
+- **Prompt assembly:** section-aware `render.maxSegmentChars`, `render.recall.*` caps, `render.knowledgeIndexMax`, `x.prompt.*` conventions; `template_partials` are render-only; knowledge `inject` / `when` with `model.tags`.
+- **i18n:** strict per-locale string lookup for display; no raw `$t:` keys in assembled prompts.
+- **Leaner appraisal prompts:** the stage's constant instructions go to the static (cacheable) segment through `PromptInput.extraStatic`, only per-turn extras stay dynamic; appraise receives no contextual (`when`) knowledge and no template-partial narration guidance.
+- **Recall without repeats:** a retrieved knowledge document that the prompt already carries in full (always-injected in static, contextual in dynamic) is no longer recalled again as an excerpt.
+- **Reflection prompt:** the static segment spells out all three output fields with the shape of their items (naming `goal_changes` / `new_claims` alone made a real model answer claims as plain strings, so every reflection was rejected by the schema) and states one output language for all text; the dynamic segment lists the character's current goals with their ids so `update` / `remove` can name one.
+- **Blank replies:** the render schema rejects a reply without text (the adapter then retries once with the repair hint, and `renderStage` fails with `RENDER_FAILED` instead of committing a blank utterance and memory); `dialogue` / `speech` / `reply` / `response` / `content` / `message` / `line` / `narration` are read as `text` when a model ignores the field name.
+
+### `@animae/host`
+
+- Gallery accessors, `:gallery`, localized `GALLERY_*` errors (`gallery-errors.ts`), optional `galleryNotices` (`maskTitle`, `toasts`).
+
+### `@animae/web`
+
+- Gallery client messages, `gallery_notice` push, image HTTP route; optional host hook **`images_probe`** for generator health checks with unsaved settings draft.
+
 ### Documentation
 
 - English [spec.md](./spec.md) is canonical; [spec.zh-CN.md](./spec.zh-CN.md) is the Chinese edition.

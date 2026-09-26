@@ -3,6 +3,7 @@ import { AnimaeError, type CharacterId, type EventDraft, type SceneId } from "..
 import type { Kernel } from "../contracts.ts";
 import { stringifyYaml } from "../store/util.ts";
 import { summaryMdPath } from "./util.ts";
+import { buildReflectionPromptSegments } from "./reflect-prompt.ts";
 
 // Model output, not authored data: keys a model adds on its own (`confidence`, `reason`, `mood`) are dropped instead of
 // failing the reflection, so these are plain (stripping) objects rather than strict ones.
@@ -86,23 +87,13 @@ export async function runReflectionForOwner(
   const def = k.catalog.character(owner);
   if (!def) return { owner, accepted: false };
 
-  const sceneEvents = k.timeline.events().filter((e) => e.scene === sceneId);
-  const memLines = sceneEvents
-    .filter((e) => e.kind === "memory.written" && (e as { owner?: string }).owner === owner)
-    .map((e) => JSON.stringify(e))
-    .join("\n");
-  const prompt = [
-    `Reflect on scene ${sceneId} for character ${owner}.`,
-    "Recent scene events and memories:",
-    ...sceneEvents.slice(-40).map((e) => `${e.kind}: ${JSON.stringify(e)}`),
-    memLines,
-  ].join("\n");
+  const segments = buildReflectionPromptSegments(k, sceneId, owner);
 
   let proposal: ReflectionOutput;
   try {
     proposal = await k.models.s2.object({
       label: "reflect",
-      segments: { static: "", semiStatic: "", dynamic: prompt, user: "Produce reflection JSON." },
+      segments,
       schema: ReflectionResponseSchema,
       maxOutputTokens: k.policy.router.budget?.maxOutputTokens.s2 ?? 800,
     });

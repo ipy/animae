@@ -43,6 +43,42 @@ describe("name references", () => {
     expect(hasNameRefs("see {{name:player}}")).toBe(true);
   });
 
+  test("a localized spelling replaces the card label for UI text; a runtime nickname still wins", () => {
+    const { k, setState } = kernelWith({ player: "Mira", npc1: "Odo" });
+    const seen: Array<[string, string]> = [];
+    const localized = (id: string, field: "name" | "nickname") => {
+      seen.push([id, field]);
+      return id === "npc1" ? "Odette" : undefined;
+    };
+    const view = { state: k.timeline.state(), catalog: k.catalog };
+    expect(expandNameRefs("{{name:npc1}} greets {{name:player}}.", view, { localized })).toBe("Odette greets Mira.");
+    expect(seen).toContainEqual(["npc1", "name"]);
+
+    setState({
+      ...k.timeline.state(),
+      aliases: { npc1: { aliases: {}, addressAs: {}, nickname: { label: "Od", by: "player" } } },
+    });
+    const renamed = { state: k.timeline.state(), catalog: k.catalog };
+    expect(expandNameRefs("{{name:npc1}}", renamed, { localized })).toBe("Od");
+  });
+
+  test("the localized hook is asked for the nickname when the card has one", () => {
+    const def = charDef("npc1");
+    def.card.identity.name = "Odo";
+    def.card.identity.nickname = "Old Odo";
+    const { k } = createFakeKernel({ chars: [def] });
+    const view = { state: k.timeline.state(), catalog: k.catalog };
+    const asked: string[] = [];
+    const out = expandNameRefs("{{name:npc1}}", view, {
+      localized: (_id, field) => {
+        asked.push(field);
+        return field === "nickname" ? "Odi" : "wrong field";
+      },
+    });
+    expect(out).toBe("Odi");
+    expect(asked).toEqual(["nickname"]);
+  });
+
   test("nameRefIds lists each referenced id once, in order", () => {
     expect(nameRefIds("{{name:b}} {{name:a}} {{name:b}} {{name}}")).toEqual(["b", "a"]);
     expect(nameRefIds("no markers")).toEqual([]);

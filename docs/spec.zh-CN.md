@@ -874,6 +874,7 @@ type CueRenderer = (cue: { type: string; args: Record<string, unknown> }, ctx: C
 | 可见性 | `visibility.granted`、`visibility.expired` |
 | 时间线 | `branch.header`、`branch.forked`、`carry.applied`、`purge.applied` |
 | 配置与预算 | `config.reloaded`、`config.warning`、`config.error`、`budget.degraded` |
+| 图鉴 | `gallery.unlocked`、`gallery.captured`、`gallery.rendered`、`gallery.removed` |
 
 ## 23. 术语表
 
@@ -983,3 +984,7 @@ type CueRenderer = (cue: { type: string; args: Record<string, unknown> }, ctx: C
 | 打字机效果 | Typewriter | 逐字显示文本的效果 |
 | cue 渲染器 | Cue Renderer | 把某种演出指令渲染到终端的函数 |
 | 按键映射 | Keymap | 按键与动作的对应表 |
+
+## 24. CG 图鉴
+
+按 profile 共享的预设与抓拍插图槽位（跨时间线）。在 `animae.yaml` 的 `gallery` 下配置；可选 `ImagePort` 通过 FIFO 作业队列异步生成图像（并发 1，待处理上限 8）。内容**分级**（CEL `when` 与 `image.tags`）控制列表、简报、生成与分发；预设解锁可在分级暂时不可用时仍写入集合。集合文件位于 `gallery/collection.json` 与 `gallery/images/`（原子写入、损坏索引恢复、孤儿文件清理）。时间线事件记录解锁/抓拍/渲染/删除以便导出；解锁状态与图像字节以集合文件为准。公开 API：`Engine.gallery`（`GalleryService`）；RPC `gallery.*` 与 `gallery.notice`。详见 [gallery.md](./gallery.md)。

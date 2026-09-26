@@ -25,7 +25,8 @@ export function buildFallbackChain(locale: string, extra?: readonly string[]): s
     if (tag !== "zh-CN") push("zh-CN");
     if (tag.startsWith("zh-") && tag !== "zh-Hans") push("zh-Hans");
   }
-  if (lang !== "en") push("en");
+  // Every tag other than `en` itself ends in `en` (so `en-US` and `en-GB` reach the `en` catalog, as `zh-TW` does).
+  if (tag !== "en") push("en");
   for (const t of extra ?? []) push(normalizeLocaleTag(t));
   return chain;
 }

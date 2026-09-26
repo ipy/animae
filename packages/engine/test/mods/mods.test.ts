@@ -44,6 +44,9 @@ test("layered storage stat without base.stat", async () => {
 test("patch merge operators", () => {
   expect(applyPatchMerge([1], { $append: [2] })).toEqual([1, 2]);
   expect(applyPatchMerge([1, 2], { $prepend: [0] })).toEqual([0, 1, 2]);
+  expect(applyPatchMerge("b", { $append: "c" })).toBe("bc");
+  expect(applyPatchMerge("b", { $prepend: "a" })).toBe("ab");
+  expect(applyPatchMerge(undefined, { $append: "c" })).toBe("c");
   expect(applyPatchMerge([1, 2], { $replace: [3] })).toEqual([3]);
   expect(applyPatchMerge([{ id: "a" }, { id: "b" }], { $remove: [{ id: "a" }] })).toEqual([{ id: "b" }]);
   expect(applyPatchMerge({ a: 1, b: 2 }, { b: { $delete: true } })).toEqual({ a: 1 });

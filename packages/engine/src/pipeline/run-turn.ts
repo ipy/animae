@@ -11,6 +11,7 @@ import { detectContradiction } from "../router/index.ts";
 import { buildRecentHistory } from "./history.ts";
 import type { AppraiseInput, RenderInput, RenderPart, RenderResult, SceneInfo } from "./types.ts";
 import { HookRegistry } from "./hooks.ts";
+import { getPromptSection } from "../prompts/index.ts";
 import { resolveAppraiseStage, resolveRenderStage } from "./stages-default.ts";
 
 function choiceTextFromTimeline(k: Kernel, choiceId: string): string | undefined {
@@ -380,7 +381,7 @@ async function* runTurnPipeline(
 
     let extraDynamic = "";
     if (appraiseOut.safety && k.policy.safety.response === "in_character") {
-      extraDynamic = "Safety: stay in character while de-escalating.";
+      extraDynamic = getPromptSection(k.i18n.promptLocale, "safety_deescalate_dynamic");
     }
 
     const renderInput: RenderInput = {
@@ -477,6 +478,10 @@ async function* runTurnPipeline(
       }
       const endTick = await k.m.director.tick("turn_end");
       for (const ev of endTick.events) eventIds.push(ev.id);
+      const turnEvts = k.timeline.eventsByTurn(input.turnId);
+      const turnKinds = turnEvts.map((e) => e.kind);
+      const apprEv = turnEvts.find((e) => e.kind === "appraisal") as { appraisal?: import("../events.ts").Appraisal } | undefined;
+      await k.m.gallery?.afterTurn?.(turnKinds, apprEv?.appraisal);
       await append([{ kind: "turn.ended", turn: input.turnId }]);
       await k.timeline.maybeSnapshot("count");
       return undefined;

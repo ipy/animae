@@ -134,7 +134,7 @@
     "mouse_on": "已启用鼠标捕获（多数终端中 Shift+拖动仍可划选文字）。",
     "mouse_off": "已关闭鼠标捕获 — 恢复终端原生划选。",
     "mouse_usage": "用法：:mouse on|off|status · 快捷键 Ctrl+M",
-    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :gallery :help :quit",
     "rewind_usage": "用法：:rewind <eventId>",
     "query_usage": "用法：:query <viewer> <path>",
     "advance_usage": "用法：:advance <duration>",
@@ -152,7 +152,8 @@
       "quit": "退出 TUI",
       "lang": "设置界面语言",
       "mouse": "切换终端鼠标捕获 (on|off|status)",
-      "llmlog": "查看最近模型调用（调试）"
+      "llmlog": "查看最近模型调用（调试）",
+      "gallery": "CG 图鉴面板与命令"
     },
     "llmlog_disabled": "本会话未启用模型调用日志。",
     "llmlog_empty": "尚无模型调用记录。",
@@ -167,7 +168,39 @@
       "advance": ":advance <duration>",
       "lang": ":lang <locale>",
       "mouse": ":mouse [on|off|status]",
-      "llmlog": ":llmlog [seq|dump]"
+      "llmlog": ":llmlog [seq|dump]",
+      "gallery": ":gallery [list|show|capture|render|...]"
+    },
+    "gallery": {
+      "list_empty": "图鉴为空。",
+      "show_usage": "用法：:gallery show <id>",
+      "not_found": "没有该图鉴条目：{id}",
+      "delegated_hint": "抓拍/渲染请使用图鉴面板。"
     }
+  },
+  "gallery": {
+    "title": "CG 图鉴",
+    "empty": "尚无图鉴条目。",
+    "locked_tag": "（未解锁）",
+    "masked_title": "受限条目",
+    "reveal_hint": "按 Enter 显示标题。",
+    "image_line": "{path}（{w}x{h}）",
+    "keys_footer": "↑↓ 选择 · Enter 显示 · c 抓拍 · r 渲染 · x 取消 · o 打开 · p 置顶 · d 删除 · Esc 关闭",
+    "no_image": "该条目暂无可用图像。",
+    "delete_confirm": "再按 d 删除此抓拍条目。",
+    "notice": {
+      "unlocked": "图鉴已解锁：{item}",
+      "job_done": "图鉴图像就绪：{item}",
+      "job_failed": "图鉴作业失败：{item}（{code}）"
+    }
+  },
+  "error": {
+    "gallery_no_generator": "未配置图像生成器（GALLERY_NO_GENERATOR）。",
+    "gallery_unknown_entry": "未知图鉴条目（GALLERY_UNKNOWN_ENTRY）。",
+    "gallery_locked": "该条目尚未解锁（GALLERY_LOCKED）。",
+    "gallery_rating_unavailable": "当前不可用该分级（GALLERY_RATING_UNAVAILABLE）。",
+    "gallery_busy": "图鉴队列已满，请稍后再试（GALLERY_BUSY）。",
+    "gallery_brief_invalid": "无法生成有效的图像简报（GALLERY_BRIEF_INVALID）。",
+    "gallery_generation_failed": "图像生成失败（GALLERY_GENERATION_FAILED）。"
   }
 }

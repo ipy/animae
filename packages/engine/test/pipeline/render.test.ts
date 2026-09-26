@@ -141,7 +141,7 @@ describe("renderStage", () => {
     expect(result.cues).toEqual([{ type: "emote", args: { who: "npc1" }, at: 2 }]);
   });
 
-  test("uses streamed partial text when final structured text is empty", async () => {
+  test("uses streamed partial text when a host model's final object has no text", async () => {
     const { k } = createPipelineKernel({
       policy: {
         events: { types: { chat: { positive: true } } },
@@ -149,11 +149,15 @@ describe("renderStage", () => {
         choices: { enabled: false, count: 3, filter: "true" },
         render: { retryOnMismatch: 0, recentTurns: 4 },
       },
-      s1Handler: async function* () {
-        yield { text: "Partial" };
-        yield { text: "", cues: [], intent_realized: "respond" };
-      },
     });
+    // The render schema rejects a blank reply, so only a port that skips validation can deliver one.
+    k.models.s1 = {
+      ...k.models.s1,
+      async *stream() {
+        yield { type: "partial" as const, value: { text: "Partial" } };
+        yield { type: "final" as const, value: { text: "", cues: [], intent_realized: "respond" } };
+      },
+    };
 
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const { result } = await collectRender(

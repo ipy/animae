@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Kernel } from "../contracts.ts";
+import { getPromptSection } from "../prompts/index.ts";
 import { AnimaeError } from "../types.ts";
 import type { SpawnCharacterSpec } from "./spawn.ts";
 
@@ -77,11 +78,15 @@ export async function buildCharacterSpecFromBrief(
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      const loc = k.i18n.promptLocale;
+      const lang = brief.language ?? k.authored.world.language;
       const segments = {
-        static: `Generate a character for archetype "${brief.archetype}". Language: ${brief.language ?? k.authored.world.language}.`,
+        static: getPromptSection(loc, "generate_brief_static", { archetype: brief.archetype, tag: lang }),
         semiStatic: "",
-        dynamic: `Avoid names: ${[...brief.avoidNames, ...pools.names.slice(0, 3)].join(", ")}`,
-        user: "Return structured character proposal.",
+        dynamic: getPromptSection(loc, "generate_brief_avoid", {
+          names: [...brief.avoidNames, ...pools.names.slice(0, 3)].join(", "),
+        }),
+        user: getPromptSection(loc, "generate_brief_user"),
       };
       const raw = await k.models.s2.object({
         label: "generate",

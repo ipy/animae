@@ -173,6 +173,14 @@ export const ClientModelsProbeSchema = z.object({
     .optional(),
 });
 
+export const ClientImagesProbeSchema = z.object({
+  ...envelope,
+  type: z.literal("images_probe"),
+  id: requestId,
+  /** Unsaved image settings; the host merges them with the stored configuration (host-defined shape). */
+  draft: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const ClientOllamaModelsSchema = z.object({
   ...envelope,
   type: z.literal("ollama_models"),
@@ -185,6 +193,13 @@ export const ClientContentPackNoticeSchema = z.object({
   type: z.literal("content_pack_notice"),
   id: requestId,
   packId: z.string().min(1).max(64),
+});
+
+export const ClientProtagonistSetSchema = z.object({
+  ...envelope,
+  type: z.literal("protagonist_set"),
+  id: requestId,
+  name: z.string().min(1).max(64),
 });
 
 export const ClientPingSchema = z.object({
@@ -210,6 +225,94 @@ export const ClientLlmLogClearSchema = z.object({
   id: requestId,
 });
 
+const galleryListOpts = {
+  includeLocked: z.boolean().optional(),
+  includeUnavailable: z.boolean().optional(),
+  debug: z.boolean().optional(),
+};
+
+export const ClientGalleryListSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_list"),
+  id: requestId,
+  ...galleryListOpts,
+});
+
+export const ClientGalleryGetSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_get"),
+  id: requestId,
+  entryId: z.string().min(1).max(128),
+  ...galleryListOpts,
+});
+
+export const ClientGalleryRatingsSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_ratings"),
+  id: requestId,
+});
+
+export const ClientGalleryCaptureSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_capture"),
+  id: requestId,
+  req: z
+    .object({
+      focus: z.string().max(512).optional(),
+      rating: z.string().max(64).optional(),
+      characters: z.array(z.string()).optional(),
+      tier: z.enum(["s1", "s2"]).optional(),
+      title: z.string().max(256).optional(),
+      seed: z.number().int().optional(),
+    })
+    .optional(),
+});
+
+export const ClientGalleryRenderSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_render"),
+  id: requestId,
+  entryId: z.string().min(1).max(128),
+  reroll: z.boolean().optional(),
+  seed: z.number().int().optional(),
+});
+
+export const ClientGalleryCancelSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_cancel"),
+  id: requestId,
+  job: z.string().min(1).max(64),
+});
+
+export const ClientGalleryRemoveSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_remove"),
+  id: requestId,
+  entryId: z.string().min(1).max(128),
+});
+
+export const ClientGalleryPinSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_pin"),
+  id: requestId,
+  entryId: z.string().min(1).max(128),
+  pinned: z.boolean(),
+});
+
+export const ClientGalleryUnlockSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_unlock"),
+  id: requestId,
+  entryId: z.string().min(1).max(128),
+  source: z.string().max(64).optional(),
+});
+
+export const ClientGalleryJobsSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_jobs"),
+  id: requestId,
+});
+
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientHelloSchema,
   ClientInputSchema,
@@ -228,14 +331,26 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientConfigSetSchema,
   ClientCancelSchema,
   ClientModelsProbeSchema,
+  ClientImagesProbeSchema,
   ClientOllamaModelsSchema,
   ClientContentPackNoticeSchema,
+  ClientProtagonistSetSchema,
   ClientClaimControllerSchema,
   ClientReleaseControlSchema,
   ClientPingSchema,
   ClientSetLocaleSchema,
   ClientLlmLogSchema,
   ClientLlmLogClearSchema,
+  ClientGalleryListSchema,
+  ClientGalleryGetSchema,
+  ClientGalleryRatingsSchema,
+  ClientGalleryCaptureSchema,
+  ClientGalleryRenderSchema,
+  ClientGalleryCancelSchema,
+  ClientGalleryRemoveSchema,
+  ClientGalleryPinSchema,
+  ClientGalleryUnlockSchema,
+  ClientGalleryJobsSchema,
 ]);
 
 export const ServerLocaleSchema = z.object({
@@ -360,6 +475,28 @@ export const ServerPongSchema = z.object({
   id: requestId,
 });
 
+export const ServerGalleryNoticeSchema = z.object({
+  ...envelope,
+  type: z.literal("gallery_notice"),
+  seq: z.number().int().nonnegative(),
+  notice: z.union([
+    z.object({ type: z.literal("unlocked"), item: z.string() }),
+    z.object({
+      type: z.literal("job"),
+      job: z.object({
+        id: z.string(),
+        item: z.string(),
+        state: z.string(),
+        progress: z.number().optional(),
+        error: z.object({ code: z.string(), message: z.string() }).optional(),
+        startedAt: z.string().optional(),
+        finishedAt: z.string().optional(),
+      }),
+    }),
+    z.object({ type: z.literal("changed"), item: z.string() }),
+  ]),
+});
+
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   ServerHelloOkSchema,
   ServerLocaleSchema,
@@ -374,6 +511,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   ServerResultSchema,
   ServerPongSchema,
   ServerHeartbeatSchema,
+  ServerGalleryNoticeSchema,
 ]);
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;

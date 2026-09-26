@@ -184,6 +184,40 @@ describe("pipeline stages with sloppy scripted output", () => {
     expect(result.text).toBe("短");
     expect(result.cues).toEqual([]);
   });
+
+  test("renderStage fails with RENDER_FAILED instead of returning a blank reply", async () => {
+    const { k } = createPipelineKernel({
+      policy: {
+        events: { types: { chat: { positive: true } } },
+        choices: { enabled: false, count: 3, filter: "true" },
+        render: { retryOnMismatch: 0, recentTurns: 4 },
+      },
+      // Not what a validating adapter would return; a host model that skips validation must not slip through either.
+      s1Handler: () => ({ text: "", cues: [], intent_realized: "respond" }),
+    });
+    k.models.s1 = {
+      ...k.models.s1,
+      async *stream() {
+        yield { type: "final" as const, value: { text: "  ", cues: [], intent_realized: "respond" } };
+      },
+    };
+    const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
+    const run = collectRender(
+      renderStage(k, turn, {
+        tier: "s1",
+        speaker: "npc1",
+        addressee: "player",
+        intent: { intent: "respond", scores: { respond: 1 } },
+        appraisal: { type: "chat", intensity: 0.5, sincerity: 1, claims: [], search_terms: [], tags: [], input_class: "normal" },
+        fieldEffects: {},
+        scene: { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false },
+        history: [],
+        sidenotes: [],
+        hits: [],
+      }),
+    );
+    await expect(run).rejects.toMatchObject({ code: "RENDER_FAILED" });
+  });
 });
 
 describe("coerceRenderRaw", () => {
@@ -196,5 +230,31 @@ describe("coerceRenderRaw", () => {
     });
     expect(out.intent_realized).toBe("Respond");
     expect((out.choices as { expected_event_type: string }[])[0]?.expected_event_type).toBe("matchmake");
+  });
+
+  test("reads the spoken reply from the keys models use instead of `text`", () => {
+    for (const key of ["dialogue", "speech", "reply", "response", "content", "message", "line", "narration"]) {
+      expect(coerceRenderRaw({ [key]: "Morning!" }).text).toBe("Morning!");
+    }
+    // `text` wins, a blank `text` does not shadow a usable alias, and non-strings never become "[object Object]".
+    expect(coerceRenderRaw({ text: "A", reply: "B" }).text).toBe("A");
+    expect(coerceRenderRaw({ text: "  ", reply: "B" }).text).toBe("B");
+    expect(coerceRenderRaw({ text: { nested: true } }).text).toBe("");
+  });
+});
+
+describe("a reply without text", () => {
+  const schema = buildRenderSchema(applyPolicyDefaults({ events: { types: { chat: { positive: true } } } }));
+
+  test("is rejected by the render schema, so the adapter repairs instead of committing a blank line", () => {
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.safeParse({ cues: [], intent_realized: "respond" }).success).toBe(false);
+    expect(schema.safeParse({ text: "  \n", intent_realized: "respond" }).success).toBe(false);
+    expect(schema.safeParse({ text: "Hi.", intent_realized: "respond" }).success).toBe(true);
+  });
+
+  test("an aliased reply key still parses into `text`", () => {
+    const parsed = schema.parse({ response: "Hi.", intent_realized: "respond" });
+    expect(parsed.text).toBe("Hi.");
   });
 });

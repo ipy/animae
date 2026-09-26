@@ -109,14 +109,14 @@ describe("late-bound strings in prompts", () => {
   });
 
   test("event type descriptions in the appraisal prompt resolve too", async () => {
-    let dynamic = "";
+    let staticText = "";
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
       policy: { events: { types: { flirt: { positive: true, description: "$t:event.flirt.description" } } } },
       i18n: { promptLocale: "zh-CN", outputLocale: "zh-CN", contentLocale: "zh-CN" },
       displayText: fakeDisplayText(TABLES),
       s1Handler: (req) => {
-        dynamic = req.segments.dynamic;
+        staticText = req.segments.static;
         return { type: "flirt", intensity: 0.5, sincerity: 0.5, claims: [], search_terms: [], tags: [], input_class: "normal" };
       },
     });
@@ -130,8 +130,8 @@ describe("late-bound strings in prompts", () => {
       history: [],
       fieldEffects: {},
     });
-    expect(dynamic).toContain("- flirt: 调情或示好 (positive)");
-    expect(dynamic).not.toContain("$t:");
+    expect(staticText).toContain("- flirt：调情或示好［正向］");
+    expect(staticText).not.toContain("$t:");
   });
 });
 
@@ -145,15 +145,33 @@ describe("name glossary for a different output language", () => {
 
   test("lists each character's working-language names with the output-language spelling", () => {
     const seg = buildPromptSegments(cross(), renderInput());
-    expect(seg.static).toContain("白芷 → Bai Zhi");
-    expect(seg.static).toContain("芷芷 → Zhizhi");
-    expect(seg.static).toContain("顾远 → Gu Yuan");
+    expect(seg.static).toContain("npc1 → Bai Zhi");
+    expect(seg.static).toContain("player → Gu Yuan");
+    expect(seg.static).not.toContain("Zhizhi");
+  });
+
+  test("a character shown by its card nickname is translated with the nickname, not the full name", () => {
+    const withNick = charDef("player");
+    withNick.card.identity.nickname = "园长";
+    const tables: Tables = {
+      "zh-CN": { ...TABLES["zh-CN"]! },
+      en: { ...TABLES.en!, "character.player.nickname": "Director" },
+    };
+    const { k } = createPipelineKernel({
+      chars: [charDef("npc1"), withNick],
+      i18n: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN" },
+      displayText: fakeDisplayText(tables),
+    });
+    const text = buildPromptSegments(k, renderInput()).static;
+    expect(text).toContain("npc1 → Bai Zhi");
+    expect(text).toContain("园长 → Director");
+    expect(text).not.toContain("Gu Yuan");
   });
 
   test("follows the per-turn output language", () => {
     const k = cross({ outputLocale: "zh-CN" });
     expect(buildPromptSegments(k, renderInput()).static).not.toContain("→");
-    expect(buildPromptSegments(k, renderInput({ outputLocale: "en" })).static).toContain("白芷 → Bai Zhi");
+    expect(buildPromptSegments(k, renderInput({ outputLocale: "en" })).static).toContain("npc1 → Bai Zhi");
   });
 
   test("a language without its own strings gets no glossary instead of fallback-language names", () => {

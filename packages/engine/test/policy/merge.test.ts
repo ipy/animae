@@ -26,3 +26,17 @@ test("mergePolicies $append concatenates", () => {
   ]);
   expect(merged.intent?.types).toEqual(["a", "b"]);
 });
+
+test("mergePolicies string $append and $prepend concatenate prose blocks", () => {
+  const { merged } = mergePolicies([
+    { name: "a.yaml", doc: { x: { prompt: { render: "base line\n" } } } },
+    { name: "b.yaml", doc: { x: { prompt: { render: { $append: "extra line\n" } } } } },
+    { name: "c.yaml", doc: { x: { prompt: { render: { $prepend: "first line\n" } } } } },
+  ]);
+  expect((merged.x as { prompt: { render: string } }).prompt.render).toBe("first line\nbase line\nextra line\n");
+});
+
+test("mergePolicies string $append on an absent value yields the payload alone", () => {
+  const { merged } = mergePolicies([{ name: "a.yaml", doc: { x: { prompt: { choices: { $append: "only\n" } } } } }]);
+  expect((merged.x as { prompt: { choices: string } }).prompt.choices).toBe("only\n");
+});

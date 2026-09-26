@@ -31,6 +31,7 @@ Per-character episodic/semantic memory (`artifacts/<npc>/memory.jsonl`), knowled
 - Vector embeddings cached in-memory per branch/doc id (not persisted).
 - Propagation once per `(entryId, target)` per session (plus `carriedFrom` dedup on disk).
 - Reflection summaries stored only when at least one proposal accepted.
+- The reflection prompt names every output field together with the shape of its items (`goal_changes`: `{action, id?, text, tags}`; `new_claims`: `{s, p, o}`) and lists the character's current goals with their ids, so `update` / `remove` can refer to one. All reflection text uses the output language.
 - The reflection answer is model output: unknown keys are ignored, and an answer that still fails the schema (or a provider error) skips that owner with a `REFLECTION_FAILED` warning (`config.warning`) so `scene.end` always completes. `RECORDING_MISSING` in replay mode is not swallowed.
 
 ## Edge cases

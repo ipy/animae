@@ -16,6 +16,8 @@ Package overview and install: [../README.md](../README.md).
 | [tui-guide.md](./tui-guide.md) | UI integrators | Ink 8 TUI: layout, theme, keymap, extensions |
 | [rpc-reference.md](./rpc-reference.md) | Tooling | JSON-RPC sidecar (`animae serve --stdio`) |
 | [embedding.md](./embedding.md) | Library users | `createEngine`, ports, determinism, sidecar |
+| [i18n.md](./i18n.md) | Host apps | UI vs prompt vs content vs output locale, `$t:` / name refs |
+| [gallery.md](./gallery.md) | Integrators | CG gallery, `ImagePort`, ratings, jobs, RPC |
 | [CHANGELOG.md](./CHANGELOG.md) | Release | v1.0.0 summary |
 
 ## Module notes (`modules/`)
@@ -41,6 +43,7 @@ Implementation-facing notes (purpose, public API, edge cases):
 | Pipeline | [modules/pipeline.md](./modules/pipeline.md) |
 | Scene | [modules/scene.md](./modules/scene.md) |
 | Engine kernel | [modules/engine.md](./modules/engine.md) |
+| Gallery | [modules/gallery.md](./modules/gallery.md) |
 | RPC | [modules/rpc.md](./modules/rpc.md) |
 | CLI | [modules/cli.md](./modules/cli.md) |
 | TUI | [modules/tui.md](./modules/tui.md) |

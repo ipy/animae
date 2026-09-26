@@ -163,14 +163,16 @@ export function buildCelContext(deps: BuildCelContextDeps, params: BuildCelConte
     fields: { active: activeFields, ...Object.fromEntries(activeFields.map((id) => [id, true])) },
     check: params.check ?? null,
     model: { slot: "", tags: [] as string[] },
+    image: { tags: [] as string[] },
   };
 
   const extra = (params.extra ?? {}) as Record<string, unknown>;
   const extraWorld = extra.world;
   const extraTime = extra.time;
   const extraModel = extra.model;
+  const extraImage = extra.image;
   for (const [k, v] of Object.entries(extra)) {
-    if (k === "world" || k === "time" || k === "model") continue;
+    if (k === "world" || k === "time" || k === "model" || k === "image") continue;
     (ctx as Record<string, unknown>)[k] = v;
   }
   if (extraModel && typeof extraModel === "object" && !Array.isArray(extraModel)) {
@@ -179,6 +181,10 @@ export function buildCelContext(deps: BuildCelContextDeps, params: BuildCelConte
       slot: typeof m.slot === "string" ? m.slot : "",
       tags: Array.isArray(m.tags) ? [...m.tags] : [],
     };
+  }
+  if (extraImage && typeof extraImage === "object" && !Array.isArray(extraImage)) {
+    const im = extraImage as { tags?: string[] };
+    ctx.image = { tags: Array.isArray(im.tags) ? [...im.tags] : [] };
   }
   if (extraWorld && typeof extraWorld === "object" && !Array.isArray(extraWorld)) {
     const world = ctx.world as Record<string, unknown>;

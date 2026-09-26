@@ -5,6 +5,8 @@ export * from "./types.ts";
 export { buildRecentHistory, historyToMessages } from "./history.ts";
 export { buildAppraiseSchema, buildRenderSchema } from "./schemas.ts";
 export { buildPromptSegments, measurePromptSegments } from "./prompt.ts";
+export { lintAssembledPrompt, assertPromptLintClean } from "./prompt-lint.ts";
+export { estimateTokensForText, segmentMetrics } from "./segment-utils.ts";
 export { modelCelExtra } from "./model-cel.ts";
 export { coerceAppraiseRaw, coerceRenderRaw, parseJsonLoose } from "./coerce.ts";
 export { appraiseStage } from "./appraise.ts";

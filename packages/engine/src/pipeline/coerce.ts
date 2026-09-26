@@ -82,8 +82,21 @@ export function coerceAppraiseRaw(raw: Record<string, unknown>, policy: Resolved
   };
 }
 
+/** Other names models give the spoken reply when they ignore the `text` field name. */
+const RENDER_TEXT_ALIASES = ["dialogue", "dialog", "speech", "reply", "response", "content", "message", "line", "narration"] as const;
+
+/** The spoken reply: `text`, else the first alias that carries a non-blank string; "" when the object has none. */
+function renderText(raw: Record<string, unknown>): string {
+  if (typeof raw.text === "string" && raw.text.trim()) return raw.text;
+  for (const key of RENDER_TEXT_ALIASES) {
+    const v = raw[key];
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return typeof raw.text === "string" ? raw.text : "";
+}
+
 export function coerceRenderRaw(raw: Record<string, unknown>): Record<string, unknown> {
-  const text = typeof raw.text === "string" ? raw.text : normalizeString(raw.text);
+  const text = renderText(raw);
   const intent_realized = normalizeString(raw.intent_realized);
   const cues = Array.isArray(raw.cues)
     ? (raw.cues as unknown[]).map((c) => {

@@ -25,6 +25,7 @@ import { useTurn } from "../hooks/use-turn.ts";
 import { createCueRegistry } from "../cues/registry.ts";
 import { loadTheme } from "../theme/load.ts";
 import { runCommandLine } from "../commands/builtin.ts";
+import { createHostI18n, galleryNoticeToast } from "@animae/host";
 import {
   deleteGraphemeAfter,
   deleteGraphemeBefore,
@@ -44,6 +45,8 @@ import { applyTabAutocomplete } from "../components/AutocompletePopup.tsx";
 import { InputDraftProvider, useInputDraftActions } from "../context/input-draft-context.tsx";
 import { buildPaletteEntries } from "../utils/action-list.ts";
 import { TuiI18nProvider, useTuiI18n } from "../i18n/context.tsx";
+import { GalleryPanel } from "../components/GalleryPanel.tsx";
+import { localizeError, type FormatParams } from "@animae/i18n";
 
 export interface TuiAppProps extends RunTuiOptions {
   onReady?: () => void;
@@ -93,6 +96,10 @@ export function TuiApp(props: TuiAppProps) {
       onSceneEnd: props.onSceneEnd,
       nameHints: props.nameHints ?? [],
       resolveFreeInput: props.resolveFreeInput,
+      galleryPresentation: props.galleryPresentation,
+      openFile: props.openFile,
+      galleryCapture: props.galleryCapture,
+      galleryNotices: props.galleryNotices,
     }),
     [
       cueRegistry,
@@ -104,6 +111,10 @@ export function TuiApp(props: TuiAppProps) {
       props.onSceneEnd,
       props.nameHints,
       props.resolveFreeInput,
+      props.galleryPresentation,
+      props.openFile,
+      props.galleryCapture,
+      props.galleryNotices,
     ],
   );
 
@@ -188,7 +199,7 @@ function TuiShellInner({
   noSceneHint?: string;
   dispatchMouse: ReturnType<typeof useMouseDispatch>;
 }) {
-  const { t, has, setLocale: setUiLocale } = useTuiI18n();
+  const { t, has, setLocale: setUiLocale, locale: uiLocale } = useTuiI18n();
   const app = useApp();
   const { engine, viewer, actor } = useEngineContext();
   const { state, dispatch, commandApi, config } = useAppState();
@@ -204,6 +215,31 @@ function TuiShellInner({
   const handleMouse = useCallback((ev: SgrMouseEvent) => dispatchMouse(ev), [dispatchMouse]);
   const [timelineIdx, setTimelineIdx] = useState(0);
   const [loadIdx, setLoadIdx] = useState(0);
+  const [galleryIdx, setGalleryIdx] = useState(0);
+  const [galleryRevealed, setGalleryRevealed] = useState<Set<string>>(() => new Set());
+  const [galleryDeletePending, setGalleryDeletePending] = useState(false);
+  const [galleryTick, setGalleryTick] = useState(0);
+  useEffect(() => {
+    const hostT = createHostI18n(uiLocale);
+    const tHost = (key: string, params?: Record<string, string | number>) =>
+      hostT.t(key, params, { ns: "host" });
+    const off = engine.gallery.subscribe((notice) => {
+      if (notice.type === "changed") {
+        setGalleryTick((n) => n + 1);
+        return;
+      }
+      void galleryNoticeToast(notice, {
+        locale: uiLocale,
+        getItem: (id) => engine.gallery.get(id, { locale: uiLocale, includeUnavailable: true }),
+        maskTitle: config.galleryNotices?.maskTitle,
+        t: tHost,
+      }).then((payload) => {
+        if (payload) commandApi.notify(payload.text, payload.level);
+        setGalleryTick((n) => n + 1);
+      });
+    });
+    return off;
+  }, [engine, uiLocale, config.galleryNotices, commandApi]);
   const { setDraft: setInputDraft, clearDraft, readDraft } = useInputDraftActions();
   const { completePrompt, actions, entityActions, actionContext, runAction, runEntityAction } =
     useActionRunner();
@@ -422,6 +458,75 @@ function TuiShellInner({
                   .then(() => commandApi.notify(t("command.loaded", { label: slot.label })));
               }
             });
+          }
+        }
+        if (s.overlay === "gallery") {
+          const bump = () => setGalleryTick((n) => n + 1);
+          const fail = (err: unknown) =>
+            commandApi.notify(localizeError(err, (key, params) => t(key, params as FormatParams)), "warn");
+          if (ev.key.upArrow) setGalleryIdx((i) => Math.max(0, i - 1));
+          if (ev.key.downArrow) setGalleryIdx((i) => i + 1);
+          if (ev.key.return) {
+            void engine.gallery.list({ locale: uiLocale }).then((items) => {
+              const item = items[galleryIdx];
+              if (!item) return;
+              const pres = config.galleryPresentation?.(item);
+              if (pres?.blur && !galleryRevealed.has(item.id)) {
+                setGalleryRevealed((s) => new Set(s).add(item.id));
+              }
+            });
+          }
+          if (ev.name === "c") {
+            const capture = config.galleryCapture ?? ((_, req) => engine.gallery.capture(req));
+            void capture(commandApi, undefined).then(bump).catch(fail);
+          }
+          if (ev.name === "r") {
+            void engine.gallery.list({ locale: uiLocale }).then((items) => {
+              const item = items[galleryIdx];
+              if (item) void engine.gallery.render(item.id).then(bump).catch(fail);
+            });
+          }
+          if (ev.name === "x") {
+            const job = engine.gallery.jobs().find((j) => j.state !== "done" && j.state !== "failed");
+            if (job) void engine.gallery.cancel(job.id).then(bump).catch(fail);
+          }
+          if (ev.name === "o") {
+            void engine.gallery.list({ locale: uiLocale }).then(async (items) => {
+              const item = items[galleryIdx];
+              if (!item) return;
+              const img = await engine.gallery.image(item.id);
+              if (!img) {
+                commandApi.notify(t("gallery.no_image"), "warn");
+                return;
+              }
+              const open = commandApi.openFile;
+              if (open) await open(img.ref.path);
+              else commandApi.notify(img.ref.path);
+            });
+          }
+          if (ev.name === "p") {
+            void engine.gallery.list({ locale: uiLocale }).then((items) => {
+              const item = items[galleryIdx];
+              if (item?.kind === "captured") {
+                void engine.gallery.pin(item.id, !item.pinned).then(bump).catch(fail);
+              }
+            });
+          }
+          if (ev.name === "d") {
+            void engine.gallery.list({ locale: uiLocale }).then((items) => {
+              const item = items[galleryIdx];
+              if (!item || item.kind !== "captured") return;
+              if (!galleryDeletePending) {
+                setGalleryDeletePending(true);
+                commandApi.notify(t("gallery.delete_confirm"), "warn");
+                return;
+              }
+              setGalleryDeletePending(false);
+              void engine.gallery.remove(item.id).then(bump).catch(fail);
+            });
+          }
+          if (ev.key.escape && galleryDeletePending) {
+            setGalleryDeletePending(false);
           }
         }
         if (s.overlay === "rewindConfirm" && ev.key.return && s.pendingRewindEventId) {
@@ -706,6 +811,16 @@ function TuiShellInner({
       {state.overlay === "explain" ? <ExplainView /> : null}
       {state.overlay === "inspector" ? <Inspector /> : null}
       {state.overlay === "loadSlots" ? <LoadSlots selected={loadIdx} /> : null}
+      {state.overlay === "gallery" ? (
+        <GalleryPanel
+          selected={galleryIdx}
+          revealed={galleryRevealed}
+          onToggleReveal={(id) => setGalleryRevealed((s) => new Set(s).add(id))}
+          presentation={config.galleryPresentation}
+          locale={uiLocale}
+          onRefresh={() => setGalleryTick((n) => n + 1)}
+        />
+      ) : null}
       {state.overlay === "rewindConfirm" ? (
         <Overlay title={t("rewind.confirm_title")}>
           <Text>

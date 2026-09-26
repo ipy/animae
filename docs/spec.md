@@ -873,6 +873,7 @@ Upper layers may replace the entire `layout`, compose components, register cue r
 | Visibility | `visibility.granted`, `visibility.expired` |
 | Timeline | `branch.header`, `branch.forked`, `carry.applied`, `purge.applied` |
 | Config and budget | `config.reloaded`, `config.warning`, `config.error`, `budget.degraded` |
+| Gallery | `gallery.unlocked`, `gallery.captured`, `gallery.rendered`, `gallery.removed` |
 
 ## 23. Glossary
 
@@ -982,3 +983,7 @@ Upper layers may replace the entire `layout`, compose components, register cue r
 | Typewriter | Character-by-character text display |
 | Cue Renderer | Function rendering a cue type to the terminal |
 | Keymap | Key-to-action map |
+
+## 24. CG gallery
+
+Preset and captured illustration slots scoped to the profile (shared across timelines). Authored in `animae.yaml` under `gallery`; optional `ImagePort` generates images off-thread via a FIFO job queue (concurrency 1, pending cap 8). Content **ratings** (CEL `when`, plus `image.tags`) gate list, brief, generate, and serve; preset unlock may occur while a rating is temporarily unavailable. Collection files live under `gallery/collection.json` and `gallery/images/` (atomic writes, corrupt-index recovery, orphan cleanup). Timeline events record unlock/capture/render/remove for export; the collection file is authoritative for unlock state and bytes. Public API: `Engine.gallery` (`GalleryService`); RPC `gallery.*` with `gallery.notice`. Full reference: [gallery.md](./gallery.md).

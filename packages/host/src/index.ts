@@ -22,3 +22,13 @@ export { consumeTurnStream } from "./turn-consumer.ts";
 export { hostBuiltinCommands, runHostCommandLine } from "./builtin-commands.ts";
 export { createHostI18n, hostCatalogs, hostPackageCatalogs } from "./i18n/host-i18n.ts";
 export { bindLocalizeTranslator, localizeSnapshot } from "./localize-snapshot.ts";
+export { createGalleryCommand, galleryHostCommand } from "./gallery-command.ts";
+export {
+  collectKnownGalleryErrorCodes,
+  formatGalleryError,
+  formatGalleryErrorCode,
+  galleryErrorMessageKey,
+  galleryErrorTextShowsBareCode,
+  galleryJobFailureReason,
+} from "./gallery-errors.ts";
+export { galleryNoticeToast, type GalleryNoticeToastContext } from "./gallery-notice-toast.ts";

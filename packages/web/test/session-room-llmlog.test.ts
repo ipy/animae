@@ -4,6 +4,7 @@ import { createModelCallLog, createScriptedModel, withModelCallLog } from "@anim
 import { SessionRoom } from "../src/server/session-room.ts";
 import type { Engine } from "@animae/engine";
 import { z } from "zod";
+import { galleryStub } from "./helpers/stub-engine.ts";
 
 function engineWithLog(): Engine {
   const log = createModelCallLog();
@@ -20,6 +21,7 @@ function engineWithLog(): Engine {
     mods: () => ({ mods: [], drift: false, provenance: {} }),
     on: () => () => {},
     modelCallLog: log,
+    gallery: galleryStub(),
     info: () => ({
       root: "/tmp",
       language: "en",

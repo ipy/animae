@@ -1,6 +1,6 @@
 # Animae Web Protocol (v1)
 
-JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
+JSON messages over WebSocket (`/ws`). Every message includes `"v": 1` (`WEB_PROTOCOL_VERSION`).
 
 ## Correlation
 
@@ -37,11 +37,26 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 | `config_set` | `{ id, patch, consent? }` — optional content-pack consent payload |
 | `cancel` | `{ id, targetId? }` — abort in-flight turn (client UI + host signal) |
 | `models_probe` | `{ id, slot?: "s1" \| "s2" }` — connectivity test (host-defined) |
+| `images_probe` | `{ id, draft?: object }` — image generator health check; `draft` carries unsaved settings (host-defined, controller only, `UNSUPPORTED` without a host hook) |
 | `ollama_models` | `{ id, baseURL? }` — list local Ollama models via `/api/tags` (host-defined) |
 | `content_pack_notice` | `{ id, packId }` — fetch opt-in pack notice text |
 | `llm_log` | `{ id, since?, limit?, label?, slot?, errorsOnly? }` — in-memory model call log (when host enabled `modelCallLog` on the engine); `result.data`: `{ enabled, entries, newestSeq }`, at most **50** entries per response |
 | `llm_log_clear` | `{ id }` — clear the in-memory log buffer |
 | `ping` | `{ id }` |
+| `gallery_list` | `{ id, includeLocked?, includeUnavailable?, debug? }` — spectator OK |
+| `gallery_get` | `{ id, entryId, includeLocked?, includeUnavailable?, debug? }` |
+| `gallery_ratings` | `{ id }` |
+| `gallery_jobs` | `{ id }` |
+| `gallery_capture` | `{ id, req? }` — controller only |
+| `gallery_render` | `{ id, entryId, reroll?, seed? }` — controller only |
+| `gallery_cancel` | `{ id, job }` — controller only |
+| `gallery_remove` | `{ id, entryId }` — controller only |
+| `gallery_pin` | `{ id, entryId, pinned }` — controller only |
+| `gallery_unlock` | `{ id, entryId, source? }` — controller only; server must set `gallery.allowGalleryUnlock` |
+
+### Gallery HTTP (same session auth as `/ws`)
+
+`GET|HEAD /api/gallery/image/<entryId>?v=<imageId>` — bytes when unlocked and available; `404` otherwise; `ETag` `"<imageId>"`; `Cache-Control` from host `galleryImagePolicy` (default: `immutable` for default rating, `no-store` for others). No path traversal: ids are validated and resolved through `engine.gallery.image`.
 
 ## Server → client
 
@@ -60,6 +75,7 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1`.
 | `result` | Request acknowledgement |
 | `pong` | Ping reply |
 | `heartbeat` | Keep-alive (~30s) |
+| `gallery_notice` | `{ notice: GalleryNotice }` — pushed to every connected client on unlock/job/changed |
 
 ### `snapshot.state` shape (host-defined superset)
 

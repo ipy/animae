@@ -41,6 +41,8 @@ export const EVENT_KINDS = [
   "config.reloaded", "config.warning", "config.error", "budget.degraded",
   // scene lifecycle (extension)
   "scene.started", "scene.ended", "turn.started", "turn.ended",
+  // gallery (extension — reducer no-op; collection file is authoritative)
+  "gallery.unlocked", "gallery.captured", "gallery.rendered", "gallery.removed",
 ] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
 

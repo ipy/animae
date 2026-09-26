@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Cel, CelOrBool, CelOrNumber, EntityRefSchema, EventDraftSchema, Id, LevelSchema, LodSchema, Tags, WorldTimeSchema } from "./common.ts";
+import { GalleryConfigSchema, type GalleryConfig } from "./gallery.ts";
 
 /**
  * Zod schemas of AUTHORED files (config, characters, fields, director, schedule). CONTRACT file.
@@ -48,6 +49,7 @@ export const AnimaeConfigSchema = z.strictObject({
   /** enabled content mod ids (see docs/mods.md); host may override via createEngine({ mods }) */
   mods: z.array(z.string()).default([]),
   i18n: I18nConfigSchema.optional(),
+  gallery: GalleryConfigSchema.optional(),
 });
 /** Parsed config always includes `mods` (default `[]`); `mods?` on the type keeps test/fixture literals valid. */
 export type AnimaeConfig = Omit<z.infer<typeof AnimaeConfigSchema>, "mods"> & { mods?: string[] };
@@ -293,6 +295,8 @@ export const CardFrontmatterSchema = z.looseObject({
     /** display hints for the UI */
     nickname: z.string().optional(),
     color: z.string().optional(),
+    /** generator-oriented appearance tags for CG prompts */
+    visual: z.string().optional(),
   }),
   constraints: z
     .strictObject({ motives: z.array(z.string()).default([]), bottom_lines: z.array(BottomLineSchema).default([]), taboos: z.array(z.string()).default([]) })
@@ -390,8 +394,10 @@ export const FieldDescriptorSchema: z.ZodType<FieldDescriptor> = z.lazy(() =>
 ) as z.ZodType<FieldDescriptor>;
 
 /** Everything loaded from the data root's authored files (+ branch entities merged by timeline). */
+export type { GalleryConfig, GalleryPresetEntry, GalleryRatingDef } from "./gallery.ts";
+
 export interface Authored {
-  config: AnimaeConfig;
+  config: AnimaeConfig & { gallery?: GalleryConfig };
   world: WorldDef;
   locations: Record<string, LocationDef>;
   items: Record<string, ItemDef>;

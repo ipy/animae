@@ -1,4 +1,4 @@
-import type { Engine, TurnChunk } from "@animae/engine";
+import type { Engine, GalleryCaptureRequest, GalleryItemView, TurnChunk } from "@animae/engine";
 import type { SceneId, TurnId, Viewer } from "@animae/engine";
 import type { ReactNode, ComponentType } from "react";
 import type { ThemePatch } from "./theme/schema.ts";
@@ -155,6 +155,7 @@ export interface CommandApi {
   t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
   /** @internal Block input while a command-driven scene turn runs (PTY harness mirror). */
   setTurnPending?(pending: boolean): void;
+  openFile?(path: string): void | Promise<void>;
 }
 
 export interface CustomCommand {
@@ -232,7 +233,26 @@ export interface RunTuiOptions {
   uiLocale?: string;
   /** Free-roam text routing before rejecting input (game-provided). */
   resolveFreeInput?: ResolveFreeInputFn;
+  /** Mask restricted-rated gallery rows until revealed (game policy). */
+  galleryPresentation?: GalleryPresentationFn;
+  /** Open gallery image path (`o` in gallery panel, `:gallery open`). */
+  openFile?: (path: string) => void | Promise<void>;
+  /** Optional capture gate (consent, policy) before `engine.gallery.capture`. */
+  galleryCapture?: (
+    api: CommandApi,
+    req?: GalleryCaptureRequest,
+  ) => Promise<{ item: string; job: string }>;
+  /** Mask entry titles in global gallery toasts (same policy as `galleryPresentation`). */
+  galleryNotices?: {
+    maskTitle?: (item: GalleryItemView) => boolean;
+  };
 }
+
+export interface GalleryPresentation {
+  blur?: boolean;
+}
+
+export type GalleryPresentationFn = (item: GalleryItemView) => GalleryPresentation;
 
 export interface TranscriptCue {
   type: string;

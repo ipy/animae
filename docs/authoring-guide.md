@@ -57,6 +57,9 @@ models:
 | `policies` | string[] | `[]` | Paths under data root |
 | `mods` | string[] | `[]` | Enabled mod ids; host may override via `createEngine({ mods })`. See [mods.md](./mods.md). |
 | `models.s1` / `s2` | `ModelSpec` | — | `provider`: anthropic, openai, google, deepseek, ollama, openai-compatible; optional `baseURL`, `apiKeyEnv`, `apiKey`, `headers`, `options`, `name` |
+| `gallery` | object | — | CG preset entries, ratings, capture/render defaults. See [gallery.md](./gallery.md). |
+
+Optional **`gallery`** block: preset CG slots, content ratings (CEL), and generator defaults. Character cards may add **`identity.visual`** (generator appearance tags) used when composing image prompts for entries that list that character.
 
 ---
 
@@ -273,13 +276,19 @@ constraints:
       text: Will not assist theft.
       tags: [theft]
       hardness: hard    # hard → self.hard_bottom_line_tags in CEL
-  taboos: []
+  taboos: []         # tags; prompts show `taboo.<tag>.label` from the string tables when present, else the tag itself
 lod: principal          # principal | supporting | extra
 tags: [npc]
 style: Warm, concise.
 ---
 Persona prose for prompts.
 ```
+
+### Name references (`{{name:<id>}}`)
+
+In knowledge, templates, gallery strings, and persona prose, refer to characters with **`{{name:player}}`** or **`{{name:<characterId>}}`** instead of hard-coded names. At prompt assembly the engine expands markers to card labels (nickname-aware for the speaker line). Runtime aliases from `engine.setAlias` win over card text.
+
+For **UI display strings** resolved in another language than the content locale, register parallel spellings in locale string tables: `character.<id>.name` and `character.<id>.nickname`. Pass `{ localizeNames: true }` to `Engine.display.resolve(locale, value, { localizeNames: true })` so gallery titles, hints, and `$t:`-lifted copy match the viewer language; a player-chosen alias still wins. Prompts always use card labels, with an optional cross-language glossary when output locale differs from content locale (see [i18n.md](./i18n.md)).
 
 ### `traits.yaml`
 

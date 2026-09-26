@@ -45,6 +45,7 @@ Public surface: `api.ts` `Engine` interface (world, scene, timeline, entities, f
 | `ModelPort` | Structured LLM calls (appraise, render, reflect, generate) |
 | `StoragePort` | Authored files + timeline JSONL |
 | `EmbeddingPort` | Optional memory vector retrieval |
+| `ImagePort` | Optional CG gallery image generation ([gallery.md](./gallery.md)) |
 
 Build models from config:
 
@@ -160,4 +161,43 @@ Subscribe before turns if you need streaming on stdout while the request is in f
 
 A typical host wraps `createEngine({ root, presets, modBundles, … })`, then calls `runTui` from `@animae/tui`, the CLI plain mode, or `animae serve --stdio`. Register presets, optional `ModBundle.setup()` hooks, and custom TUI actions in one bootstrap module.
 
-Further reading: [rpc-reference.md](./rpc-reference.md), [modules/engine.md](./modules/engine.md).
+### CG gallery in hosts
+
+Wire `ImagePort` on `createEngine({ ports: { image } })`, then expose the collection through `@animae/host`:
+
+```typescript
+import { SessionHost } from "@animae/host";
+import { createWebServer } from "@animae/web";
+
+const host = new SessionHost({
+  engine,
+  openFile: (path) => { /* OS viewer */ },
+  galleryNotices: {
+    maskTitle: (item) => item.rating !== "general",
+    toasts: true,
+  },
+});
+
+createWebServer({
+  host,
+  port: 8787,
+  assets: myAssets,
+  gallery: {
+    defaultRating: "general",
+    galleryImagePolicy: (item) =>
+      item.rating === "general" ? { cache: "immutable" } : { cache: "no-store" },
+  },
+  hooks: {
+    // Optional: Settings UI "Test" without saving config (controller only)
+    async imagesProbe(draft) {
+      return { ok: true, lines: ["stub probe"] };
+    },
+  },
+});
+```
+
+Web clients send `{ type: "images_probe", id, draft?: object }`; the room calls `hooks.imagesProbe(draft)` and returns a host-defined result (for example a connectivity test against unsaved image settings). Without the hook, the server answers `UNSUPPORTED`.
+
+TUI: pass `galleryPresentation` and `openFile` on `runTui`. Headless: `animae gallery list --root ./data` with optional `--image-command ./scripts/fake-gen.sh`.
+
+Further reading: [gallery.md](./gallery.md), [rpc-reference.md](./rpc-reference.md), [modules/engine.md](./modules/engine.md).

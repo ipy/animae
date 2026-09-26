@@ -1,5 +1,6 @@
 import type { Authored, CharacterDef } from "../schema/authored.ts";
 import type { ConfigIssue } from "./errors.ts";
+import { warnUnknownNameRefs } from "./name-refs-validate.ts";
 
 export type WarnFn = (code: string, message: string, extra?: Record<string, unknown>) => void;
 
@@ -50,6 +51,8 @@ export function crossReferenceAuthored(authored: Authored, warn: WarnFn): Config
 
   const dupCheck = duplicateEntityIds(authored);
   issues.push(...dupCheck);
+
+  warnUnknownNameRefs(authored, warn);
 
   return issues;
 }

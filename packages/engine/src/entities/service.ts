@@ -7,6 +7,7 @@ import { templateFieldsSchema } from "./descriptor.ts";
 import { exportAcard } from "./acard.ts";
 import { importSillyTavernCard } from "./import-card.ts";
 import { generateFromBrief, resolveEntity, retireEntity, setEntityAlias, spawnEntity } from "./lifecycle.ts";
+import { buildEntityGeneratePrompt, buildEntityPromotePrompt } from "./generate-prompt.ts";
 
 export function createEntityService(k: Kernel): EntityService {
   return {
@@ -38,7 +39,7 @@ async function generateEntity(
 
   const schema = templateFieldsSchema(tpl.fields);
   const language = outputLanguage(k, r.hints);
-  const segments = buildGeneratePrompt(k, tpl, r, language);
+  const segments = buildEntityGeneratePrompt(k, tpl, r, language);
   const port = tpl.lod === "principal" ? k.models.s2 : k.models.s1;
 
   let proposal: Record<string, unknown>;
@@ -79,42 +80,6 @@ function outputLanguage(k: Kernel, hints?: Record<string, unknown>): string {
   return k.i18n.outputLocale ?? k.authored.world.language;
 }
 
-function buildGeneratePrompt(
-  k: Kernel,
-  tpl: Template,
-  r: { kind: string; template: string; hints?: Record<string, unknown> },
-  language: string,
-): import("../ports.ts").PromptSegments {
-  const rules = k.authored.world.rules_text ?? "";
-  const staticParts = [
-    rules && `World rules:\n${rules}`,
-    `Output language: ${language} (all generated text must use this language).`,
-    tpl.guidance && `Template guidance:\n${tpl.guidance}`,
-  ].filter(Boolean);
-
-  const existingNames = collectExistingNames(k, r.kind as "character" | "location" | "item");
-  const dynamicParts = [
-    r.hints && Object.keys(r.hints).length ? `Hints:\n${JSON.stringify(r.hints, null, 2)}` : "",
-    existingNames.length ? `Avoid duplicating these names: ${existingNames.join(", ")}` : "",
-  ].filter(Boolean);
-
-  return {
-    static: staticParts.join("\n\n"),
-    semiStatic: "",
-    dynamic: dynamicParts.join("\n\n"),
-    user: `Generate a structured ${r.kind} proposal for template "${r.template}". Fill every required field in the schema.`,
-  };
-}
-
-function collectExistingNames(k: Kernel, kind: "character" | "location" | "item"): string[] {
-  if (kind === "character") return k.catalog.characters().map((c) => c.card.identity.name);
-  if (kind === "location") return k.catalog.locations().map((l) => l.name);
-  const names: string[] = [];
-  for (const i of Object.values(k.authored.items)) names.push(i.name);
-  for (const i of Object.values(k.timeline.state().generated.items)) names.push(i.name);
-  return names;
-}
-
 async function persistGenerated(k: Kernel, ref: EntityRef, data: Record<string, unknown>, template: string): Promise<void> {
   const branch = k.timeline.branch().name;
   const path = `timelines/${branch}/entities/${ref.kind}/${ref.id}.json`;
@@ -141,18 +106,14 @@ async function promoteCharacter(
 
   const schema = templateFieldsSchema(tpl.fields);
   const language = k.i18n.outputLocale ?? def.card.identity.language ?? k.authored.world.language;
-  const segments: import("../ports.ts").PromptSegments = {
-    static: [
-      k.authored.world.rules_text && `World rules:\n${k.authored.world.rules_text}`,
-      `Output language: ${language}`,
-      tpl.guidance && `Template guidance:\n${tpl.guidance}`,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
-    semiStatic: `Current character JSON:\n${JSON.stringify(stripCharacterForPrompt(def), null, 2)}`,
-    dynamic: `Promote from LOD ${from} to ${to}. Only provide fields missing for the target LOD.`,
-    user: `Complete the character to LOD ${to}.`,
-  };
+  const segments = buildEntityPromotePrompt(
+    k,
+    tpl,
+    JSON.stringify(stripCharacterForPrompt(def), null, 2),
+    from,
+    to,
+    language,
+  );
 
   const port = to === "principal" ? k.models.s2 : k.models.s1;
   const patch = schema.parse(

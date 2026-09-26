@@ -1,4 +1,4 @@
-import type { ModelPort, StoragePort, EmbeddingPort, PromptSegments } from "./ports.ts";
+import type { ModelPort, StoragePort, EmbeddingPort, ImagePort, PromptSegments } from "./ports.ts";
 import type { Appraisal } from "./events.ts";
 import type { Authored, CharacterDef, FieldDef, FieldEffects, LocationDef, ItemDef, Template, KnowledgeDoc, AnchorDef, ScheduleItem } from "./schema/authored.ts";
 import type { ResolvedPolicy, Policy } from "./schema/policy.ts";
@@ -273,7 +273,17 @@ export interface MemoryEntry {
   claims: { s: string; p: string; o: string }[]; importance: number; valence: number; src?: EventId; branch: string;
   shareable?: boolean; hops?: number; carriedFrom?: string;
 }
-export interface RetrievalHit { kind: "memory" | "knowledge"; id: string; text: string; score: number; entry?: MemoryEntry; doc?: KnowledgeDoc; distortion?: string }
+export interface RetrievalHit {
+  kind: "memory" | "knowledge";
+  id: string;
+  text: string;
+  score: number;
+  entry?: MemoryEntry;
+  doc?: KnowledgeDoc;
+  /** Developer-facing instruction (English); prompts render the localized phrase for `distortionKind`. */
+  distortion?: string;
+  distortionKind?: string;
+}
 export interface InjectedKnowledge {
   always: KnowledgeDoc[]; // static segment
   when: KnowledgeDoc[]; // dynamic segment
@@ -364,8 +374,13 @@ export interface EngineLocaleConfig {
  * is synchronous, so `prepare` loads the tables beforehand (the engine does it at startup and at the start of a turn).
  */
 export interface DisplayText {
-  /** `$t:key` / `{ i18n }` values resolve; plain strings and other values pass through unchanged. */
-  resolve(locale: string, value: unknown): unknown;
+  /**
+   * `$t:key` / `{ i18n }` values resolve; plain strings and other values pass through unchanged. Name references
+   * (`{{name:<id>}}`) expand to the card names; with `localizeNames`, text shown in another language than the cards
+   * are written in uses that language's spelling instead (string keys `character.<id>.name` / `.nickname` of
+   * `locale`, falling back to the card name). Only UI text asks for it: prompts keep the card names.
+   */
+  resolve(locale: string, value: unknown, opts?: { localizeNames?: boolean }): unknown;
   /**
    * Strict lookup of one string key in exactly that locale's tables (no fallback locale), so a key translated only in
    * the fallback language is never mistaken for a translation into another language.
@@ -387,6 +402,7 @@ export interface Kernel {
   timeline: TimelineStore;
   models: { s1: ModelPort; s2: ModelPort };
   embedding?: EmbeddingPort;
+  image?: ImagePort;
   catalog: Catalog;
   /** appends events with the current turn/scene context */
   emit(drafts: EventDraft[], ctx?: AppendCtx): Promise<EngineEvent[]>;
@@ -399,6 +415,7 @@ export interface Kernel {
     introspect: Introspect;
     router: Router;
     entities: EntityService;
+    gallery?: import("./gallery/types.ts").GalleryService & import("./gallery/types.ts").GalleryLifecycleHooks;
   };
   /** build the CEL context for an evaluation (see docs/architecture.md "CEL context") */
   celContext(p: { self?: CharacterId; other?: CharacterId; actor?: CharacterId; event?: Partial<Appraisal> & { type?: string; text?: string }; sceneId?: SceneId; check?: unknown; extra?: CelContext }): CelContext;

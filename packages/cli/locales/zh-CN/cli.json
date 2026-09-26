@@ -12,5 +12,32 @@
     "advance_usage": "用法：:advance <duration>",
     "advanced": "已推进 {duration}",
     "unknown": "未知指令：{name}"
+  },
+  "gallery": {
+    "help": "用法：animae gallery list|show|capture|render|cancel|remove|pin|ratings|jobs [--json]",
+    "list_empty": "图鉴为空。",
+    "show_usage": "用法：animae gallery show <id>",
+    "not_found": "没有该图鉴条目：{id}",
+    "capture_started": "已排队抓拍：{item}（作业 {job}）",
+    "render_usage": "用法：animae gallery render <id> [--reroll]",
+    "render_started": "已为 {id} 排队渲染（作业 {job}）",
+    "no_job": "没有进行中的图鉴作业。",
+    "cancelled": "已取消作业 {job}",
+    "cancel_failed": "无法取消作业 {job}",
+    "remove_usage": "用法：animae gallery remove <id>",
+    "removed": "已删除 {id}",
+    "pin_usage": "用法：animae gallery pin <id> [--unpin]",
+    "pinned": "已置顶 {id}",
+    "unpinned": "已取消置顶 {id}",
+    "unknown_sub": "未知图鉴子命令：{sub}"
+  },
+  "error": {
+    "gallery_no_generator": "未配置图像生成器（GALLERY_NO_GENERATOR）。",
+    "gallery_unknown_entry": "未知图鉴条目（GALLERY_UNKNOWN_ENTRY）。",
+    "gallery_locked": "该条目尚未解锁（GALLERY_LOCKED）。",
+    "gallery_rating_unavailable": "当前不可用该分级（GALLERY_RATING_UNAVAILABLE）。",
+    "gallery_busy": "图鉴队列已满，请稍后再试（GALLERY_BUSY）。",
+    "gallery_brief_invalid": "无法生成有效的图像简报（GALLERY_BRIEF_INVALID）。",
+    "gallery_generation_failed": "图像生成失败（GALLERY_GENERATION_FAILED）。"
   }
 }

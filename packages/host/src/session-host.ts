@@ -7,6 +7,15 @@ import { createHostCommandApi, setHostSceneId, type CommandApiState } from "./co
 import { createHostI18n } from "./i18n/host-i18n.ts";
 import { consumeTurnStream } from "./turn-consumer.ts";
 import type {
+  GalleryCaptureRequest,
+  GalleryItemView,
+  GalleryJobView,
+  GalleryListOptions,
+  GalleryNotice,
+  GalleryRatingView,
+} from "@animae/engine";
+import { galleryNoticeToast } from "./gallery-notice-toast.ts";
+import type {
   HostAction,
   HostActionContext,
   HostCommand,
@@ -38,6 +47,17 @@ export interface SessionHostOptions {
   sidePanelTabForCommand?: Record<string, string>;
   /** Free-roam routing before NO_SCENE errors (game-provided). */
   resolveFreeInput?: import("./types.ts").HostResolveFreeInputFn;
+  /** Open gallery image files (`:gallery open`, TUI `o`). */
+  openFile?: (path: string) => void | Promise<void>;
+  /**
+   * How gallery notices (unlocks, finished renders) talk about an entry. Titles are shown by default; a game that
+   * hides some entries behind a content mask returns `true` from `maskTitle` and the notice stays generic.
+   * `toasts: false` is for clients that render their own gallery toasts from `onGalleryNotice`.
+   */
+  galleryNotices?: {
+    maskTitle?: (item: GalleryItemView) => boolean;
+    toasts?: boolean;
+  };
 }
 
 export interface ActionDescriptor {
@@ -69,12 +89,14 @@ export class SessionHost {
   private readonly footerFn?: SessionHostOptions["footerState"];
   private readonly sidePanelTabForCommand: Record<string, string>;
   private readonly resolveFreeInput?: import("./types.ts").HostResolveFreeInputFn;
+  private readonly galleryNotices: NonNullable<SessionHostOptions["galleryNotices"]>;
   private i18n: I18nInstance;
 
   private activeTurnAbort?: AbortController;
   private activeRequestId?: string;
   private endDayInFlight = false;
   private streamCallbacks: StreamCallbacks = {};
+  private galleryUnsub?: () => void;
   /** Player free-text cap (colon commands exempt). */
   static readonly maxPlayerInputChars = 4096;
 
@@ -92,6 +114,7 @@ export class SessionHost {
     this.footerFn = opts.footerState;
     this.sidePanelTabForCommand = opts.sidePanelTabForCommand ?? {};
     this.resolveFreeInput = opts.resolveFreeInput;
+    this.galleryNotices = opts.galleryNotices ?? {};
 
     this.ui = {
       hasScene: false,
@@ -141,7 +164,13 @@ export class SessionHost {
       },
       uiBridge,
       i18nBridge,
+      opts.openFile,
     );
+
+    this.galleryUnsub = this.engine.gallery.subscribe((notice) => {
+      this.streamCallbacks.onGalleryNotice?.(notice);
+      this.handleGalleryNotice(notice);
+    });
 
     if (opts.initialMessage) {
       this.appendSystemLine(opts.initialMessage, "info");
@@ -150,7 +179,111 @@ export class SessionHost {
   }
 
   setStreamCallbacks(cb: StreamCallbacks): void {
-    this.streamCallbacks = cb;
+    this.streamCallbacks = { ...this.streamCallbacks, ...cb };
+  }
+
+  private galleryLocale(): string {
+    return this.i18n.locale;
+  }
+
+  private galleryListOpts(extra?: GalleryListOptions): GalleryListOptions {
+    return { locale: this.galleryLocale(), ...extra };
+  }
+
+  async galleryList(opts?: GalleryListOptions): Promise<GalleryItemView[]> {
+    return this.engine.gallery.list(this.galleryListOpts(opts));
+  }
+
+  async galleryGet(id: string, opts?: GalleryListOptions): Promise<GalleryItemView | undefined> {
+    return this.engine.gallery.get(id, this.galleryListOpts(opts));
+  }
+
+  galleryRatings(): GalleryRatingView[] {
+    return this.engine.gallery.ratings();
+  }
+
+  galleryJobs(): GalleryJobView[] {
+    return this.engine.gallery.jobs();
+  }
+
+  galleryGeneratorAvailable(): boolean {
+    return this.engine.gallery.generatorAvailable();
+  }
+
+  async galleryUnlock(id: string, why?: { source?: string }): Promise<GalleryItemView> {
+    return this.engine.gallery.unlock(id, why);
+  }
+
+  async galleryCapture(req?: GalleryCaptureRequest): Promise<{ item: string; job: string }> {
+    return this.engine.gallery.capture(req);
+  }
+
+  async galleryRender(id: string, opts?: { reroll?: boolean; seed?: number }): Promise<{ job: string }> {
+    return this.engine.gallery.render(id, opts);
+  }
+
+  async galleryCancel(job: string): Promise<boolean> {
+    return this.engine.gallery.cancel(job);
+  }
+
+  async galleryRemove(id: string): Promise<void> {
+    return this.engine.gallery.remove(id);
+  }
+
+  async galleryPin(id: string, pinned: boolean): Promise<void> {
+    return this.engine.gallery.pin(id, pinned);
+  }
+
+  async galleryImage(id: string) {
+    return this.engine.gallery.image(id);
+  }
+
+  /** The entry's title for a notice, or `undefined` when it is unknown or masked (the notice then stays generic). */
+  private async galleryNoticeTitle(id: string): Promise<string | undefined> {
+    try {
+      const view = await this.engine.gallery.get(id, this.galleryListOpts({ includeUnavailable: true }));
+      if (!view || this.galleryNotices.maskTitle?.(view)) return undefined;
+      return view.title.trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private handleGalleryNotice(notice: GalleryNotice): void {
+    if (notice.type === "changed") {
+      this.streamCallbacks.onStateChange?.();
+      return;
+    }
+    void this.deliverGalleryNotice(notice).catch(() => this.streamCallbacks.onStateChange?.());
+  }
+
+  private async deliverGalleryNotice(notice: Exclude<GalleryNotice, { type: "changed" }>): Promise<void> {
+    const t = (key: string, params?: Record<string, string | number>) =>
+      this.activeI18n.t(key, params, { ns: "host" });
+    const toast = (level: "info" | "error", text: string) => {
+      if (this.galleryNotices.toasts !== false) this.streamCallbacks.onToast?.(level, text);
+    };
+    if (notice.type === "unlocked") {
+      const title = await this.galleryNoticeTitle(notice.item);
+      const key = title ? "gallery.notice.unlocked" : "gallery.notice.unlocked_generic";
+      const params = title ? { item: title } : undefined;
+      this.appendSystemLine({ i18n: { key, params } });
+      toast("info", t(key, params));
+    } else {
+      const payload = await galleryNoticeToast(notice, {
+        locale: this.galleryLocale(),
+        getItem: (id) => this.engine.gallery.get(id, this.galleryListOpts({ includeUnavailable: true })),
+        maskTitle: this.galleryNotices.maskTitle,
+        t,
+      });
+      if (payload) toast(payload.level, payload.text);
+    }
+    this.streamCallbacks.onStateChange?.();
+  }
+
+  dispose(): void {
+    this.galleryUnsub?.();
+    this.galleryUnsub = undefined;
   }
 
   /** Attach an already-started engine scene (e.g. after external bootstrap). */

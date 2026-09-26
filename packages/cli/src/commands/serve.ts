@@ -2,8 +2,11 @@ import { createInterface } from "node:readline";
 import { createRpcServer } from "@animae/engine";
 import { printError } from "../errors.ts";
 import { openEngine, type OpenEngineOptions } from "../engine-open.ts";
+import { createCommandImagePort } from "../image-command-port.ts";
 
-export async function runServe(opts: OpenEngineOptions & { stdio: boolean }): Promise<number> {
+export async function runServe(
+  opts: OpenEngineOptions & { stdio: boolean; imageCommand?: string; imageCommandArgs?: string[] },
+): Promise<number> {
   if (!opts.stdio) {
     process.stderr.write("serve currently supports only --stdio\n");
     return 1;
@@ -11,7 +14,10 @@ export async function runServe(opts: OpenEngineOptions & { stdio: boolean }): Pr
 
   let engine;
   try {
-    engine = await openEngine(opts);
+    const ports = opts.imageCommand
+      ? { image: createCommandImagePort({ command: opts.imageCommand, args: opts.imageCommandArgs }) }
+      : opts.ports;
+    engine = await openEngine({ ...opts, ports });
   } catch (err) {
     printError(err);
     return 1;

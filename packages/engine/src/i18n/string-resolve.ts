@@ -7,6 +7,8 @@ const T_MUSTACHE = /\{\{\s*t\.([a-zA-Z0-9_.-]+)\s*\}\}/g;
 export interface StringTableResolver {
   resolve(key: string): string | undefined;
   warnings: string[];
+  /** Merged flat entries from the locale chain (later locales override). */
+  entries(): Record<string, string>;
 }
 
 export async function loadStringTables(
@@ -36,6 +38,8 @@ export async function loadStringTables(
     }
   }
 
+  const merged = (): Record<string, string> => Object.assign({}, ...tables);
+
   return {
     warnings,
     resolve(key: string) {
@@ -44,6 +48,7 @@ export async function loadStringTables(
       }
       return undefined;
     },
+    entries: merged,
   };
 }
 

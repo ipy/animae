@@ -25,7 +25,7 @@ export interface SceneService {
 export function createSceneService(
   k: Kernel,
   hooks: HookRegistry,
-  opts?: { afterTurn?: () => Promise<void> },
+  opts?: { afterTurn?: () => Promise<void>; afterSceneEnd?: () => Promise<void> },
 ): SceneService {
   let turnInFlight = false;
 
@@ -227,6 +227,7 @@ export function createSceneService(
 
       await k.m.memory.propagateTick();
       await k.timeline.maybeSnapshot("scene_end");
+      await opts?.afterSceneEnd?.();
 
       const anchors = Object.entries(k.timeline.state().anchors).map(([id, st]) => ({
         id,

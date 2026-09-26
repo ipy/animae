@@ -24,3 +24,7 @@ Runtime entity generation, LOD promotion, and SillyTavern card import/export ([6
 
 - PNG: prefers `ccv3` over `chara` when both chunks exist.
 - Promotion template pick: match `template.lod`, else `x_import.template`, else first character template.
+
+## Name references in authored prose
+
+Use `{{name:<characterId>}}` in markdown/YAML/strings when text must address a character by their current display name (card name or runtime nickname from `setAlias`). Expansion is implemented in `entities/name-refs.ts` and wired through `promptText`, `prepareAuthoredProse`, and `Engine.display.resolve(..., { localizeNames: true })` for UI in another language than card prose. Policy prompt templates may still use `{{ name }}` / `{{ canonical_name }}` (speaker-scoped). Cross-language render prompts may add a name glossary using `character.<id>.name|nickname` string-table keys (nickname field on the card when present). `animae validate` warns on unknown ids (`NAME_REF_UNKNOWN`). Alias labels must not contain `{{` or start with `$t:`.

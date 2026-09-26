@@ -3,6 +3,7 @@ import type { Kernel } from "../contracts.ts";
 import type { EntityRef, EventDraft, WorldTime } from "../types.ts";
 import { compareTime } from "./calendar.ts";
 import { parseAtTime } from "./schedule-parse.ts";
+import { buildNarrateLocationPrompt } from "./narrate-prompt.ts";
 
 const NarrateSchema = z.strictObject({ text: z.string() });
 
@@ -64,15 +65,9 @@ function lastSimulated(state: import("../state.ts").EngineState, entity: EntityR
 
 async function narrateLocation(k: Kernel, locationId: string): Promise<string | undefined> {
   try {
-    const loc = k.catalog.location(locationId);
     const result = await k.models.s1.object({
       label: "narrate",
-      segments: {
-        static: loc?.description ?? loc?.summary ?? locationId,
-        semiStatic: "",
-        dynamic: "Describe visible traces at this location in one sentence.",
-        user: "Narrate offscreen traces.",
-      },
+      segments: buildNarrateLocationPrompt(k, locationId),
       schema: NarrateSchema,
       maxOutputTokens: k.policy.router.budget?.maxOutputTokens?.s1 ?? 400,
     });

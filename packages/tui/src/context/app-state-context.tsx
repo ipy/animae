@@ -265,6 +265,10 @@ export interface AppConfig {
   footer?: ComponentType<LayoutProps>;
   nameHints: string[];
   resolveFreeInput?: import("../types.ts").ResolveFreeInputFn;
+  galleryPresentation?: import("../types.ts").GalleryPresentationFn;
+  openFile?: (path: string) => void | Promise<void>;
+  galleryCapture?: import("../types.ts").RunTuiOptions["galleryCapture"];
+  galleryNotices?: import("../types.ts").RunTuiOptions["galleryNotices"];
 }
 
 interface AppStateContextValue {
@@ -399,6 +403,7 @@ export function AppStateProvider({
       setTurnPending: (pending: boolean) => {
         dispatch({ type: "setPending", pending });
       },
+      openFile: config.openFile,
     }),
     [engine, viewer, actor, notify, openOverlay, closeOverlay, setMouseCapture, config, dispatch, syncLiveScene],
   );

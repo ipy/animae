@@ -7,12 +7,12 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-function isAppendMarker(v: unknown): v is { $append: unknown[] } {
-  return isPlainObject(v) && Array.isArray(v.$append) && Object.keys(v).length === 1;
+function isAppendMarker(v: unknown): v is { $append: unknown[] | string } {
+  return isPlainObject(v) && (Array.isArray(v.$append) || typeof v.$append === "string") && Object.keys(v).length === 1;
 }
 
-function isPrependMarker(v: unknown): v is { $prepend: unknown[] } {
-  return isPlainObject(v) && Array.isArray(v.$prepend) && Object.keys(v).length === 1;
+function isPrependMarker(v: unknown): v is { $prepend: unknown[] | string } {
+  return isPlainObject(v) && (Array.isArray(v.$prepend) || typeof v.$prepend === "string") && Object.keys(v).length === 1;
 }
 
 function pathJoin(base: string, key: string): string {
@@ -48,10 +48,12 @@ function mergeValue(
   warnings: ConfigWarning[],
 ): unknown {
   if (isAppendMarker(incoming)) {
+    if (typeof incoming.$append === "string") return `${typeof base === "string" ? base : ""}${incoming.$append}`;
     const arr = Array.isArray(base) ? base : [];
     return [...arr, ...incoming.$append];
   }
   if (isPrependMarker(incoming)) {
+    if (typeof incoming.$prepend === "string") return `${incoming.$prepend}${typeof base === "string" ? base : ""}`;
     const arr = Array.isArray(base) ? base : [];
     return [...incoming.$prepend, ...arr];
   }
