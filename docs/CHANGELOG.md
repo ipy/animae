@@ -22,6 +22,7 @@
 ### `@animae/web`
 
 - Gallery client messages, `gallery_notice` push, image HTTP route; optional host hook **`images_probe`** for generator health checks with unsaved settings draft.
+- **Replay on connect:** a client that has seen nothing (`hello.resumeSeq` 0 or absent) no longer receives the buffered stream of every earlier turn, only the turn that is still running; a returning client (`resumeSeq > 0`) still gets everything after its last message. The old behaviour replayed up to 500 stale `stream` / `busy` messages to every fresh page.
 
 ### Documentation
 

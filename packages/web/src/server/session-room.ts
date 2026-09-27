@@ -306,12 +306,35 @@ export class SessionRoom {
     }
   }
 
+  /**
+   * Catch a connecting client up on streamed output.
+   *
+   * A returning client (`seq > 0`) receives everything after the last message it saw. A client that has seen nothing
+   * (`seq === 0`: a fresh page or tab) has just received the whole state as a snapshot, so the stream of earlier
+   * turns is not replayed (hundreds of messages would be applied to a page that already shows their result). Only
+   * the turn that is running right now is, so a client that joins mid-turn follows its stream from the start.
+   */
   replaySince(seq: number, ws: ServerWebSocket<WsData>): void {
-    for (const msg of this.patchBuffer) {
+    const start = seq > 0 ? 0 : this.runningTurnStart();
+    if (start < 0) return;
+    for (let i = start; i < this.patchBuffer.length; i++) {
+      const msg = this.patchBuffer[i]!;
       if ("seq" in msg && typeof msg.seq === "number" && msg.seq > seq) {
         ws.send(JSON.stringify(msg));
       }
     }
+  }
+
+  /** Buffer index of the first message of the turn that is still running, or -1 when the last busy report says idle. */
+  private runningTurnStart(): number {
+    let start = -1;
+    for (let i = this.patchBuffer.length - 1; i >= 0; i--) {
+      const msg = this.patchBuffer[i]!;
+      if (msg.type !== "busy") continue;
+      if (!msg.active) break;
+      start = i;
+    }
+    return start;
   }
 
   registerClient(ws: ServerWebSocket<WsData>, id: string): void {
