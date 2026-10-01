@@ -1,6 +1,7 @@
 import {
   generateText,
   isStepCount,
+  NoOutputGeneratedError,
   Output,
   streamText,
   tool,
@@ -16,7 +17,15 @@ import type { ModelSpec } from "../schema/authored.ts";
 import { promptSegmentCharCount, segmentsToMessages } from "./messages.ts";
 import { resolveOllamaProviderOptions, resolveOpenAICompatibleProviderOptions } from "./provider.ts";
 import { estimatePromptTokensFromChars, warnOllamaContextBudget } from "./warnings.ts";
-import { isOutputValidationError, isTransientError, withTransientRetries } from "./retry.ts";
+import { asModelAnimaeError, modelTimeoutError } from "./classify-error.ts";
+import {
+  isOutputValidationError,
+  isTimeoutLikeError,
+  isTransientError,
+  MAX_TIMEOUT_RETRIES,
+  withTransientRetries,
+} from "./retry.ts";
+import { createStreamWatchdog, resolveModelTimeoutMs } from "./timeout.ts";
 import type { ModelPortOptions } from "./types.ts";
 import { sanitizeStructuredOutput } from "./reasoning.ts";
 import { salvageStructuredFromValidationError } from "./salvage-output.ts";
@@ -62,6 +71,16 @@ function providerOptionsFromSpec(
   return { [key]: spec.options };
 }
 
+function modelCallContext(spec: ModelSpec) {
+  const timeoutMs = resolveModelTimeoutMs(spec);
+  return { timeoutMs, baseURL: spec.baseURL };
+}
+
+/** Non-streaming calls: one total wall-clock limit per attempt. Streams use `createStreamWatchdog`. */
+function objectTransportOptions(spec: ModelSpec): { timeout: number } {
+  return { timeout: resolveModelTimeoutMs(spec) };
+}
+
 function callSettings(
   req: ModelRequestBase,
   spec: ModelSpec,
@@ -78,6 +97,10 @@ function callSettings(
   };
 }
 
+function rethrowModel(err: unknown, spec: ModelSpec): never {
+  throw asModelAnimaeError(err, modelCallContext(spec));
+}
+
 function finishGenerate<T>(
   result: Awaited<ReturnType<typeof generateText>>,
   tracker: UsageTracker,
@@ -87,7 +110,7 @@ function finishGenerate<T>(
   tracker.add(usage);
   opts.usageSink?.(usage);
   if (result.output === undefined) {
-    throw new AnimaeError("MODEL_OUTPUT_INVALID", "Model returned no structured output");
+    throw new AnimaeError("MODEL_EMPTY", "Model returned no structured output");
   }
   return sanitizeStructuredOutput(result.output as T);
 }
@@ -104,6 +127,8 @@ export async function runObjectWithRepair<T>(
   const settings = callSettings(req, spec, { warningSink: opts.warningSink });
   const output = Output.object({ schema: req.schema });
 
+  const transport = objectTransportOptions(spec);
+
   const call = (extra: ModelMessage[]) =>
     withTransientRetries(
       () =>
@@ -114,6 +139,7 @@ export async function runObjectWithRepair<T>(
           output,
           maxRetries: 0,
           ...settings,
+          ...transport,
         } as unknown as Parameters<typeof generateText>[0]),
       { max: opts.maxTransientRetries, sleep: opts.sleep },
     );
@@ -121,7 +147,7 @@ export async function runObjectWithRepair<T>(
   try {
     return finishGenerate(await call([]), tracker, opts);
   } catch (first) {
-    if (!isOutputValidationError(first)) throw first;
+    if (!isOutputValidationError(first)) rethrowModel(first, spec);
     try {
       return finishGenerate(await call([REPAIR_HINT]), tracker, opts);
     } catch (second) {
@@ -152,72 +178,95 @@ async function* streamOnce(
     wake?.();
   };
 
-  const result = streamText({
-    model,
-    messages,
-    tools,
-    output,
-    maxRetries: 0,
-    ...settings,
-    onChunk(event: { chunk: TextStreamPart<ToolSet> }) {
-      const { chunk } = event;
-      if (chunk.type === "tool-result") {
-        push({ type: "tool", name: chunk.toolName, input: chunk.input, output: chunk.output });
-      }
-    },
-  } as unknown as Parameters<typeof streamText>[0]);
-
+  const timeoutMs = resolveModelTimeoutMs(spec);
+  const watchdog = createStreamWatchdog(timeoutMs, () => wake?.());
   let streamError: unknown;
-  const partialTask = (async () => {
-    try {
-      for await (const partial of result.partialOutputStream) {
-        push({ type: "partial", value: sanitizeStructuredOutput(partial) });
-      }
-    } catch (e) {
-      streamError = e;
-      wake?.();
-    }
-  })();
-
-  let textDone = false;
-  void Promise.resolve(result.text)
-    .then(() => {
-      textDone = true;
-      wake?.();
-    })
-    .catch((e: unknown) => {
-      streamError = e;
-      textDone = true;
-      wake?.();
-    });
-
-  while (!textDone || queue.length > 0) {
-    while (queue.length) yield queue.shift()!;
-    if (!textDone) {
-      await new Promise<void>((resolve) => {
-        wake = resolve;
-      });
-    }
-  }
-
-  await partialTask;
-  if (streamError) throw streamError;
-
-  let value: unknown;
+  // The SDK reports transport/provider failures on the stream and then rejects with a generic
+  // "No output generated"; keep the first real error so it can be classified, and (by supplying
+  // `onError`) stop the SDK from printing it to the console.
+  const noteError = (e: unknown) => {
+    if (streamError === undefined || NoOutputGeneratedError.isInstance(streamError)) streamError = e;
+    wake?.();
+  };
   try {
-    value = await result.output;
-  } catch (e) {
-    const salvaged = isOutputValidationError(e)
-      ? salvageStructuredFromValidationError(e, req.schema)
-      : undefined;
-    if (salvaged === undefined) throw e;
-    value = salvaged;
-  }
+    const result = streamText({
+      model,
+      messages,
+      tools,
+      output,
+      maxRetries: 0,
+      ...settings,
+      abortSignal: watchdog.signal,
+      onError: ({ error }: { error: unknown }) => noteError(error),
+      onChunk(event: { chunk: TextStreamPart<ToolSet> }) {
+        const { chunk } = event;
+        // `start` / `start-step` are emitted by the SDK itself before the request goes out; only
+        // provider output counts as liveness.
+        if (chunk.type !== "start" && chunk.type !== "start-step") watchdog.touch();
+        if (chunk.type === "tool-result") {
+          push({ type: "tool", name: chunk.toolName, input: chunk.input, output: chunk.output });
+        }
+      },
+    } as unknown as Parameters<typeof streamText>[0]);
 
-  const usage = mapUsage(await result.usage);
-  tracker.add(usage);
-  opts.usageSink?.(usage);
-  yield { type: "final", value: sanitizeStructuredOutput(value), usage };
+    const partialTask = (async () => {
+      try {
+        for await (const partial of result.partialOutputStream) {
+          push({ type: "partial", value: sanitizeStructuredOutput(partial) });
+        }
+      } catch (e) {
+        noteError(e);
+      }
+    })();
+
+    let textDone = false;
+    void Promise.resolve(result.text)
+      .then(() => {
+        textDone = true;
+        watchdog.stop();
+        wake?.();
+      })
+      .catch((e: unknown) => {
+        textDone = true;
+        // A provider failure ends the request: the idle timer must not fire afterwards and relabel it a timeout.
+        watchdog.stop();
+        noteError(e);
+      });
+
+    while (!textDone || queue.length > 0) {
+      while (queue.length) yield queue.shift()!;
+      if (watchdog.firedPhase) break;
+      if (!textDone) {
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+      }
+    }
+
+    // The SDK may take a moment (or never) to surface our own abort; the watchdog result is authoritative.
+    if (watchdog.firedPhase) throw modelTimeoutError(timeoutMs, watchdog.firedPhase, streamError);
+
+    await partialTask;
+    if (streamError) rethrowModel(streamError, spec);
+
+    let value: unknown;
+    try {
+      value = await result.output;
+    } catch (e) {
+      const salvaged = isOutputValidationError(e)
+        ? salvageStructuredFromValidationError(e, req.schema)
+        : undefined;
+      if (salvaged === undefined) rethrowModel(e, spec);
+      value = salvaged;
+    }
+
+    const usage = mapUsage(await result.usage);
+    tracker.add(usage);
+    opts.usageSink?.(usage);
+    yield { type: "final", value: sanitizeStructuredOutput(value), usage };
+  } finally {
+    watchdog.stop();
+  }
 }
 
 export async function* runStream(
@@ -230,6 +279,7 @@ export async function* runStream(
   const maxTransient = opts.maxTransientRetries ?? 3;
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
 
+  let timeoutRetries = 0;
   for (let repair = 0; repair < 2; repair++) {
     const extra = repair === 1 ? [REPAIR_HINT] : [];
     for (let attempt = 0; attempt <= maxTransient; attempt++) {
@@ -248,11 +298,16 @@ export async function* runStream(
           throw new AnimaeError("MODEL_OUTPUT_INVALID", "Model stream output failed schema validation after repair", e);
         }
         if (isTransientError(e) && attempt < maxTransient) {
+          if (isTimeoutLikeError(e)) {
+            if (timeoutRetries >= MAX_TIMEOUT_RETRIES) rethrowModel(e, spec);
+            timeoutRetries += 1;
+          }
           await sleep(200 * 2 ** attempt);
           continue;
         }
-        throw e;
+        rethrowModel(e, spec);
       }
     }
   }
+  rethrowModel(new Error("stream retries exhausted"), spec);
 }

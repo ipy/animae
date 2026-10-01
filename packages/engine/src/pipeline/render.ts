@@ -10,6 +10,8 @@ import { buildPromptSegments } from "./prompt.ts";
 import { routerBudgetK } from "../router/policy-access.ts";
 import type { RenderInput, RenderPart, RenderResult } from "./types.ts";
 import { modelCelExtra } from "./model-cel.ts";
+import { rethrowPipelineModelError } from "./model-error.ts";
+import { resolveModelTimeoutMs } from "../model/timeout.ts";
 
 function textDelta(prev: string, next: string): string | null {
   if (next === prev) return null;
@@ -205,12 +207,17 @@ async function runRenderStream(
     sidenotes: i.sidenotes,
     tracks: i.tracks,
     tiers: i.tiers,
+    extraStatic: i.extraStatic,
     extraDynamic: i.extraDynamic,
     outputLocale: t.outputLocale,
   });
 
   const schema = buildRenderSchema(k.policy);
   const model = i.tier === "s2" ? k.models.s2 : k.models.s1;
+  const slotSpec = i.tier === "s2" ? k.authored.config.models?.s2 : k.authored.config.models?.s1;
+  const modelCtx = slotSpec
+    ? { timeoutMs: resolveModelTimeoutMs(slotSpec), baseURL: slotSpec.baseURL }
+    : undefined;
   const tools = i.tier === "s2" ? buildS2Tools(k, i.speaker) : undefined;
 
   const parts: RenderPart[] = [];
@@ -250,14 +257,16 @@ async function runRenderStream(
       }
     }
   } catch (err) {
-    throw new AnimaeError("RENDER_FAILED", "Render model call failed", err);
+    rethrowPipelineModelError(err, "RENDER_FAILED", "Render model call failed", modelCtx);
   }
 
-  if (!finalValue) throw new AnimaeError("RENDER_FAILED", "Render stream ended without final value");
+  if (!finalValue) {
+    throw new AnimaeError("MODEL_EMPTY", "Render stream ended without final value");
+  }
 
   const text = String(finalValue.text ?? "").trim() || longestPartialText.trim();
   // Never commit a blank utterance (it would also be written to memory); the turn fails and the player can resend.
-  if (!text) throw new AnimaeError("RENDER_FAILED", "Render model returned no text");
+  if (!text) throw new AnimaeError("MODEL_EMPTY", "Render model returned no text");
   const intent_realized = String(finalValue.intent_realized ?? "");
   const cues = (finalValue.cues as { type: string; args: Record<string, unknown>; at?: number }[]) ?? [];
   const choices = finalValue.choices as { text: string; expected_event_type: string; tags: string[] }[] | undefined;

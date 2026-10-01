@@ -1,11 +1,26 @@
 import type { FieldQuery, FieldSystem, Kernel, LedgerEntry } from "../contracts.ts";
-import type { FieldDef } from "../schema/authored.ts";
 import type { EngineEvent, EventDraft } from "../types.ts";
 import { clampEffects } from "./caps.ts";
 import { grantAllowed } from "./grants.ts";
+import { validateFieldL3Effects } from "./l3-validate.ts";
 import { emptyEffectsByLevel, levelIndex, LEVELS } from "./levels.ts";
 import { mergeFieldEffects } from "./merge.ts";
 import { scopeMatches } from "./scope.ts";
+import type { FieldCustomRule } from "../schema/custom-rule.ts";
+import type { FieldDef } from "../schema/authored.ts";
+
+function collectL3FieldRules(fields: FieldDef[]): FieldCustomRule[] {
+  const sorted = [...fields].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
+  const ordered: FieldCustomRule[] = [];
+  for (const f of sorted) {
+    for (const entry of f.effects.rule_add ?? []) {
+      ordered.push({ ...entry, fieldId: f.id });
+    }
+  }
+  const lastIndex = new Map<string, number>();
+  ordered.forEach((r, i) => lastIndex.set(r.id, i));
+  return ordered.filter((r, i) => lastIndex.get(r.id) === i);
+}
 
 type TrackedField = { def: FieldDef; turnsActive: number };
 
@@ -126,10 +141,12 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
       }
     }
 
-    return { effects, applied, maxLevel, events };
+    const l3FieldRules = collectL3FieldRules(byLevel.L3 ?? []);
+    return { effects, applied, maxLevel, events, l3FieldRules };
   }
 
   async function grant(f: FieldDef, why?: { source: string; because?: string[] }): Promise<LedgerEntry> {
+    validateFieldL3Effects(k, f);
     const source = why?.source ?? f.source;
     if (!grantAllowed(f, source, k.policy, k.rules.cel)) {
       const evs = await k.emit(
@@ -152,6 +169,7 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
   }
 
   function declare(f: FieldDef): void {
+    validateFieldL3Effects(k, f);
     declared[f.id] = f;
   }
 

@@ -3,7 +3,9 @@ import type { SessionHost } from "@animae/host";
 import { randomUUID } from "node:crypto";
 import type { AssetProvider } from "../assets/types.ts";
 import { serveAssetRequest } from "../assets/serve-asset.ts";
+import { localizeValue, matchAvailableLocale } from "@animae/i18n";
 import { WEB_PROTOCOL_VERSION } from "../protocol/version.ts";
+import { WEB_SUPPORTED_LOCALES, createWebI18n } from "../i18n/web-i18n.ts";
 import {
   checkOrigin,
   extractToken,
@@ -45,6 +47,8 @@ export interface CreateWebServerOptions {
   extraOrigins?: string[];
   hooks?: WebSessionHooks;
   gallery?: WebGalleryServerOptions;
+  /** Optional authenticated `/api/*` handler before built-in gallery routes. */
+  onApiRequest?: (req: Request, url: URL) => Promise<Response | undefined>;
   version?: string;
   onListen?: (info: { url: string; token?: string }) => void;
 }
@@ -98,6 +102,33 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
           package: "@animae/web",
           app: opts.version ?? "unknown",
         });
+      }
+
+      if (url.pathname === "/api/environment") {
+        const hook = room.hooks.environment;
+        if (!hook) {
+          return new Response("Not Found", { status: 404 });
+        }
+        const locale = matchAvailableLocale(url.searchParams.get("locale") ?? "en", WEB_SUPPORTED_LOCALES);
+        const t = createWebI18n(locale).t;
+        const raw = await hook();
+        const entries = raw.map((entry) => ({
+          id: entry.id,
+          value: entry.value,
+          kind: entry.kind,
+          label:
+            entry.label == null
+              ? entry.id
+              : typeof entry.label === "string"
+                ? entry.label
+                : String(localizeValue(entry.label, t)),
+        }));
+        return Response.json({ entries });
+      }
+
+      if (opts.onApiRequest) {
+        const custom = await opts.onApiRequest(req, url);
+        if (custom) return custom;
       }
 
       if (url.pathname.startsWith("/api/gallery/image/")) {

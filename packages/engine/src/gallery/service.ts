@@ -70,12 +70,16 @@ export function createGalleryService(
     return parsed.success ? parsed.data : undefined;
   }
 
+  function generatorReady(): boolean {
+    return imagePort !== undefined && imagePort.available?.() !== false;
+  }
+
   function galleryEnabled(): boolean {
     const cfg = config();
     if (!cfg) return false;
     if (cfg.enabled === false) return false;
     if (Object.keys(cfg.entries).length > 0) return true;
-    return imagePort !== undefined;
+    return generatorReady();
   }
 
   function unlockedIds(): string[] {
@@ -408,7 +412,7 @@ export function createGalleryService(
     await k.emit([{ kind: "gallery.unlocked", item: id, source: why.source ?? "api" }]);
     notify({ type: "unlocked", item: id });
     const entry = cfg.entries[id]!;
-    if (entry.render?.auto && imagePort && !entry.image?.src && !store.snapshot().presetImages[id]) {
+    if (entry.render?.auto && generatorReady() && !entry.image?.src && !store.snapshot().presetImages[id]) {
       await enqueueRender(id, { seed: entry.render.seed });
     }
     return (await buildItemView(id, "preset", k.i18n.locale, {}))!;
@@ -424,7 +428,7 @@ export function createGalleryService(
   }
 
   async function enqueueRender(itemId: string, o?: { seed?: number; reroll?: boolean }): Promise<string> {
-    if (!imagePort) throw new AnimaeError("GALLERY_NO_GENERATOR", "No ImagePort configured");
+    if (!generatorReady()) throw new AnimaeError("GALLERY_NO_GENERATOR", "No ImagePort configured");
     if (shuttingDown) throw new AnimaeError("GALLERY_BUSY", "Gallery is shutting down");
     if (pendingCount() >= MAX_PENDING) throw new AnimaeError("GALLERY_BUSY", "Gallery job queue is full");
     const jobId = newJobId();
@@ -467,7 +471,16 @@ export function createGalleryService(
 
   async function runJob(jobId: string, o?: { seed?: number; reroll?: boolean }): Promise<void> {
     const cfg = config();
-    if (!cfg || !imagePort) return;
+    if (!cfg) return;
+    if (!generatorReady()) {
+      // The generator went away between queueing and running: end the job visibly instead of leaving it queued.
+      await updateJob(jobId, {
+        state: "failed",
+        error: { code: "GALLERY_NO_GENERATOR", message: "No ImagePort available" },
+        finishedAt: wallNow(),
+      });
+      return;
+    }
     const abort = new AbortController();
     const promise = (async () => {
       try {
@@ -552,7 +565,9 @@ export function createGalleryService(
           options: { ...cfg.generator.options },
         };
 
-        const result = await imagePort.generate(req, {
+        const port = imagePort;
+        if (!port) throw new AnimaeError("GALLERY_NO_GENERATOR", "No ImagePort configured");
+        const result = await port.generate(req, {
           signal: abort.signal,
           onProgress: (f) => {
             if (f >= 1 || f === 0) void updateJob(jobId, { progress: 0.35 + f * 0.5 });
@@ -572,7 +587,7 @@ export function createGalleryService(
           width: validated.width,
           height: validated.height,
           bytes: result.bytes.length,
-          generator: imagePort.id,
+          generator: port.id,
           seed: result.seed ?? seed,
           createdAt: wallNow(),
           meta: result.meta,
@@ -698,7 +713,7 @@ export function createGalleryService(
   }
 
   const service: GalleryService = {
-    generatorAvailable: () => imagePort !== undefined,
+    generatorAvailable: () => generatorReady(),
     ratings: () => {
       const cfg = config();
       if (!cfg) return [];
@@ -737,7 +752,7 @@ export function createGalleryService(
     },
     unlock: (id, why) => unlockInternal(id, why ?? {}),
     capture: async (req) => {
-      if (!imagePort) throw new AnimaeError("GALLERY_NO_GENERATOR", "No ImagePort configured");
+      if (!generatorReady()) throw new AnimaeError("GALLERY_NO_GENERATOR", "No ImagePort configured");
       const cfg = config();
       if (!cfg) throw new AnimaeError("GALLERY_UNKNOWN_ENTRY", "Gallery not configured");
       const rating = req?.rating ?? cfg.defaultRating;

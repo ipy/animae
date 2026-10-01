@@ -86,6 +86,7 @@ export interface RenderInput {
   sidenotes: { noteId: string; text: string; verbatim: boolean }[];
   tracks?: Record<string, number>;
   tiers?: Record<string, string | null>;
+  extraStatic?: string;
   extraDynamic?: string;
 }
 

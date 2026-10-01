@@ -1,5 +1,5 @@
 import { evaluate, check } from "@marcbachmann/cel-js";
-import type { CelEngine, Kernel, RuleEngine, TimelineStore } from "../../src/contracts.ts";
+import type { CelEngine, Kernel, RuleEngine, RuleFn, TimelineStore } from "../../src/contracts.ts";
 import { reduce } from "../../src/timeline/reducer.ts";
 import { initialState } from "../../src/timeline/initial-state.ts";
 import { applyPolicyDefaults } from "../../src/policy/defaults.ts";
@@ -187,10 +187,14 @@ class FakeTimeline implements TimelineStore {
 export function buildTestKernel(authored: Authored, policy = openPolicy()): Kernel & { fields: FieldSystem; director: Director } {
   const timeline = new FakeTimeline(authored, policy);
   const cel = makeCel();
+  const fns = new Map<string, RuleFn>();
   const rules: RuleEngine = {
     cel,
-    register() {},
+    register(name, fn) {
+      fns.set(name, fn);
+    },
     fn: (name) => {
+      if (fns.has(name)) return fns.get(name);
       if (name === "pick_max") {
         return (ctx) => {
           const vals = (ctx.vars.field_merge_values as number[]) ?? [];
@@ -199,7 +203,7 @@ export function buildTestKernel(authored: Authored, policy = openPolicy()): Kern
       }
       return undefined;
     },
-    has: (name) => name === "pick_max",
+    has: (name) => fns.has(name) || name === "pick_max",
     run(name, ctx) {
       const fn = rules.fn(name);
       if (!fn) return [];

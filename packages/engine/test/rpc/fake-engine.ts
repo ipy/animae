@@ -76,6 +76,7 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
     query: () => ({ ok: true }),
     queryAsync: async () => ({ ok: true }),
     grant: async () => {},
+    revoke: async () => {},
     explain: () => ({ turnId: "turn_0001" as TurnId, viewer: "player", chain: [] }),
     on(kind: string, h: (e: EngineEvent) => void) {
       if (!listeners.has(kind)) listeners.set(kind, new Set());

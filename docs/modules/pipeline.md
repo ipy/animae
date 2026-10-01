@@ -23,6 +23,8 @@ parseJsonLoose(text: string): unknown
 
 Types: `src/pipeline/types.ts`.
 
+**Turn extensions:** `TurnCtx.promptExtraStatic` / `promptExtraDynamic` merge into render segments (mods use this for pack-specific static/dynamic blocks). Stage hooks registered on the engine may take an optional third argument `(ctx, next, kernel)`.
+
 ## Integration (H2)
 
 `pipeline/stages-default.ts` resolves to these exports. `createEngine` uses `createRouter` from `router/`.
@@ -42,6 +44,7 @@ Deterministic ordering; **locked secrets never appear**; unlocked secrets only i
 - **Prose hygiene:** HTML comments, mod stub bodies (`<!-- LLM body: … -->`), and frontmatter-only append overlays are stripped at load or merge (`prose/for-prompt.ts`, mod `card.append.md` merge).
 
 - **Who speaks.** The closing `render` user message names the speaking character ("generate X's in-character response; speak only as X"). With one speaking character, history lines map one to one to chat messages. As soon as the window holds a reply from another character, only the speaker's own replies stay `assistant` messages and every other line (the player's and other characters') becomes a `user` message prefixed with its speaker's display name (`historyToMessages`), so a model does not mistake another character's reply for its own earlier words and continue in that voice.
+- **Scene-scoped history.** `buildRecentHistory(k, speaker, addressee, limitTurns?, scope?)` filters timeline `input.received` / `utterance` events by scene participation before applying K ([spec section 8](../spec.md#8-cognitive-pipeline)). `runTurn` passes the active scene; reflection callers pass `{ sceneId, participants }` after `state.scene` is cleared. Reflection prompts already filter events by `sceneId`; memory recall is per speaker and does not replay other scenes' dialogue.
 - **Output language.** The language directive, style-example heading, and name glossary are described in [i18n.md](../i18n.md#keeping-replies-in-the-output-language).
 
 Appraise **user** message wraps actor text in `<<<ACTOR_INPUT>>>` … `<<<END_ACTOR_INPUT>>>` so injection strings are not treated as system instructions.

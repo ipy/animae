@@ -49,6 +49,10 @@ Per level: sort by `priority` desc, then fold each top-level effect key using th
 
 L4 merged effects are returned only for the query `owner` (self-view); they must not mutate stored world state.
 
+### L3 (`rule_add`, `rule_override`)
+
+While in scope, L3 merged effects feed `runCustomStageRules` alongside policy `rules.custom` ([spec 10.2](../spec.md#102-levels-and-effect-fields)). `resolve()` also returns `l3FieldRules` (deduped `rule_add` entries in deterministic order). Grant/declare validates entries against `CustomRuleSchema`, registered `fn`, and override ids. Stage `tick` is rejected for field rules.
+
 ## Caps & grants
 
 - `policy.fields.caps` — clamp magnitudes (`salience.boost`, `event_prob`, `track_offset`, `track_mult`, `intent_bias`); report keys on `field.applied.clamped`

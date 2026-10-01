@@ -3,145 +3,236 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Animae ref client</title>
-    <style>
-      :root {
-        font-family: system-ui, sans-serif;
-        line-height: 1.4;
-      }
-      body {
-        margin: 1rem;
-        max-width: 52rem;
-      }
-      #log {
-        white-space: pre-wrap;
-        font-family: ui-monospace, monospace;
-        font-size: 12px;
-        border: 1px solid #ccc;
-        padding: 0.5rem;
-        min-height: 8rem;
-        max-height: 40vh;
-        overflow: auto;
-      }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
-        margin-bottom: 0.75rem;
-      }
-      input[type="text"] {
-        flex: 1;
-        min-width: 12rem;
-      }
-    </style>
+    <title data-i18n="app.title">Animae session diagnostics</title>
+    <link rel="stylesheet" href="./app.css" />
   </head>
   <body>
-    <h1>Animae ref client</h1>
-    <p>Minimal WebSocket UI for protocol smoke tests (locale + snapshot).</p>
-    <div class="row">
-      <label>UI locale
-        <select id="locale">
-          <option value="en">en</option>
-          <option value="zh-CN">zh-CN</option>
-        </select>
-      </label>
-      <button type="button" id="connect">Connect</button>
-      <span id="status">disconnected</span>
+    <div class="app-shell">
+      <header class="topbar">
+        <h1 data-i18n="app.title">Animae session diagnostics</h1>
+        <div class="topbar-actions">
+          <span class="pill" id="conn-pill" data-state="disconnected" role="status">
+            <span class="pill-dot" aria-hidden="true"></span>
+            <span id="conn-pill-text" data-i18n="status.disconnected">Disconnected</span>
+          </span>
+          <label class="field field--row field--compact">
+            <span data-i18n="top.language">Language</span>
+            <select id="locale-select" aria-label="Language">
+              <option value="en">English</option>
+              <option value="zh-CN">中文（简体）</option>
+            </select>
+          </label>
+          <button type="button" id="theme-toggle" data-i18n-attr="aria-label:theme.toggle" title="Toggle theme">
+            <span data-i18n="theme.light">Light</span>
+          </button>
+        </div>
+      </header>
+
+      <p class="intro">
+        <span data-i18n="app.intro">Developer console for the WebSocket session.</span>
+        <strong data-i18n="app.introMutate">Only the Console tab sends player input or commands.</strong>
+      </p>
+
+      <div id="live-region" class="sr-only" aria-live="polite" data-i18n="aria.live">Status updates</div>
+
+      <section class="card" aria-labelledby="conn-heading">
+        <h2 id="conn-heading" data-i18n="conn.cardTitle">WebSocket session</h2>
+        <div class="field-grid two">
+          <label class="field">
+            <span data-i18n="conn.url">WebSocket URL</span>
+            <input id="ws-url" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span data-i18n="conn.role">Role</span>
+            <select id="ws-role">
+              <option value="spectator" data-i18n="conn.roleSpectator">Spectator</option>
+              <option value="controller" data-i18n="conn.roleController">Controller</option>
+            </select>
+          </label>
+        </div>
+        <div class="btn-row btn-row--spaced">
+          <label class="field field--row">
+            <input type="checkbox" id="auto-reconnect" />
+            <span data-i18n="conn.autoReconnect">Auto-reconnect</span>
+          </label>
+          <button type="button" class="primary" id="btn-connect" data-i18n="conn.connect">Connect</button>
+          <button type="button" id="btn-disconnect" data-i18n="conn.disconnect" disabled>Disconnect</button>
+        </div>
+        <dl class="meta-grid" id="hello-meta">
+          <div class="meta-pair">
+            <dt data-i18n="conn.sessionId">Session ID</dt>
+            <dd id="meta-session">—</dd>
+          </div>
+          <div class="meta-pair">
+            <dt data-i18n="conn.protocolVersion">Protocol</dt>
+            <dd id="meta-protocol">—</dd>
+          </div>
+          <div class="meta-pair">
+            <dt data-i18n="conn.negotiatedLocale">UI locale</dt>
+            <dd id="meta-locale">—</dd>
+          </div>
+          <div class="meta-pair">
+            <dt data-i18n="conn.supportedLocales">Supported locales</dt>
+            <dd id="meta-locales">—</dd>
+          </div>
+          <div class="meta-pair">
+            <dt data-i18n="conn.controllerSeat">Controller seat</dt>
+            <dd id="meta-controller">—</dd>
+          </div>
+        </dl>
+      </section>
+
+      <div class="tabs">
+        <div role="tablist" aria-label="Diagnostics sections" id="tablist">
+          <button role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" data-i18n="tab.overview">Overview</button>
+          <button role="tab" id="tab-smoke" aria-controls="panel-smoke" aria-selected="false" data-i18n="tab.smoke">Smoke tests</button>
+          <button role="tab" id="tab-llm" aria-controls="panel-llm" aria-selected="false" data-i18n="tab.llm">Model calls</button>
+          <button role="tab" id="tab-state" aria-controls="panel-state" aria-selected="false" data-i18n="tab.state">State</button>
+          <button role="tab" id="tab-protocol" aria-controls="panel-protocol" aria-selected="false" data-i18n="tab.protocol">Protocol</button>
+          <button role="tab" id="tab-console" aria-controls="panel-console" aria-selected="false" data-i18n="tab.console">Console</button>
+        </div>
+
+        <div role="tabpanel" id="panel-overview" data-active="true" aria-labelledby="tab-overview">
+          <h2 class="sr-only" data-i18n="tab.overview">Overview</h2>
+          <section class="card card--prominent" aria-labelledby="env-heading">
+            <h3 id="env-heading" data-i18n="env.cardTitle">Environment</h3>
+            <p class="card-lead" data-i18n="env.cardIntro">Host paths reported by the game server (authenticated).</p>
+            <div id="env-list" class="env-list" data-state="loading">
+              <p class="empty-state" data-i18n="common.loading">Loading…</p>
+            </div>
+          </section>
+          <section class="card-section">
+            <p data-i18n="overview.smokeIntro">Smoke test intro</p>
+            <h3 data-i18n="overview.smokeTitle">Read-only smoke checks</h3>
+            <ul class="smoke-list" id="overview-test-list"></ul>
+          </section>
+        </div>
+
+        <div role="tabpanel" id="panel-smoke" aria-labelledby="tab-smoke">
+          <div class="btn-row">
+            <button type="button" class="primary" id="smoke-run-all" data-i18n="smoke.runAll">Run all</button>
+            <button type="button" id="smoke-rerun-failed" data-i18n="smoke.rerunFailed">Re-run failed</button>
+            <button type="button" id="smoke-copy" data-i18n="smoke.copyReport">Copy report</button>
+            <button type="button" id="smoke-download" data-i18n="smoke.downloadReport">Download report</button>
+          </div>
+          <div id="smoke-banner" class="banner ok" hidden></div>
+          <ul class="smoke-list" id="smoke-results"></ul>
+        </div>
+
+        <div role="tabpanel" id="panel-llm" aria-labelledby="tab-llm">
+          <div class="btn-row btn-row--spaced">
+            <label class="field field--row">
+              <input type="checkbox" id="llm-live" />
+              <span data-i18n="llm.live">Live</span>
+            </label>
+            <button type="button" id="llm-refresh" data-i18n="llm.refresh">Refresh</button>
+            <button type="button" id="llm-export" data-i18n="llm.export">Export</button>
+            <button type="button" id="llm-clear" data-i18n="llm.clear">Clear</button>
+          </div>
+          <fieldset class="field-grid two fieldset--plain">
+            <legend data-i18n="llm.filters">Filters</legend>
+            <label class="field">
+              <span data-i18n="llm.slotAll">Slot</span>
+              <select id="llm-slot">
+                <option value="" data-i18n="llm.slotAll">All</option>
+                <option value="s1" data-i18n="llm.slotS1">s1</option>
+                <option value="s2" data-i18n="llm.slotS2">s2</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="llm.labelFilter">Label</span>
+              <input id="llm-label" type="text" />
+            </label>
+            <label class="field field--row">
+              <input type="checkbox" id="llm-errors-only" />
+              <span data-i18n="llm.errorsOnly">Errors only</span>
+            </label>
+          </fieldset>
+          <div class="llm-layout">
+            <div class="table-wrap">
+              <table class="data" id="llm-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="llm.col.seq">Seq</th>
+                    <th data-i18n="llm.col.time">Time</th>
+                    <th data-i18n="llm.col.slot">Slot</th>
+                    <th data-i18n="llm.col.label">Label</th>
+                    <th data-i18n="llm.col.model">Model</th>
+                    <th data-i18n="llm.col.tokens">Tokens</th>
+                    <th data-i18n="llm.col.latency">Latency</th>
+                    <th data-i18n="llm.col.status">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="llm-tbody"></tbody>
+              </table>
+            </div>
+            <div class="detail-pane" id="llm-detail">
+              <p class="empty-state" data-i18n="llm.empty">No entries</p>
+            </div>
+          </div>
+        </div>
+
+        <div role="tabpanel" id="panel-state" aria-labelledby="tab-state">
+          <div class="summary-cards" id="state-cards"></div>
+          <div class="btn-row">
+            <label class="field field--grow">
+              <span data-i18n="state.search">Filter JSON</span>
+              <input id="state-filter" type="text" />
+            </label>
+            <button type="button" id="state-copy" data-i18n="state.copy">Copy JSON</button>
+          </div>
+          <div class="json-tree" id="state-tree"></div>
+        </div>
+
+        <div role="tabpanel" id="panel-protocol" aria-labelledby="tab-protocol">
+          <div class="btn-row">
+            <button type="button" id="protocol-pause" data-i18n="protocol.pause">Pause</button>
+            <button type="button" id="protocol-clear" data-i18n="protocol.clear">Clear</button>
+            <label class="field">
+              <span data-i18n="protocol.filterType">Frame type</span>
+              <select id="protocol-type-filter">
+                <option value="" data-i18n="protocol.allTypes">All</option>
+              </select>
+            </label>
+          </div>
+          <div class="protocol-feed" id="protocol-feed"></div>
+          <details id="protocol-expanded" hidden>
+            <summary data-i18n="protocol.expand">Frame body</summary>
+            <pre id="protocol-body" class="code-block"></pre>
+          </details>
+        </div>
+
+        <div role="tabpanel" id="panel-console" aria-labelledby="tab-console">
+          <div class="console-warn" data-i18n="console.warning">Warning</div>
+          <section class="card">
+            <h3 data-i18n="console.inputLabel">Player input</h3>
+            <div class="btn-row">
+              <input id="console-input" class="input-grow" type="text" data-i18n-attr="placeholder:console.inputPlaceholder" />
+              <button type="button" id="console-send-input" data-i18n="console.sendInput">Send input</button>
+            </div>
+          </section>
+          <section class="card">
+            <h3 data-i18n="console.commandLabel">Command</h3>
+            <div class="field-grid two">
+              <label class="field">
+                <span data-i18n="console.commandName">Name</span>
+                <input id="console-cmd-name" type="text" />
+              </label>
+              <label class="field">
+                <span data-i18n="console.commandArgs">Args</span>
+                <input id="console-cmd-args" type="text" />
+              </label>
+            </div>
+            <button type="button" id="console-send-cmd" data-i18n="console.sendCommand">Send command</button>
+          </section>
+          <section class="card">
+            <h3 data-i18n="console.rawLabel">Raw JSON</h3>
+            <textarea id="console-raw" data-i18n-attr="placeholder:console.rawPlaceholder"></textarea>
+            <button type="button" id="console-send-raw" data-i18n="console.sendRaw">Send frame</button>
+          </section>
+        </div>
+      </div>
     </div>
-    <div class="row">
-      <input id="input" type="text" placeholder="Player input (controller)" />
-      <button type="button" id="send">Send input</button>
-    </div>
-    <pre id="header">—</pre>
-    <div id="log"></div>
-    <script>
-      const qs = new URLSearchParams(location.search);
-      const wsUrl = qs.get("ws") || `ws://${location.host}/ws`;
-      const token = qs.get("token") || "";
-      const clientId = localStorage.getItem("animae.clientId") || `ref-${crypto.randomUUID().slice(0, 8)}`;
-      localStorage.setItem("animae.clientId", clientId);
-
-      let ws;
-      let seq = 0;
-      let req = 0;
-
-      const logEl = document.getElementById("log");
-      const statusEl = document.getElementById("status");
-      const headerEl = document.getElementById("header");
-      const localeEl = document.getElementById("locale");
-
-      function log(line) {
-        logEl.textContent = `${logEl.textContent}${line}\n`;
-        logEl.scrollTop = logEl.scrollHeight;
-      }
-
-      function nextId() {
-        req += 1;
-        return `r${req}`;
-      }
-
-      function send(msg) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify(msg));
-      }
-
-      function hello() {
-        send({
-          v: 1,
-          type: "hello",
-          role: "controller",
-          clientId,
-          locale: localeEl.value,
-          token: token || undefined,
-        });
-      }
-
-      localeEl.addEventListener("change", () => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-        send({ v: 1, type: "set_locale", id: nextId(), locale: localeEl.value });
-      });
-
-      document.getElementById("connect").addEventListener("click", () => {
-        if (ws) ws.close();
-        logEl.textContent = "";
-        ws = new WebSocket(wsUrl);
-        statusEl.textContent = "connecting…";
-        ws.onopen = () => {
-          statusEl.textContent = "connected";
-          hello();
-        };
-        ws.onclose = () => {
-          statusEl.textContent = "disconnected";
-        };
-        ws.onmessage = (ev) => {
-          const m = JSON.parse(ev.data);
-          if (typeof m.seq === "number" && m.seq > seq) seq = m.seq;
-          if (m.type === "hello_ok") {
-            localeEl.value = m.locale || localeEl.value;
-            log(`hello_ok locale=${m.locale}`);
-          }
-          if (m.type === "locale") {
-            localeEl.value = m.locale;
-            log(`locale ack ${m.locale}`);
-          }
-          if (m.type === "snapshot" && m.state?.header?.time?.label) {
-            headerEl.textContent = m.state.header.time.label;
-          }
-          if (m.type === "error") {
-            log(`error ${m.code}: ${m.message}`);
-          }
-          if (m.type === "result") {
-            log(`result ${m.id} ok=${m.ok}`);
-          }
-        };
-      });
-
-      document.getElementById("send").addEventListener("click", () => {
-        const text = document.getElementById("input").value.trim();
-        if (!text) return;
-        send({ v: 1, type: "input", id: nextId(), text });
-      });
-    </script>
+    <script type="module" src="./js/main.js"></script>
   </body>
 </html>

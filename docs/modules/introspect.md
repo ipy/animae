@@ -12,6 +12,7 @@ Synchronous read-only views over engine state for TUI/RPC ([Section 15](../spec.
 | `query(viewer, path)` | Returns deep-frozen JSON, or **`undefined` when denied** (never throws). |
 | `canRead(viewer, path)` | Visibility + active grants. |
 | `grant(viewer, path, ttl?)` | Emits `visibility.granted` with `expiresAt` from world time + duration. |
+| `revoke(viewer, path)` | Ends the grants for exactly `(viewer, path)` before their TTL by emitting `visibility.expired`; does nothing (and writes no event) when no such grant is active. |
 | `expireGrants()` | Emits `visibility.expired` for elapsed grants (call on `time.advanced`). |
 | `explain(turnId, viewer)` | Event chain filtered by viewer/kinds rules. |
 | `registerViewer(v)` | Stores custom viewer defs for future use; **visibility rules are not extended from registrations yet** (preset viewers only). JSON-RPC blocks this registrar. |

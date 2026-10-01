@@ -380,6 +380,7 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       return introspect.query(viewer, path);
     },
     grant: (viewer, path, ttl) => introspect.grant(viewer, path, ttl),
+    revoke: (viewer, path) => introspect.revoke(viewer, path),
     explain: (turnId, viewer) => introspect.explain(turnId, viewer),
     on: (kind, h) => timeline.on(kind, h),
     purge: (scope) => timeline.purge(scope),

@@ -53,7 +53,7 @@ Extends Zod validation for authored/event payloads.
 | `turn_cap` | `Record<track, positive>` | Max \|Δ\| per turn per track |
 | `windows` | array | `{ id, trigger, durationScenes, mult, capToLoss? }` |
 | `thresholds` | array | `{ id, when, emit, repeat? }` |
-| `custom` | array | `{ id, fn, when?, stage? }` — `stage`: `adjudicate` \| `tick` \| `scene_end` \| `scene_start` \| `daily` |
+| `custom` | array | `{ id, fn, when?, stage? }` — `stage`: `adjudicate` \| `scene_end` \| `scene_start` \| `daily` (`tick` rejected at load; schedule items use tick ctx separately) |
 
 **CEL sites:** `windows[].trigger`, `thresholds[].when`, `custom[].when`.
 

@@ -41,6 +41,7 @@ export function createHostCommandApi(
     t: (key: string, params?: Record<string, string | number | boolean | null | undefined>) => string;
   },
   openFile?: (path: string) => void | Promise<void>,
+  focusTarget?: () => string | undefined,
 ): HostCommandApi {
   const api: HostCommandApi = {
     engine,
@@ -82,6 +83,9 @@ export function createHostCommandApi(
     },
     t(key, params) {
       return i18n?.t(key, params) ?? key;
+    },
+    focusTarget() {
+      return focusTarget?.();
     },
     openFile,
   };

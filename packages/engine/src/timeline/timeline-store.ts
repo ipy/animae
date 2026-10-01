@@ -31,6 +31,8 @@ import { initialState } from "./initial-state.ts";
 import { exportBranchToFile, importBranchFromFile } from "./export-import.ts";
 import { HEAD_FILE, SAVES_FILE, branchDir, entitiesPath, eventsPath } from "./paths.ts";
 import { lookupRecording, readRecordings } from "./recordings.ts";
+import { compactRecordingsStorage, recordingLineForAppend, recordingResponseEqual } from "./recording-compact.ts";
+import { recordingsPath } from "./paths.ts";
 import { createReducer } from "./reducer.ts";
 import { createRng } from "./rng.ts";
 import { deleteSnapshotsAfter, loadLatestSnapshot, rebuildState, shouldSnapshot, writeSnapshot } from "./snapshots.ts";
@@ -78,14 +80,17 @@ export function createTimeline(deps: TimelineDeps): TimelineStore {
     },
     async record(key, response) {
       if (deps.modelMode !== "record") return;
+      const line = recordingLineForAppend(key, response);
+      const existing = recordings.lookup(key);
+      if (existing !== undefined && recordingResponseEqual(existing, line.response)) return;
       const { appendJsonl } = await import("../store/util.ts");
-      await appendJsonl(deps.storage, `${branchDir(branch)}/recordings.jsonl`, { key, response }, { fsync: true });
+      await appendJsonl(deps.storage, recordingsPath(branch), line, { fsync: true });
       let m = recordingsCache.get(branch);
       if (!m) {
         m = new Map();
         recordingsCache.set(branch, m);
       }
-      m.set(key, response);
+      m.set(key, line.response);
     },
   };
 
@@ -220,6 +225,22 @@ export function createTimeline(deps: TimelineDeps): TimelineStore {
       branch = head?.trim() || DEFAULT_BRANCH;
       await ensureBranchHeader(deps.storage, branch);
       await reloadEventsAndState();
+      if (deps.modelMode !== "replay") {
+        try {
+          for (const br of chain) {
+            await compactRecordingsStorage(deps.storage, recordingsPath(br.name));
+          }
+          await refreshRecordingsCache();
+        } catch (err) {
+          await appendInternal([
+            {
+              kind: "config.warning",
+              code: "recordings.compact",
+              message: err instanceof Error ? err.message : String(err),
+            } as EventDraft,
+          ]);
+        }
+      }
     },
     async close() {
       if (closed) return;

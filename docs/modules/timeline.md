@@ -40,6 +40,10 @@ Then `carry.applied` summarizes copied items.
 
 See also [spec Section 13](../spec.md#13-timeline) for normative timeline behaviour.
 
+## Recordings (`recordings.jsonl`)
+
+Per-branch append-only LLM cache (see [model.md](./model.md#recording)). `RecordingStore.record` skips identical last-wins responses. On `open()` in record/live mode, each branch file on the chain may be compacted in place (dedupe keys, strip legacy stream partials). Tools: `compactRecordingsFile(path)` and `compactRecordingsStorage`.
+
 ## Storage test helper
 
 Tests should use `MemoryStorage()` from `store` (root-level paths like `animae.yaml` supported); `test/helpers/storage.ts` re-exports it.

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Cel, CelOrBool, CelOrNumber, EntityRefSchema, EventDraftSchema, Id, LevelSchema, LodSchema, Tags, WorldTimeSchema } from "./common.ts";
+import { CustomRuleSchema } from "./custom-rule.ts";
 import { GalleryConfigSchema, type GalleryConfig } from "./gallery.ts";
 
 /**
@@ -24,6 +25,8 @@ export const ModelSpecSchema = z.strictObject({
   name: z.string().optional(),
   /** Capability tags forwarded to the model port (CEL `model.tags`). */
   tags: z.array(z.string()).optional(),
+  /** Wall-clock limit per model call (ms). Omitted = provider default (see model module docs). */
+  timeoutMs: z.number().int().positive().max(3_600_000).optional(),
 });
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 
@@ -135,7 +138,7 @@ const Effects = z.strictObject({
   intent_bias: z.record(z.string(), z.number()).optional(),
   // L3
   rule_override: z.record(z.string(), z.string()).optional(),
-  rule_add: z.array(z.record(z.string(), z.unknown())).optional(),
+  rule_add: z.array(CustomRuleSchema).optional(),
   // L4
   hide_entities: z.array(z.string()).optional(),
   disguise: z.record(z.string(), z.string()).optional(),

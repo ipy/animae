@@ -1,5 +1,28 @@
-export { createModelPort } from "./port.ts";
+export { createModelPort, syncModelPortSpec } from "./port.ts";
+export {
+  DEFAULT_OLLAMA_MODEL_TIMEOUT_MS,
+  DEFAULT_REMOTE_MODEL_TIMEOUT_MS,
+  MODEL_TIMEOUT_MS_MAX,
+  createStreamWatchdog,
+  defaultModelTimeoutMs,
+  resolveModelTimeoutMs,
+  type StreamWatchdog,
+} from "./timeout.ts";
+export {
+  classifyModelError,
+  asModelAnimaeError,
+  modelTimeoutError,
+  isClassifiedModelErrorCode,
+  sanitizeHttpDetail,
+  type ModelTimeoutPhase,
+} from "./classify-error.ts";
 export { withRecording } from "./recording.ts";
+export {
+  isStreamPartsResponse,
+  replayStreamParts,
+  slimStreamPartsForRecord,
+  recordingResponseEqual,
+} from "./recording-stream.ts";
 export {
   createModelCallLog,
   withModelCallLog,

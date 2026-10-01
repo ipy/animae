@@ -15,5 +15,6 @@ export { runChecks, type RunChecksInput } from "./checks.ts";
 export { adjudicate, type AdjudicateInput } from "./adjudicate.ts";
 export { decideIntent, type DecideIntentInput } from "./decide.ts";
 export { runStageRules, type CustomStage } from "./stages.ts";
+export { runCustomStageRules, type RunCustomRulesOpts } from "./l3-custom.ts";
 export { decayTicks } from "./decay.ts";
 export { type RulesDeps, type FieldEffects } from "./deps.ts";

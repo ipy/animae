@@ -67,6 +67,13 @@ export function createIntrospect(k: Kernel): Introspect {
       await k.emit([draft]);
     },
 
+    async revoke(viewer, path) {
+      const target = path.replace(/^\/+/, "");
+      const active = k.timeline.state().grants.some((g) => g.viewer === viewer && g.path === target);
+      if (!active) return;
+      await k.emit([{ kind: "visibility.expired", source: "introspect", viewer, path: target }]);
+    },
+
     explain(turnId, viewer) {
       const ex = buildExplanation(k, turnId, viewer);
       return deepFreeze(ex) as Explanation;

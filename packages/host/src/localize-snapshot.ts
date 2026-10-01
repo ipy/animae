@@ -102,11 +102,42 @@ export function localizeSnapshot(
     out.actions = actions.map((a) => {
       if (!a || typeof a !== "object") return a;
       const row = a as Record<string, unknown>;
-      if (typeof row.label !== "string" && row.label !== undefined) {
-        const { text, i18n } = wireText(row.label, t, has);
-        return { ...row, label: text, ...(i18n ? { i18n: { ...i18n, field: "label" } } : {}) };
+      const next: Record<string, unknown> = { ...row };
+      for (const field of ["label", "hint"] as const) {
+        const raw = row[field];
+        if (typeof raw !== "string" && raw !== undefined) {
+          const { text, i18n } = wireText(raw, t, has);
+          next[field] = text;
+          if (i18n) next[`${field}I18n`] = { ...i18n, field };
+        }
       }
-      return row;
+      const args = row.args;
+      if (Array.isArray(args)) {
+        next.args = args.map((argRow) => {
+          if (!argRow || typeof argRow !== "object") return argRow;
+          const ar = argRow as Record<string, unknown>;
+          const argOut: Record<string, unknown> = { ...ar };
+          if (typeof ar.label !== "string" && ar.label !== undefined) {
+            const { text, i18n } = wireText(ar.label, t, has);
+            argOut.label = text;
+            if (i18n) argOut.labelI18n = i18n;
+          }
+          const opts = ar.options;
+          if (Array.isArray(opts)) {
+            argOut.options = opts.map((opt) => {
+              if (!opt || typeof opt !== "object") return opt;
+              const o = opt as Record<string, unknown>;
+              if (typeof o.label !== "string" && o.label !== undefined) {
+                const { text, i18n } = wireText(o.label, t, has);
+                return { ...o, label: text, ...(i18n ? { labelI18n: i18n } : {}) };
+              }
+              return o;
+            });
+          }
+          return argOut;
+        });
+      }
+      return next;
     });
   }
 

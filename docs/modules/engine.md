@@ -18,7 +18,7 @@ See `src/api.ts` for `Engine` and options. Exported from `@animae/engine` via `s
 - Live getters for `authored` / `policy` via `createLiveAuthoredPolicy`; `reload()` and turn-end stat fingerprint check call `checkHotReload`.
 - Wire kernel modules: fields (director `bypassArmed`), director, world, memory, introspect, **router (`createRouter`)**, entities.
 - Delegate timeline mutations to `rebuildModuleCaches` after load/rewind/switch/import.
-- Scene service + `HookRegistry` for stage hooks.
+- Scene service + `HookRegistry` for stage hooks (`(ctx, next, kernel?)` — optional third argument is the live kernel for mods that need services).
 
 ## Turn pipeline
 

@@ -18,7 +18,7 @@ export class HookRegistry {
     const dispatch = async (): Promise<unknown> => {
       idx += 1;
       if (idx >= stack.length) return runDefault(k, t);
-      return stack[idx]!(t, dispatch);
+      return stack[idx]!(t, dispatch, k);
     };
     return dispatch();
   }

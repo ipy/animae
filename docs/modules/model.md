@@ -27,6 +27,27 @@ AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `ge
 - `warningSink` / `warningLogPath` — pluggable warnings (deduped; AI SDK uses `globalThis.AI_SDK_LOG_WARNINGS`)
 - `sleep` / `maxTransientRetries` — retry tests & tuning
 - `model` — inject `LanguageModelV4` (tests)
+- `specRef` — mutable `{ current: ModelSpec }` for hot config (`syncModelPortSpec`)
+
+### Request timeout (`ModelSpec.timeoutMs`)
+
+Optional positive integer (max 3_600_000 ms). When omitted:
+
+| Provider class | Default |
+|----------------|---------|
+| `ollama` | 600_000 ms (10 min) |
+| all others | 120_000 ms (2 min) |
+
+Semantics:
+
+- **Non-streaming (`object`)**: total wall-clock limit for one attempt (AI SDK `timeout`).
+- **Streaming (`stream`)**: an idle watchdog owned by the engine (`createStreamWatchdog`). It starts when the request is issued and restarts on every chunk of provider output, so it bounds connecting plus time-to-first-token (`phase: "first_chunk"`) and any later silence between chunks (`phase: "idle"`). Steady streaming is never capped by a total duration. The SDK's own `firstChunkMs` is deliberately not used: it only starts counting once the HTTP response is open, so a server that accepts the request and then stays silent would never time out. Structured output delivers chunks in coarse steps (the SDK holds text back until a partial object can be parsed), so very small limits are not meaningful.
+
+Errors are classified once at the call site into `MODEL_TIMEOUT` (`params: { timeoutMs, seconds, phase }`), `MODEL_UNREACHABLE` (`params: { host }`, including Bun's `ConnectionRefused` / `FailedToOpenSocket` / `ConnectionClosed`), `MODEL_HTTP` (`params: { status, detail }`), `MODEL_EMPTY` and `MODEL_OUTPUT_INVALID`. On the stream path the SDK reports the real failure through `onError` and then rejects with a generic "No output generated"; the engine keeps the first real error so the classification (and the user-facing message) reflects the actual cause, and nothing is printed to the console.
+
+Transient retries: timeouts are retryable at most **once** per call, in both `object` and `stream` (other transients — unreachable endpoint, HTTP 429/5xx — use `maxTransientRetries`, default 3). Worst-case wall clock for a single call is roughly `2 × timeoutMs` plus backoff (200 ms + 400 ms).
+
+Use `syncModelPortSpec(port, spec)` after changing config without recreating ports.
 
 ## Prompt segments ([Section 17.4](../spec.md#174-prompt-segments))
 
@@ -47,20 +68,25 @@ Defaults: `resolveOpenAICompatibleProviderOptions` sets `reasoning_effort: "none
 
 ## Recording
 
-Key: `sha256(stableJson({ model: port.id, label, segments, schema JSON Schema fingerprint, tool names, maxOutputTokens, maxSteps, temperature, seed }))`.
+Key: `sha256(stableJson({ model: port.id, label, segments, schema JSON Schema fingerprint, tool names, maxOutputTokens, maxSteps, temperature, seed, recordingLocales }))`.
 
 - `object`: stored value
-- `stream`: full `StreamPart[]` (partials, tools, final) — replay re-yields the same sequence (I6). Tool `execute` is not re-run on replay.
+- `stream`: slim `StreamPart[]` (`tool` + `final` only; cumulative `partial` chunks are not persisted). New JSONL rows may include `v: 2`. Replay re-yields stored tools, then one synthesized `partial` (final value) and `final`. Legacy recordings that still contain `partial` parts replay verbatim. Tool `execute` is not re-run on replay.
+- Timeline `record` skips an append when lookup already returns the same canonical response. `compactRecordingsFile(path)` / lazy compaction on timeline open (record/live only) dedupe keys last-wins and strip legacy partials without changing lookup semantics.
 
 Miss in replay: `AnimaeError("RECORDING_MISSING", key + label)`.
 
 ## Errors
 
-| Code | When |
-|------|------|
-| `MODEL_CONFIG` | Invalid openai-compatible config (missing `baseURL`), missing `models` in config, unsupported embedding provider |
-| `MODEL_OUTPUT_INVALID` | Schema validation failed after one repair pass **and** salvage found nothing usable |
-| `RECORDING_MISSING` | Replay lookup miss |
+| Code | When | `params` (wire-safe) |
+|------|------|----------------------|
+| `MODEL_CONFIG` | Invalid openai-compatible config (missing `baseURL`), missing `models` in config, unsupported embedding provider | — |
+| `MODEL_TIMEOUT` | Abort / AI SDK timeout | `timeoutMs`, `seconds`, `phase`: `connect` \| `first_chunk` \| `idle` \| `total` |
+| `MODEL_UNREACHABLE` | Connection refused, DNS, fetch failed | `host` (hostname only) |
+| `MODEL_HTTP` | HTTP error from provider | `status`, optional `detail` (~200 chars, no secrets) |
+| `MODEL_EMPTY` | No text / empty structured reply | — |
+| `MODEL_OUTPUT_INVALID` | Schema validation failed after one repair pass **and** salvage found nothing usable | — |
+| `RECORDING_MISSING` | Replay lookup miss | — |
 
 Transient HTTP/network/429/5xx: bounded exponential backoff (default 3). Client validation 4xx: no retry. Missing API keys: warn once; 401 at request time.
 

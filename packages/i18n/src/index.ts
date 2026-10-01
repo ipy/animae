@@ -17,5 +17,6 @@ export {
   type I18nRef,
   type LocalizableValue,
 } from "./localize-value.ts";
+export { resolveText, type ResolvableText } from "./resolvable-text.ts";
 export type { MessageKeyOf, ParamsForKey } from "./catalog-types.ts";
 export type * from "./types.ts";

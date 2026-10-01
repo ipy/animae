@@ -22,6 +22,18 @@ describe("gallery protocol schemas", () => {
     expect(parsed.success).toBe(false);
   });
 
+  test("gallery_list result data may include generatorAvailable", () => {
+    const parsed = ServerMessageSchema.safeParse({
+      v: 1,
+      type: "result",
+      seq: 1,
+      id: "r1",
+      ok: true,
+      data: { gallery: [], generatorAvailable: false },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   test("gallery_notice server shape", () => {
     const parsed = ServerMessageSchema.safeParse({
       v: 1,

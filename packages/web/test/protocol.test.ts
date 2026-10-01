@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { ClientMessageSchema, ServerMessageSchema } from "../src/protocol/schemas.ts";
+import { ClientMessageSchema, ConfigSetResultSchema, ServerMessageSchema } from "../src/protocol/schemas.ts";
+
+test("config_set result meta round-trip", () => {
+  const meta = { restarting: true, message: "Session restart scheduled." };
+  expect(ConfigSetResultSchema.parse(meta)).toEqual(meta);
+});
 
 test("client hello round-trip", () => {
   const msg = { v: 1 as const, type: "hello" as const, role: "controller" as const, resumeSeq: 0 };

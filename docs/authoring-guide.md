@@ -145,7 +145,7 @@ effects:
 | L0 | `world_vars`, `event_prob`, `salience`, `topic_access`, `schedule_offset` |
 | L1 | `track_mult`, `track_offset`, `track_caps`, `tier_shift`, `check_mod` |
 | L2 | `intent_force`, `intent_forbid`, `intent_bias` |
-| L3 | `rule_override`, `rule_add` |
+| L3 | `rule_override` (`{originalId: replacementId}`), `rule_add` (array of `{id, fn, when?, stage?}` like `rules.custom`; runs while field in scope; `tick` not allowed) |
 | L4 | `hide_entities`, `disguise`, `inject_belief`, `suppress_memory_tags` |
 
 Optional `cost`: `{ payer, effects?, events?, due?, ttlScenes, fallback? }`.

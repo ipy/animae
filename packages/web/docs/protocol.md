@@ -34,7 +34,7 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1` (`WEB_PROT
 | `get_state` | `{ id }` |
 | `query` | `{ id, path, viewer? }` |
 | `config_get` | `{ id, keys?: string[] }` — secrets masked |
-| `config_set` | `{ id, patch, consent? }` — optional content-pack consent payload |
+| `config_set` | `{ id, patch, consent? }` — optional content-pack consent payload; `result.data` may include `{ reloadRecommended?, restarting?, message? }` when the host needs a full session restart (embedding app restarts the stack; `restarting: true` means the client should wait for reconnect) |
 | `cancel` | `{ id, targetId? }` — abort in-flight turn (client UI + host signal) |
 | `models_probe` | `{ id, slot?: "s1" \| "s2" }` — connectivity test (host-defined) |
 | `images_probe` | `{ id, draft?: object }` — image generator health check; `draft` carries unsaved settings (host-defined, controller only, `UNSUPPORTED` without a host hook) |
@@ -57,6 +57,14 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1` (`WEB_PROT
 ### Gallery HTTP (same session auth as `/ws`)
 
 `GET|HEAD /api/gallery/image/<entryId>?v=<imageId>` — bytes when unlocked and available; `404` otherwise; `ETag` `"<imageId>"`; `Cache-Control` from host `galleryImagePolicy` (default: `immutable` for default rating, `no-store` for others). No path traversal: ids are validated and resolved through `engine.gallery.image`.
+
+### Environment HTTP (diagnostics)
+
+When the host implements `WebSessionHooks.environment`, authenticated clients may call:
+
+`GET /api/environment?locale=<tag>` — JSON `{ entries: [{ id, label, value, kind? }] }` with localized labels (config directory, data directory, versions). Same auth rules as other `/api/*` routes (token required on LAN binds). Returns `404` when the hook is absent. The bundled `/ref/` diagnostics client reads this hook for its Overview **Environment** card when the host implements it.
+
+Hosts may expose additional authenticated `/api/…` routes (for example generated character art) beside the gallery image route.
 
 ## Server → client
 

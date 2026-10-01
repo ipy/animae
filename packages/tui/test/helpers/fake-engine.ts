@@ -111,6 +111,7 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     query: (_viewer, path) => queryData[path] ?? null,
     queryAsync: async (_viewer, path) => queryData[path] ?? null,
     grant: async () => {},
+    revoke: async () => {},
     explain: () => ({
       turnId: "turn_0001" as TurnId,
       viewer: "player",

@@ -1,8 +1,9 @@
 export { runTurn, type RunTurnInput } from "./run-turn.ts";
+export { trackLabel, tierLabel } from "./relation-line.ts";
 export { HookRegistry } from "./hooks.ts";
 export { resolveAppraiseStage, resolveRenderStage, resolveBuildPromptSegments } from "./stages-default.ts";
 export * from "./types.ts";
-export { buildRecentHistory, historyToMessages } from "./history.ts";
+export { buildRecentHistory, historyToMessages, type HistoryScope } from "./history.ts";
 export { buildAppraiseSchema, buildRenderSchema } from "./schemas.ts";
 export { buildPromptSegments, measurePromptSegments } from "./prompt.ts";
 export { lintAssembledPrompt, assertPromptLintClean } from "./prompt-lint.ts";

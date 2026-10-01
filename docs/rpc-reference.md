@@ -105,6 +105,7 @@ Consecutive same-speaker `text` chunks between two `done` values are **utterance
 |--------|--------|
 | `query` | `{ viewer, path }` — uses `queryAsync` when available |
 | `grant` | `{ viewer, path, ttl? }` |
+| `revoke` | `{ viewer, path }` |
 | `explain` | `{ turnId, viewer }` |
 | `purge` | `{ scope }` |
 

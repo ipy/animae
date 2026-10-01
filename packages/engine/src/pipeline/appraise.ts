@@ -9,6 +9,8 @@ import { getPromptSection } from "../prompts/index.ts";
 import { prepareAuthoredProse } from "./prompt-prose.ts";
 import { routerBudgetK } from "../router/policy-access.ts";
 import type { AppraiseInput, AppraiseStageResult } from "./types.ts";
+import { rethrowPipelineModelError } from "./model-error.ts";
+import { resolveModelTimeoutMs } from "../model/timeout.ts";
 
 function normalizeTags(tags: string[]): string[] {
   const out = new Set<string>();
@@ -143,7 +145,10 @@ export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Pr
       },
     })) as Record<string, unknown>;
   } catch (err) {
-    throw new AnimaeError("APPRAISE_FAILED", "Appraise model call failed", err);
+    const slotSpec = k.authored.config.models?.s1;
+    rethrowPipelineModelError(err, "APPRAISE_FAILED", "Appraise model call failed", slotSpec
+      ? { timeoutMs: resolveModelTimeoutMs(slotSpec), baseURL: slotSpec.baseURL }
+      : undefined);
   }
 
   if (hint) {

@@ -15,3 +15,11 @@
 
 - Document `patch`, `cancel`, `models_probe`, and `content_pack_notice` in protocol.md (aligned with session room).
 - `@animae/engine` `world/locations/{id}` query now includes authored `summary` and `connects` for map UIs (additive).
+
+## 1.0.3 — 2026-11-01
+
+- Optional `WebSessionHooks.environment` and authenticated `GET /api/environment` for host path metadata on the diagnostics Overview tab.
+- Rebuilt `ref-client/` as a styled diagnostics console: tabs for smoke tests, model call log (`llm_log` / `llm_log_clear`), snapshot/state, live protocol feed, and controller-only console.
+- Read-only smoke test runner (injectable transport, unit-tested) covering socket, hello, snapshot shape, ping RTT, locale, config secret masking, llm_log, get_state, and resume quiet check.
+- i18n catalogs (`en`, `zh-CN`) for all UI strings; light/dark theme toggle with `prefers-color-scheme` support.
+- Diagnostics client escapes every dynamic value it writes into HTML (smoke ids, protocol types, model slot/label/id, state cards); `docs/protocol.md` documents the `GET /api/environment` payload as `{ entries: [{ id, label, value, kind? }] }` (it previously said `rows`).

@@ -43,6 +43,7 @@ Implementation-facing notes (purpose, public API, edge cases):
 | Pipeline | [modules/pipeline.md](./modules/pipeline.md) |
 | Scene | [modules/scene.md](./modules/scene.md) |
 | Engine kernel | [modules/engine.md](./modules/engine.md) |
+| Host session shell | [modules/host.md](./modules/host.md) · [modules/host.zh-CN.md](./modules/host.zh-CN.md) |
 | Gallery | [modules/gallery.md](./modules/gallery.md) |
 | RPC | [modules/rpc.md](./modules/rpc.md) |
 | CLI | [modules/cli.md](./modules/cli.md) |

@@ -96,7 +96,8 @@ export function loadCharacterFromFiles(
 
   const knowledge: CharacterDef["knowledge"] = [];
   for (const f of files) {
-    if (!f.path.includes(`/characters/${charId}/knowledge/`) || !f.path.endsWith(".md")) continue;
+    const knowledgePrefix = `characters/${charId}/knowledge/`;
+    if (!f.path.includes(knowledgePrefix) || !f.path.endsWith(".md")) continue;
     const rel = f.path;
     const { doc, issues: kIssues } = parseKnowledgeMarkdown(f.path, rel, f.content, charId);
     issues.push(...kIssues);

@@ -109,7 +109,18 @@ export function createSceneService(
           { sceneId },
         ),
       };
-      await k.emit(runStageRules(deps, "scene_start", deps.celContext));
+      const fieldFx = k.m.fields.resolve({
+        owner: player,
+        target: player,
+        scene: {
+          id: sceneId,
+          location: s.location,
+          participants: s.participants,
+          turn: 0,
+        },
+        ctx: deps.celContext,
+      });
+      await k.emit(runStageRules(deps, "scene_start", deps.celContext, fieldFx.effects.L3, fieldFx.l3FieldRules));
 
       return sceneId;
     },
@@ -216,6 +227,33 @@ export function createSceneService(
 
       await k.m.fields.onSceneEnd();
       const participants = [...scene.participants];
+      const player = k.authored.world.player;
+      const endFields = k.m.fields.resolve({
+        owner: player,
+        target: player,
+        scene: {
+          id: scene.id,
+          location: scene.location,
+          participants,
+          turn: scene.turn,
+        },
+        ctx: k.celContext({ sceneId: scene.id }),
+      });
+      const endDeps = {
+        state: k.timeline.state(),
+        authored: k.authored,
+        policy: k.policy,
+        cel: k.rules.cel,
+        rules: k.rules,
+        catalog: k.catalog,
+        celContext: buildCelContext(
+          { state: k.timeline.state(), authored: k.authored, policy: k.policy, catalog: k.catalog },
+          { sceneId: scene.id },
+        ),
+      };
+      await k.emit(
+        runStageRules(endDeps, "scene_end", endDeps.celContext, endFields.effects.L3, endFields.l3FieldRules),
+      );
       await k.emit([{ kind: "scene.ended", sceneId }]);
 
       const reflectAllow = k.m.router.allow("reflection");

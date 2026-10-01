@@ -69,7 +69,7 @@ Animae 是一个与具体玩法无关的角色与世界运行时，以 TypeScrip
 | `director` | 锚点、节拍、场边提示、例外通道 |
 | `world` | 世界变量、地点、物品、历法、调度器、长事件、离屏模拟、惰性补算 |
 | `scene` | 场景、参与者、发言轮转、NPC 自主对话 |
-| `introspect` | `query`、`grant`、`explain`、事件订阅 |
+| `introspect` | `query`、`grant`、`revoke`、`explain`、事件订阅 |
 | `classify` | 输入分类、安全分类 |
 | `router` | S1/S2 路由、预算、降级、prompt 分段 |
 | `dice` | 掷骰表达式与检定 |
@@ -241,6 +241,8 @@ input → classify → appraise → check → adjudicate → applyFields → dec
 
 **输出语言**：优先使用 `identity.language`，否则使用 `world.yaml` 中的 `language`（BCP 47 标签）。语言设置只影响 `render` 和 `entities.generate`。
 
+**近期对话窗口**：`buildRecentHistory` 向 appraise 与 render 提供策略 `render.recentTurns`（默认 12）所定义的最近 K 个 turn id。在应用 K 窗口之前先按**场景参与**过滤（不可见 turn 不计入 K）。对作用域 `{sceneId?, participants}` 下的说话者 S，一行可见当且仅当：该行无 `scene` id；或属于作用域场景；或 S 为目录角色且曾参与该行所在场景（以 `scene.started` 的 participants 为准）；或 S 非角色且该行场景与作用域场景至少有一名非玩家共同参与者。`state.scene` 已清空时（例如 `scene.end` 后的 reflection），调用方显式传入 ended 场景 id 与 captured participants。记忆召回、reflection 叙事与按场景过滤的事件视图遵循相同边界；跨场景信息须通过记忆传播或 authored knowledge 传递，不得经对话窗口泄漏。
+
 ## 9. 记忆与知识
 
 ### 9.1 记忆条目
@@ -329,8 +331,14 @@ cost: { payer: <entity>, effects: {...}, due: <CEL>, ttlScenes: 3, fallback: {..
 | L0 叙事条件 | 环境与时机 | `world_vars`、`event_prob: {id: Δ}`、`salience: [{tags, boost}]`、`topic_access: {open[], close[]}`、`schedule_offset: {id: minutes}` |
 | L1 数值 | 轨道与检定 | `track_mult: {track: {eventType\|"*": m}}`、`track_offset`、`track_caps`、`tier_shift`、`check_mod: {skill\|"*": {bonus, advantage}}` |
 | L2 意图 | 意图 | `intent_force`、`intent_forbid[]`、`intent_bias: {intent: score}` |
-| L3 规则 | 规则 | `rule_override: {ruleId: ruleId}`、`rule_add[]` |
+| L3 规则 | 规则 | `rule_override: {ruleId: ruleId}`、`rule_add[]`（与 `rules.custom` 条目同形） |
 | L4 感知 | NPC 的自我视图 | `hide_entities[]`、`disguise: {entity: asEntity}`、`inject_belief: [{text, tags, claims}]`、`suppress_memory_tags[]` |
+
+**L3 语义（场处于作用域内时）**
+
+- `rule_add`：`{id, fn, when?, stage?}` 数组（`stage` 默认 `adjudicate`）。与策略 `rules.custom` 相同阶段钩子执行：先策略规则，再按场 priority（降序）、场 id、数组顺序执行场规则（同 id 后者覆盖前者）。草案校验与策略规则相同；事件 `source` 标注场来源。
+- `rule_override`：`{originalId: replacementId}`（仅一跳）。当 `originalId` 将要执行时，改用 replacement 条目的 `fn`，但保留**原条目**的 `stage` 与 `when`。replacement 在策略 custom 与当前 `rule_add` 中解析。冲突 override 按场 stacking 合并（更高层级 / priority 胜出）。未知 id 或未注册 `fn` 在 grant/declare 可检查时失败，否则运行时报错或诊断——不得静默跳过。
+- 已接线阶段：`adjudicate`、`scene_start`（`scene.started` 之后）、`scene_end`（场 scene-end 费用之后、`scene.ended` 之前）、`daily`（日界）。`tick` 仅保留给 schedule 项钩子；策略与场 `rule_add` 不得使用 `tick`（加载校验报错）。
 
 ### 10.3 授权
 
@@ -437,7 +445,7 @@ start: { day: 1, minute: 480 }
 | 导出 | `timeline.export(branch, {recordings: bool})`：导出为单个 `.asave.jsonl` 文件。第 1 行是清单 `{engine, preset, branch, chain[], hashes}`；之后每一行是 `{path, content}`。内容包括世界定义、角色定义、策略、从根分支到当前分支整条祖先链上的事件和 artifacts，以及可选的录制数据 |
 | 导入 | `timeline.import(file)`：导入时校验哈希，生成一个新分支 |
 | 重播 | `timeline.replay(branch, {from, to})`：按回合逐个产出 `TurnChunk`，全部使用录制数据 |
-| 录制 | `recordings.jsonl` 中每行是 `{key: hash(model, prompt, params, seed), response}`。回放模式下查不到录制时报错 |
+| 录制 | `recordings.jsonl` 中每行是 `{key: hash(model, prompt, params, seed), response}`（流式行可有 `v: 2`）。`object` 调用存解析结果；流式调用存精简的 `StreamPart[]`（仅 `tool` 与 `final`，不含累积的 `partial`）。若该 key 在分支链上已解析为相同规范响应（末行胜出），则跳过追加。record/live 模式下，当文件较大或存在冗余时，引擎可对分支文件原地压缩（末行胜出去重、剥离旧格式 partial）。回放时 object 原样返回；精简流式记录先重放已存的 tool，再合成一条 `partial`（final 的值）与 `final`（仍含 partial 的旧行原样重放）。回放模式下查不到录制时报错 |
 | 热加载 | 每个回合结束时，比对作者文件的哈希。有变化时重新加载并校验：校验通过则写入 `config.reloaded` 事件（附带新哈希）；校验失败则保留旧配置，并写入 `config.error` 事件。重放时如果配置哈希不一致，会写入 `config.warning` 事件 |
 
 ## 14. 多角色编排
@@ -456,7 +464,7 @@ start: { day: 1, minute: 480 }
 | 观察者 | 内置五种：`debug`（始终全部可见）、`author`、`gm`、`player`、`npc:<id>`（角色的自我视图，叠加了 L4 效果）。上层可以用 `introspect.registerViewer` 注册自定义观察者 |
 | 路径 | `characters/<id>/{identity,constraints,traits,tracks,tiers,goals,secrets,memory,knowledge,alias}`、`world/{vars,locations,items}`、`ledger`、`events`、`timeline` |
 | 可见性策略 | `visibility.rules: [{viewer, path: <glob>, allow: bool}]`，按顺序求值，以最后一条匹配的规则为准；没有任何规则匹配时拒绝 |
-| 临时授权 | `grant(viewer, path, ttl)`：写入 `visibility.granted` 事件；到期时写入 `visibility.expired` 事件 |
+| 临时授权 | `grant(viewer, path, ttl)`：写入 `visibility.granted` 事件；到期时写入 `visibility.expired` 事件。`revoke(viewer, path)` 提前结束恰好匹配该 viewer 与 path 的授权，写入同样的 `visibility.expired` 事件（没有生效授权时不写事件） |
 | explain | `explain(turnId, viewer)` 返回该回合的事件链：输入、评估、检定、数值变化、场、意图、路由、检索命中。结果经过可见性过滤 |
 | 订阅 | `on(kind, handler)`，`kind` 支持通配符 |
 
@@ -567,6 +575,8 @@ models:
   s2: { provider: anthropic, model: claude-opus-5-5 }
 policies: [policies/my-tweaks.yaml]
 ```
+
+每个 `ModelSpec` 可设置可选字段 `timeoutMs`（正整数，上限 3_600_000）。省略时，远程提供商默认 120_000 ms，`ollama` 默认 600_000 ms。非流式调用按总墙钟时间限制；流式调用将同一数值用于首 chunk 与 chunk 间空闲超时（持续输出不受总时长上限截断）。分类错误码包括 `MODEL_TIMEOUT`、`MODEL_UNREACHABLE`、`MODEL_HTTP`、`MODEL_EMPTY`（见 model 模块文档）。
 
 ### 19.4 `@animae/preset-base`
 
@@ -703,6 +713,7 @@ interface Engine {
   introspect: { registerViewer(v: ViewerDef): void };
   query(viewer: Viewer, path: string): unknown;
   grant(viewer: Viewer, path: string, ttl?: Duration): void;
+  revoke(viewer: Viewer, path: string): void;
   explain(turnId: TurnId, viewer: Viewer): Explanation;
   on(kind: string, h: (e: EngineEvent) => void): () => void;
   purge(scope: { characters?: string[]; memoryIds?: string[]; sessions?: string[] }): Promise<void>;

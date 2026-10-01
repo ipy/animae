@@ -38,3 +38,5 @@ Per-character episodic/semantic memory (`artifacts/<npc>/memory.jsonl`), knowled
 - No embedding port: retrieval is term/recency/importance/salience only.
 - Character-scoped knowledge is visible only to that owner unless `scope: world` / matching location/scene.
 - `extra` LOD: `write` returns `undefined` and does not append.
+- **`when` CEL errors:** a knowledge doc whose `when` expression throws (unguarded optional key, typo) is **skipped** for that turn; the engine emits one `KNOWLEDGE_WHEN_FAILED` warning per doc id (`k.warn`, params `{ id, path }`). The turn continues.
+- Per-character files under `characters/<id>/knowledge/*.md` are loaded with the character bundle (`loadCharacterFromFiles`); scope `character:<id>` must match the owner.

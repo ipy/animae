@@ -185,7 +185,7 @@ describe("pipeline stages with sloppy scripted output", () => {
     expect(result.cues).toEqual([]);
   });
 
-  test("renderStage fails with RENDER_FAILED instead of returning a blank reply", async () => {
+  test("renderStage fails with MODEL_EMPTY instead of returning a blank reply", async () => {
     const { k } = createPipelineKernel({
       policy: {
         events: { types: { chat: { positive: true } } },
@@ -216,7 +216,7 @@ describe("pipeline stages with sloppy scripted output", () => {
         hits: [],
       }),
     );
-    await expect(run).rejects.toMatchObject({ code: "RENDER_FAILED" });
+    await expect(run).rejects.toMatchObject({ code: "MODEL_EMPTY" });
   });
 });
 

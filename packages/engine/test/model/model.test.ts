@@ -146,7 +146,7 @@ describe("ScriptedModel", () => {
 });
 
 describe("withRecording", () => {
-  test("record then replay stream identity", async () => {
+  test("record then replay stream preserves final value", async () => {
     const inner = createScriptedModel("m/m", () => streamFromObject({ text: "x" }));
     const store: RecordingStore & { map: Map<string, unknown> } = {
       mode: "record",
@@ -159,13 +159,17 @@ describe("withRecording", () => {
       },
     };
     const wrapped = withRecording(inner, store);
-    const live: StreamPart[] = [];
-    for await (const p of wrapped.stream(baseReq())) live.push(p);
+    for await (const _ of wrapped.stream(baseReq())) {
+      /* drain live partials */
+    }
+    const stored = store.map.values().next().value as StreamPart[];
+    expect(stored.some((p) => p.type === "partial")).toBe(false);
 
     store.mode = "replay";
     const replay: StreamPart[] = [];
     for await (const p of wrapped.stream(baseReq())) replay.push(p);
-    expect(JSON.stringify(replay)).toBe(JSON.stringify(live));
+    expect(replay.at(-1)).toEqual(stored.at(-1));
+    expect(replay.filter((p) => p.type === "partial").length).toBe(1);
   });
 
   test("replay miss throws RECORDING_MISSING", async () => {

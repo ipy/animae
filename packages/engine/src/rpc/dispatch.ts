@@ -186,6 +186,12 @@ export function buildHandlerMap(
     return null;
   });
 
+  bind("revoke", async (params) => {
+    const p = paramsObject(params, ["viewer", "path"]);
+    await engine.revoke(p.viewer as never, requireString(p.path, "path"));
+    return null;
+  });
+
   bind("explain", (params) => {
     const p = paramsObject(params, ["turnId", "viewer"]);
     return engine.explain(requireString(p.turnId, "turnId") as never, p.viewer as never);

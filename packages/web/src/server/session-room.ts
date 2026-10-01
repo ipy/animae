@@ -14,12 +14,20 @@ export interface SessionRoomGalleryOptions {
   allowGalleryUnlock?: boolean;
 }
 
+export interface WebEnvironmentEntry {
+  id: string;
+  /** Plain text or `{ i18n: { key, ns? } }` resolved on `/api/environment` using the request locale. */
+  label?: string | { i18n: { key: string; ns?: string } };
+  value: string;
+  kind?: "path" | "text";
+}
+
 export interface WebSessionHooks {
   configGet?(keys?: string[]): Promise<Record<string, unknown>>;
   configSet?(
     patch: Record<string, unknown>,
     consent?: { packId: string; phrase: string; noticeVersion: string },
-  ): Promise<{ reloadRecommended?: boolean; message?: string } | void>;
+  ): Promise<{ reloadRecommended?: boolean; restarting?: boolean; message?: string } | void>;
   modelsProbe?(
     slot?: "s1" | "s2",
     draft?: Record<string, unknown>,
@@ -28,6 +36,8 @@ export interface WebSessionHooks {
   ollamaModels?(baseURL?: string): Promise<{ ok: boolean; models?: string[]; error?: string }>;
   contentPackNotice?(packId: string): Promise<{ notice: string; noticeVersion?: string }>;
   protagonistSet?(name: string): Promise<{ ok: boolean; error?: string }>;
+  /** Host paths and version metadata for the diagnostics page (authenticated like other `/api/*` routes). */
+  environment?(): Promise<WebEnvironmentEntry[]> | WebEnvironmentEntry[];
 }
 
 interface WsData {
@@ -728,7 +738,7 @@ export class SessionRoom {
             if (!this.hooks.configSet) throw new Error("config_set not supported");
             const meta = await this.hooks.configSet(m.patch, m.consent);
             this.ok(ws, m.id, meta ?? undefined);
-            if (meta?.reloadRecommended) {
+            if (meta?.reloadRecommended && !meta?.restarting) {
               this.broadcastLocalized((i18n) => ({
                 v: WEB_PROTOCOL_VERSION,
                 type: "toast",
@@ -819,7 +829,7 @@ export class SessionRoom {
               includeUnavailable: m.includeUnavailable,
               debug: m.debug,
             });
-            this.ok(ws, m.id, { gallery: items });
+            this.ok(ws, m.id, { gallery: items, generatorAvailable: this.host.galleryGeneratorAvailable() });
             break;
           }
           case "gallery_get": {
@@ -837,7 +847,7 @@ export class SessionRoom {
             break;
           }
           case "gallery_jobs": {
-            this.ok(ws, m.id, { jobs: this.host.galleryJobs() });
+            this.ok(ws, m.id, { jobs: this.host.galleryJobs(), generatorAvailable: this.host.galleryGeneratorAvailable() });
             break;
           }
           case "gallery_capture": {

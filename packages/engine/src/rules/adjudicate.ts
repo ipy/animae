@@ -1,5 +1,7 @@
 import type { Appraisal, CheckRolled } from "../events.ts";
 import type { FieldEffects } from "../schema/authored.ts";
+import type { FieldCustomRule } from "../schema/custom-rule.ts";
+import { runCustomStageRules } from "./l3-custom.ts";
 import type { CharacterId, EventDraft, Rng, SceneId, TurnId } from "../types.ts";
 import { worldMinutes } from "../timeline/time.ts";
 import { buildCelContext } from "./cel-context.ts";
@@ -14,6 +16,8 @@ export interface AdjudicateInput {
   /** The scene the turn belongs to, so CEL `scene.*` in windows / thresholds / custom rules describes it. */
   sceneId?: SceneId;
   fieldEffects?: FieldEffects;
+  l3Effects?: FieldEffects;
+  l3FieldRules?: readonly FieldCustomRule[];
   rng: Rng;
   /** Last check from the check stage (same turn), exposed to custom adjudicate rules via CEL `check`. */
   check?: CheckRolled | null;
@@ -186,20 +190,15 @@ export function adjudicate(
     drafts.push({ kind: "rule.threshold_fired", id: th.id, owner, target });
   }
 
-  for (const cr of policy.rules.custom ?? []) {
-    if (cr.stage !== "adjudicate") continue;
-    if (cr.when && !deps.cel.bool(cr.when, ctx)) continue;
-    const out = deps.rules.run(cr.fn, {
+  drafts.push(
+    ...runCustomStageRules(deps, {
       stage: "adjudicate",
-      state: deps.state,
-      authored: deps.authored,
-      policy: deps.policy,
-      time: deps.state.time,
       vars: ctx,
-      rngKey: `${input.turnId}:custom:${cr.id}`,
-    });
-    drafts.push(...out);
-  }
+      l3: input.l3Effects,
+      fieldRules: input.l3FieldRules,
+      rngKeyPrefix: String(input.turnId),
+    }),
+  );
 
   return { drafts, tierChanged, moodDelta, moodBefore };
 }

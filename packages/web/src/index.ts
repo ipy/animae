@@ -21,7 +21,7 @@ export {
   securityRequiresToken,
   type WebSecurityConfig,
 } from "./server/security.ts";
-export type { WebSessionHooks } from "./server/session-room.ts";
+export type { WebSessionHooks, WebEnvironmentEntry } from "./server/session-room.ts";
 export {
   createWebI18n,
   registerWebI18nCatalogs,

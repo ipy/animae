@@ -20,6 +20,27 @@ function celContextWithModel(ctx: CelContext): CelContext {
   return { ...ctx, model: { slot: "", tags: [] } };
 }
 
+const warnedWhenFailures = new WeakMap<Kernel, Set<string>>();
+
+/**
+ * A `when` condition that cannot be evaluated (an unguarded optional key, a typo) is an authoring defect, not a
+ * reason to fail the player's turn: the document is skipped and the defect is reported once per document.
+ */
+function whenMatches(k: Kernel, doc: KnowledgeDoc, ctx: CelContext): boolean {
+  try {
+    return k.rules.cel.bool(doc.when ?? "false", ctx);
+  } catch (err) {
+    const warned = warnedWhenFailures.get(k) ?? new Set<string>();
+    warnedWhenFailures.set(k, warned);
+    if (!warned.has(doc.id)) {
+      warned.add(doc.id);
+      const reason = err instanceof Error ? err.message : String(err);
+      k.warn("KNOWLEDGE_WHEN_FAILED", `knowledge ${doc.id} \`when\` condition failed: ${reason}`, { id: doc.id, path: doc.path });
+    }
+    return false;
+  }
+}
+
 export function gatherKnowledge(
   k: Kernel,
   q: { owner: string; location?: string; sceneId?: string; ctx: import("../types.ts").CelContext; scopeFilter?: string },
@@ -42,8 +63,7 @@ export function gatherKnowledge(
   for (const doc of ownerDocs) {
     if (doc.inject === "always") always.push(doc);
     else if (doc.inject === "when") {
-      const whenExpr = doc.when ?? "false";
-      if (k.rules.cel.bool(whenExpr, evalCtx)) when.push(doc);
+      if (whenMatches(k, doc, evalCtx)) when.push(doc);
     } else onDemandCandidates.push(doc);
   }
 

@@ -1,7 +1,7 @@
 import type { Engine, Viewer } from "@animae/engine";
 import { AnimaeError } from "@animae/engine";
 import type { FormatParams, I18nInstance, LocalizableValue } from "@animae/i18n";
-import { localizeError, scopedI18n } from "@animae/i18n";
+import { localizeError, resolveText, scopedI18n } from "@animae/i18n";
 import { runHostCommandLine } from "./builtin-commands.ts";
 import { createHostCommandApi, setHostSceneId, type CommandApiState } from "./command-api.ts";
 import { createHostI18n } from "./i18n/host-i18n.ts";
@@ -165,6 +165,7 @@ export class SessionHost {
       uiBridge,
       i18nBridge,
       opts.openFile,
+      () => this.ui.focusTarget,
     );
 
     this.galleryUnsub = this.engine.gallery.subscribe((notice) => {
@@ -333,6 +334,15 @@ export class SessionHost {
     };
   }
 
+  private resolveActionArgs(args?: HostAction["args"]): ActionDescriptor["args"] {
+    if (!args?.length) return undefined;
+    return args.map((f) => ({
+      ...f,
+      label: resolveText(f.label),
+      options: f.options?.map((o) => ({ ...o, label: resolveText(o.label) })),
+    }));
+  }
+
   listActions(focusTarget?: string): ActionDescriptor[] {
     const ctx = this.actionContext(focusTarget);
     const out: ActionDescriptor[] = [];
@@ -340,11 +350,11 @@ export class SessionHost {
       if (a.when && !a.when(ctx)) continue;
       out.push({
         id: a.id,
-        label: a.label,
-        hint: a.hint,
+        label: resolveText(a.label),
+        hint: a.hint ? resolveText(a.hint) : undefined,
         hotkey: a.hotkey,
         toolbar: a.toolbar,
-        args: a.args,
+        args: this.resolveActionArgs(a.args),
       });
     }
     if (focusTarget) {
@@ -352,11 +362,11 @@ export class SessionHost {
         if (a.when && !a.when(ctx, focusTarget)) continue;
         out.push({
           id: `entity:${a.id}`,
-          label: a.label,
-          hint: a.hint,
+          label: resolveText(a.label),
+          hint: a.hint ? resolveText(a.hint) : undefined,
           hotkey: a.hotkey,
           entityScoped: true,
-          args: a.args,
+          args: this.resolveActionArgs(a.args),
         });
       }
     }
@@ -610,6 +620,13 @@ export class SessionHost {
       if (err instanceof AnimaeError && err.messageKey) {
         const key = err.messageNamespace ? `${err.messageNamespace}:${err.messageKey}` : err.messageKey;
         neutral = { i18n: { key, params: err.params } };
+      } else if (err instanceof AnimaeError && err.params) {
+        neutral = {
+          i18n: {
+            key: `error.${err.code.toLowerCase().replace(/-/g, "_")}`,
+            params: err.params as Record<string, string | number>,
+          },
+        };
       }
       this.ui.turnError = neutral;
       this.appendSystemLine(neutral, "error");

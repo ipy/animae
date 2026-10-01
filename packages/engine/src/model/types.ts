@@ -3,6 +3,8 @@ import type { ModelWarningSink } from "./warnings.ts";
 
 export type ModelPortOptions = {
   env?: Record<string, string | undefined>;
+  /** When set, each call reads the latest spec from `current` (hot config). */
+  specRef?: { current: import("../schema/authored.ts").ModelSpec };
   fetch?: typeof fetch;
   usageSink?: (usage: Usage) => void;
   /** AI SDK / model warnings (never written to stdout/stderr by the engine) */

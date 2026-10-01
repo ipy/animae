@@ -197,7 +197,13 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
     },
     m: {
       fields: opts.fields ?? ({
-        resolve: () => ({ effects: { L0: {}, L1: {}, L2: {}, L3: {}, L4: {} }, applied: [], maxLevel: 0, events: [] }),
+        resolve: () => ({
+          effects: { L0: {}, L1: {}, L2: {}, L3: {}, L4: {} },
+          l3FieldRules: [],
+          applied: [],
+          maxLevel: 0,
+          events: [],
+        }),
         grant: async () => ({ eventId: "evt_0000", kind: "field.granted", detail: {} }),
         revoke: async () => {},
         declare: () => {},

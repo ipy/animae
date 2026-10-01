@@ -17,7 +17,7 @@ import type { PresetBundle } from "./preset.ts";
 export type Stage = "classify" | "appraise" | "check" | "adjudicate" | "applyFields" | "decide" | "route" | "render" | "commit";
 
 /** Stage hooks replace the default implementation of a stage. IO only through `ctx.ports`; calls are recorded. */
-export type StageHook = (ctx: TurnCtx, next: () => Promise<unknown>) => Promise<unknown>;
+export type StageHook = (ctx: TurnCtx, next: () => Promise<unknown>, k: Kernel) => Promise<unknown>;
 
 export interface RuleCtx {
   stage: string;
@@ -60,6 +60,10 @@ export interface TurnCtx {
   /** Per-turn narration language override (web controller UI locale). */
   outputLocale?: string;
   appraisal?: Appraisal;
+  /** Host/mod extension: merged into render `extraStatic` when set before the render stage. */
+  promptExtraStatic?: string;
+  /** Host/mod extension: merged into render `extraDynamic` when set before the render stage. */
+  promptExtraDynamic?: string;
   [k: string]: unknown;
 }
 
@@ -199,6 +203,8 @@ export interface FieldQuery {
 export interface ResolvedFields {
   /** merged effects per level, already clamped by `fields.caps` */
   effects: { L0: FieldEffects; L1: FieldEffects; L2: FieldEffects; L3: FieldEffects; L4: FieldEffects };
+  /** L3 `rule_add` entries from applicable fields (priority desc, id asc; duplicate ids last wins). */
+  l3FieldRules: import("./schema/custom-rule.ts").FieldCustomRule[];
   /** L4 effects are per owner self-view; `selfView[owner]` equals effects.L4 for that owner */
   applied: { id: string; level: string; clamped: string[] }[];
   /** highest level among applied fields (for router `field_high`) */
@@ -313,6 +319,8 @@ export interface MemoryService {
 export interface Introspect {
   query(viewer: Viewer, path: string): unknown;
   grant(viewer: Viewer, path: string, ttl?: Duration): Promise<void>;
+  /** end the grants for exactly `(viewer, path)` before their TTL; writes `visibility.expired` (no-op when none is active) */
+  revoke(viewer: Viewer, path: string): Promise<void>;
   explain(turnId: TurnId, viewer: Viewer): Explanation;
   registerViewer(v: ViewerDef): void;
   /** expire temp grants whose time passed (called on time.advanced) */

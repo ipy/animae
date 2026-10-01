@@ -1,30 +1,96 @@
 import type { Kernel } from "../contracts.ts";
-import type { CharacterId } from "../types.ts";
+import type { CharacterId, EngineEvent, SceneId } from "../types.ts";
 import type { TurnHistoryLine } from "./types.ts";
 
-/** Build recent dialogue from timeline events (last K turns). */
-export function buildRecentHistory(k: Kernel, speaker: string, addressee: string, limitTurns?: number): TurnHistoryLine[] {
+/** Scene context for filtering dialogue history (reflection passes ended-scene roster explicitly). */
+export interface HistoryScope {
+  sceneId?: SceneId;
+  participants: readonly CharacterId[];
+}
+
+function sceneParticipantsFromEvents(events: readonly EngineEvent[]): Map<SceneId, Set<CharacterId>> {
+  const map = new Map<SceneId, Set<CharacterId>>();
+  for (const e of events) {
+    if (e.kind !== "scene.started") continue;
+    const p = e as { sceneId?: SceneId; participants?: CharacterId[] };
+    if (!p.sceneId) continue;
+    map.set(p.sceneId, new Set(p.participants ?? []));
+  }
+  return map;
+}
+
+function resolveScope(k: Kernel, scope?: HistoryScope): HistoryScope {
+  if (scope) return scope;
+  const sc = k.timeline.state().scene;
+  if (sc) return { sceneId: sc.id, participants: sc.participants };
+  return { participants: [] };
+}
+
+function historyLineVisible(
+  k: Kernel,
+  lineScene: SceneId | undefined,
+  speaker: string,
+  scope: HistoryScope,
+  partMap: Map<SceneId, Set<CharacterId>>,
+): boolean {
+  if (!lineScene) return true;
+  const player = k.authored.world.player;
+  if (scope.sceneId && lineScene === scope.sceneId) return true;
+
+  const isCharacter = !!k.catalog.character(speaker);
+  const past = partMap.get(lineScene);
+  if (!past) return false;
+
+  if (isCharacter) return past.has(speaker);
+
+  const current = new Set(scope.participants);
+  for (const p of past) {
+    if (p !== player && current.has(p)) return true;
+  }
+  return false;
+}
+
+/** Build recent dialogue from timeline events (last K visible turns). */
+export function buildRecentHistory(
+  k: Kernel,
+  speaker: string,
+  _addressee: string,
+  limitTurns?: number,
+  scope?: HistoryScope,
+): TurnHistoryLine[] {
   const K = limitTurns ?? k.policy.render.recentTurns;
   const events = k.timeline.events();
   const player = k.authored.world.player;
-  const lines: TurnHistoryLine[] = [];
+  const resolved = resolveScope(k, scope);
+  const partMap = sceneParticipantsFromEvents(events);
+  const lines: { line: TurnHistoryLine; scene?: SceneId }[] = [];
 
   for (const e of events) {
     if (e.kind === "input.received") {
       const actor = (e as { actor?: string }).actor ?? player;
       const text = (e as { text?: string }).text ?? "";
-      if (text) lines.push({ turnId: e.turn, role: "user", speaker: actor, content: text });
+      if (text) {
+        lines.push({
+          scene: e.scene,
+          line: { turnId: e.turn, role: "user", speaker: actor, content: text },
+        });
+      }
     } else if (e.kind === "utterance") {
       const sp = (e as { speaker?: string }).speaker ?? speaker;
       const text = (e as { text?: string }).text ?? "";
-      if (text) lines.push({ turnId: e.turn, role: "assistant", speaker: sp, content: text });
+      if (text) {
+        lines.push({
+          scene: e.scene,
+          line: { turnId: e.turn, role: "assistant", speaker: sp, content: text },
+        });
+      }
     }
   }
 
-  const turnIds = [...new Set(lines.map((l) => l.turnId).filter(Boolean))] as string[];
+  const visible = lines.filter((row) => historyLineVisible(k, row.scene, speaker, resolved, partMap));
+  const turnIds = [...new Set(visible.map((r) => r.line.turnId).filter(Boolean))] as string[];
   const keep = new Set(turnIds.slice(-K));
-  const filtered = lines.filter((l) => !l.turnId || keep.has(l.turnId));
-  return filtered;
+  return visible.filter((r) => !r.line.turnId || keep.has(r.line.turnId)).map((r) => r.line);
 }
 
 /** Who the next reply is written for, so history can be attributed in scenes with several speaking characters. */

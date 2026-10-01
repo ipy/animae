@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Cel, CelOrBool, CelOrNumber, EventDraftSchema, Id, LevelSchema, LodSchema } from "./common.ts";
 import { FieldDescriptorSchema } from "./authored.ts";
+import { CustomRuleSchema } from "./custom-rule.ts";
 
 /**
  * Policy schema (tracks, checks, rules, retrieval, models). CONTRACT file.
@@ -49,14 +50,6 @@ const WindowSchema = z.strictObject({
   durationScenes: z.number().int().positive(),
   mult: Rec(z.number()),
   capToLoss: z.boolean().default(false),
-});
-
-const CustomRuleSchema = z.strictObject({
-  id: Id,
-  /** name registered through `engine.rules.register(name, fn)` */
-  fn: z.string(),
-  when: Cel.optional(),
-  stage: z.enum(["adjudicate", "tick", "scene_end", "scene_start", "daily"]).default("adjudicate"),
 });
 
 const IntentRuleSchema = z.strictObject({ intent: z.string(), when: Cel, score: CelOrNumber });

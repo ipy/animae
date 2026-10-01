@@ -200,6 +200,7 @@ export function createFakeKernel(opts?: Parameters<typeof minimalAuthored>[0] & 
   const introspect: Introspect = {
     query: () => undefined,
     grant: async () => {},
+    revoke: async () => {},
     explain: () => ({ turnId: "turn_0", viewer: "player", chain: [] }),
     registerViewer: () => {},
     expireGrants: async () => [],
@@ -209,6 +210,7 @@ export function createFakeKernel(opts?: Parameters<typeof minimalAuthored>[0] & 
   const fields: FieldSystem = {
     resolve: () => ({
       effects: { L0: {}, L1: {}, L2: {}, L3: {}, L4: {} },
+      l3FieldRules: [],
       applied: [],
       maxLevel: 0,
       events: [],

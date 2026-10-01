@@ -187,6 +187,16 @@ export function validatePolicyDocument(
   validateGrants(policy, file, issues, opts.authoredFields);
   validateVisibility(policy, file, issues);
   validateCues(policy, file, issues);
+  for (const cr of policy.rules?.custom ?? []) {
+    if (cr.stage === "tick") {
+      issues.push({
+        file,
+        path: `rules.custom.${cr.id}.stage`,
+        message:
+          'custom rule stage "tick" is not supported: use schedule item rules instead (policy custom rules run adjudicate, scene_start, scene_end, daily only)',
+      });
+    }
+  }
 
   const errors = issues.filter((i) => !i.warn);
   const warnings = issues.filter((i) => i.warn);

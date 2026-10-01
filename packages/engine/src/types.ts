@@ -101,7 +101,7 @@ export interface Rng {
 
 /** Optional presentation payload for localizing at the UI/protocol edge. */
 export interface AnimaeErrorPresentation {
-  messageKey: string;
+  messageKey?: string;
   params?: Record<string, JsonValue>;
   namespace?: string;
 }
@@ -119,9 +119,9 @@ export class AnimaeError extends Error {
     this.code = code;
     this.details = details;
     if (presentation) {
-      this.messageKey = presentation.messageKey;
-      this.params = presentation.params;
-      this.messageNamespace = presentation.namespace;
+      if (presentation.messageKey) this.messageKey = presentation.messageKey;
+      if (presentation.params) this.params = presentation.params;
+      if (presentation.namespace) this.messageNamespace = presentation.namespace;
     }
   }
 

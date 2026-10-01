@@ -4,6 +4,7 @@ import type { ZodType } from "zod";
 import type { RecordingStore } from "../contracts.ts";
 import { recordingKey } from "./recording-key.ts";
 import type { RecordedObjectResponse, RecordedStreamResponse } from "./types.ts";
+import { replayStreamParts, slimStreamPartsForRecord } from "./recording-stream.ts";
 
 type ObjectReq<T = unknown> = ModelRequestBase & { schema: ZodType<T> };
 
@@ -60,9 +61,9 @@ async function* recordStream(
     parts.push(part);
     yield part;
   }
-  if (rec.mode === "record") await rec.record(key, parts);
+  if (rec.mode === "record") await rec.record(key, slimStreamPartsForRecord(parts));
 }
 
 async function* replayStream(parts: StreamPart[]): AsyncGenerator<StreamPart> {
-  for (const p of parts) yield p;
+  yield* replayStreamParts(parts);
 }

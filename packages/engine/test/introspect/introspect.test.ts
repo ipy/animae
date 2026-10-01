@@ -75,6 +75,41 @@ describe("introspect query", () => {
     expect(intro.query("player", "ledger")).toBeUndefined();
   });
 
+  test("revoke ends a grant before its TTL and leaves other grants alone", async () => {
+    const { k } = createFakeKernel({
+      policy: {
+        visibility: {
+          rules: [
+            { viewer: "player", path: "ledger", allow: false },
+            { viewer: "player", path: "director/anchors", allow: false },
+          ],
+        },
+      },
+    });
+    k.m.memory = createMemoryService(k);
+    const intro = createIntrospect(k);
+    await intro.grant("player", "ledger", 600);
+    await intro.grant("player", "director/anchors", 600);
+    expect(intro.canRead("player", "ledger")).toBe(true);
+
+    await intro.revoke("player", "ledger");
+    expect(intro.canRead("player", "ledger")).toBe(false);
+    expect(intro.query("player", "ledger")).toBeUndefined();
+    expect(intro.canRead("player", "director/anchors")).toBe(true);
+  });
+
+  test("revoke is a no-op without an active grant and does not write events", async () => {
+    const { k } = createFakeKernel({
+      policy: { visibility: { rules: [{ viewer: "player", path: "ledger", allow: false }] } },
+    });
+    k.m.memory = createMemoryService(k);
+    const intro = createIntrospect(k);
+    const before = k.timeline.events().length;
+    await intro.revoke("player", "ledger");
+    expect(k.timeline.events().length).toBe(before);
+    expect(intro.canRead("player", "ledger")).toBe(false);
+  });
+
   test("L4 suppress memory tags on self view", async () => {
     const { k } = createFakeKernel({
       policy: {
@@ -85,6 +120,7 @@ describe("introspect query", () => {
       fields: {
         resolve: () => ({
           effects: { L0: {}, L1: {}, L2: {}, L3: {}, L4: { suppress_memory_tags: ["secret"] } },
+          l3FieldRules: [],
           applied: [],
           maxLevel: 4,
           events: [],

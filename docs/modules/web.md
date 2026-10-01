@@ -6,7 +6,7 @@ Browser transport for Animae hosts: static asset serving (embeddable), WebSocket
 
 ## Public API
 
-- `createWebServer(opts)` — `Bun.serve` with `/`, `/ws`, `/api/health`, `/api/version`.
+- `createWebServer(opts)` — `Bun.serve` with `/`, `/ws`, `/api/health`, `/api/version`, optional `/api/environment` when `WebSessionHooks.environment` is set.
 - `createDirectoryAssetProvider(root)` / `createMemoryAssetProvider(files)` — static assets for dev vs compiled embed.
 - `@animae/web/protocol` — Zod schemas + TS types for client/server messages (snapshot `scene.participants` for stage composition).
 
@@ -18,9 +18,24 @@ Companion package **`@animae/host`** holds UI-agnostic `SessionHost` (commands, 
 - `--host 0.0.0.0` (or any non-loopback) requires a random auth token (query param, `X-Animae-Token`, or cookie).
 - Origin allow-list, CSP on static responses, max WS payload size, per-connection rate limit.
 
+## Diagnostics page (`/ref/`)
+
+Static **`ref-client/`** tree (no bundler): developer console for the same WebSocket session as the main browser UI. Served when the asset provider includes `ref/index.html` — `serveAssetRequest` maps `/ref` and `/ref/` to that entry. Query parameters:
+
+| Param | Purpose |
+|-------|---------|
+| `token` | Session auth token (required on LAN binds); passed in the `hello` frame only, never shown in the UI |
+| `ws` | Override WebSocket URL (default `ws(s)://<host>/ws`) |
+| `role` | Optional `controller` or `spectator` (default spectator for read-only diagnostics) |
+| `locale` | Optional initial UI locale (`en`, `zh-CN`) |
+
+Features: connection metadata after `hello_ok`, an **Environment** card (host-provided config/data paths via authenticated `GET /api/environment?locale=`), read-only **smoke tests** (socket, hello/protocol v1, snapshot shape, ping RTT, locale list + `set_locale` no-op, `config_get` secret masking, `llm_log`, `get_state` version match, resume quiet), **model call log** table with live poll and JSONL export, collapsible snapshot JSON, redacted protocol frame feed, and a **console** tab (player `input` / `command` / raw JSON — controller only). Smoke tests never send mutating game frames.
+
+Security: uses the normal session token and read-only queries where possible; treat the page like any authenticated session client.
+
 ## Tests
 
-`bun test` in `packages/web` — protocol round-trips, asset provider, WS integration with `ScriptedModel`.
+`bun test` in `packages/web` — protocol round-trips, asset provider, WS integration with `ScriptedModel`, and `ref-client-*` unit tests for smoke runner, redaction, i18n parity, and asset references.
 
 ## Decisions
 
@@ -35,3 +50,4 @@ Companion package **`@animae/host`** holds UI-agnostic `SessionHost` (commands, 
 ## Changelog
 
 - **2026-10-30:** Per-client locale negotiation; `locale` server message; ref-client locale selector.
+- **2026-11-01:** Diagnostics ref-client redesign (smoke tests, model call log viewer, themed UI, i18n).

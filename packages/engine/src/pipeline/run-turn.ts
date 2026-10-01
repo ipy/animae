@@ -14,6 +14,13 @@ import { HookRegistry } from "./hooks.ts";
 import { getPromptSection } from "../prompts/index.ts";
 import { resolveAppraiseStage, resolveRenderStage } from "./stages-default.ts";
 
+function joinPromptExtra(base: string, extra: string | undefined): string {
+  const tail = extra?.trim();
+  if (!base.trim()) return tail ?? "";
+  if (!tail) return base;
+  return `${base.trim()}\n\n${tail}`;
+}
+
 function choiceTextFromTimeline(k: Kernel, choiceId: string): string | undefined {
   for (let i = k.timeline.events().length - 1; i >= 0; i--) {
     const e = k.timeline.events()[i];
@@ -175,7 +182,10 @@ async function* runTurnPipeline(
     const dirTick = await k.m.director.tick("turn_start");
     if (dirTick.events.length) await append(dirTick.events, { source: "director" });
 
-    const history = buildRecentHistory(k, input.speaker, input.addressee);
+    const history = buildRecentHistory(k, input.speaker, input.addressee, undefined, {
+      sceneId: input.sceneId,
+      participants: scene.participants,
+    });
     const sceneSnap = sceneInfo(k);
 
     if (sceneSnap.firstTurn) {
@@ -301,6 +311,8 @@ async function* runTurnPipeline(
         turnId: input.turnId,
         sceneId: input.sceneId,
         fieldEffects: l01.effects.L1,
+        l3Effects: l01.effects.L3,
+        l3FieldRules: l01.l3FieldRules,
         rng: k.timeline.rng(`adj:${input.turnId}`),
         check: checks.result ?? null,
       });
@@ -394,7 +406,8 @@ async function* runTurnPipeline(
       scene: sceneSnap,
       history,
       sidenotes,
-      extraDynamic,
+      extraStatic: typeof turnCtx.promptExtraStatic === "string" ? turnCtx.promptExtraStatic : undefined,
+      extraDynamic: joinPromptExtra(extraDynamic, turnCtx.promptExtraDynamic),
     };
 
     let renderResult: RenderResult | undefined;

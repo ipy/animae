@@ -8,7 +8,8 @@ Profile-scoped CG collection: authored preset entries (CEL unlock, optional ship
 
 - `createGalleryService(kernel, imagePort?, opts?): GalleryService & GalleryLifecycleHooks` — internal factory; hosts use `Engine.gallery` (`GalleryService`).
 - `composeGalleryPrompts`, `sniffImageDimensions`, `imageMimeFromBytes`, `validateGeneratedImageBytes` (via `util.ts` exports as needed).
-- Types: `GalleryService`, `GalleryItemView`, `GalleryNotice`, `GalleryJobView`, `ImagePort` (`ports.ts`).
+- Types: `GalleryService`, `GalleryItemView`, `GalleryNotice`, `GalleryJobView`, `ImagePort` (`ports.ts` — optional `available?(): boolean` when wired but disabled).
+- `GalleryService.generatorAvailable()` — true when a port is present and `available?.()` is not false (hosts expose the same flag on web `gallery_list` / `gallery_jobs`).
 - Schema: `GalleryConfigSchema`, `GalleryPresetEntrySchema` (`schema/gallery.ts`).
 - Authored validation: `validateGalleryAuthored` (`authored/gallery-validate.ts`) from `animae validate`.
 

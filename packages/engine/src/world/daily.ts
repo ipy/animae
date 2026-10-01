@@ -8,5 +8,7 @@ import { kernelRulesDeps } from "./rules-deps.ts";
 export function runDailyStageRules(k: Kernel, at: WorldTime): EventDraft[] {
   const deps = kernelRulesDeps(k, { time: at });
   const vars = k.celContext({ extra: { time: at } });
-  return runStageRules(deps, "daily", vars);
+  const player = k.authored.world.player;
+  const fieldFx = k.m.fields.resolve({ owner: player, target: player, ctx: vars });
+  return runStageRules(deps, "daily", vars, fieldFx.effects.L3, fieldFx.l3FieldRules);
 }

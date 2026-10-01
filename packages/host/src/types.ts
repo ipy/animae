@@ -1,15 +1,15 @@
 import type { Engine, JsonValue, TurnChunk, Viewer } from "@animae/engine";
-import type { LocalizableValue } from "@animae/i18n";
+import type { LocalizableValue, ResolvableText } from "@animae/i18n";
 import type { SceneId } from "@animae/engine";
 
 export type HostArgFieldType = "text" | "select" | "enum" | "number" | "entity";
 
 export interface HostArgField {
   id: string;
-  label: string;
+  label: ResolvableText;
   type: HostArgFieldType;
   optional?: boolean;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: ResolvableText }>;
   /** JSON-schema-like hints for frontends */
   min?: number;
   max?: number;
@@ -54,6 +54,8 @@ export interface HostCommandApi {
   locale?(): string;
   /** Translate host catalog keys for the current viewer locale. */
   t?(key: string, params?: Record<string, string | number | boolean | null | undefined>): string;
+  /** Roster / stage focus for command inference (web UI). */
+  focusTarget?(): string | undefined;
   /** Open a gallery image path (OS viewer); set by SessionHost when configured. */
   openFile?(path: string): void | Promise<void>;
 }
@@ -75,8 +77,8 @@ export interface HostActionContext {
 
 export interface HostAction {
   id: string;
-  label: string;
-  hint?: string;
+  label: ResolvableText;
+  hint?: ResolvableText;
   hotkey?: string;
   palette?: boolean;
   toolbar?: boolean;
@@ -87,8 +89,8 @@ export interface HostAction {
 
 export interface HostEntityAction {
   id: string;
-  label: string;
-  hint?: string;
+  label: ResolvableText;
+  hint?: ResolvableText;
   hotkey?: string;
   when?: (ctx: HostActionContext, entityId: string) => boolean;
   args?: HostArgField[];
@@ -97,8 +99,8 @@ export interface HostEntityAction {
 
 export interface HostCommand {
   /** Catalog key or literal; may be `() => string` for locale-aware game commands (TUI resolves at render). */
-  description: import("@animae/tui").ResolvableText;
-  usage?: import("@animae/tui").ResolvableText;
+  description: ResolvableText;
+  usage?: ResolvableText;
   run(args: string[], api: HostCommandApi): Promise<string | void>;
 }
 

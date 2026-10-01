@@ -81,7 +81,16 @@
     "gallery_rating_unavailable": "当前不可用该分级（GALLERY_RATING_UNAVAILABLE）。",
     "gallery_busy": "图鉴队列已满，请稍后再试（GALLERY_BUSY）。",
     "gallery_brief_invalid": "无法生成有效的图像简报（GALLERY_BRIEF_INVALID）。",
-    "gallery_generation_failed": "图像生成失败（GALLERY_GENERATION_FAILED）。"
+    "gallery_generation_failed": "图像生成失败（GALLERY_GENERATION_FAILED）。",
+    "model_timeout": "模型在 {seconds} 秒内未响应。若回复经常较慢，请在模型设置中增大请求超时。",
+    "model_unreachable": "无法连接模型服务 {host}。请检查接口地址并确认服务已启动。",
+    "model_http": "模型 HTTP {status}：{detail}",
+    "model_http_short": "模型 HTTP {status}。",
+    "model_empty": "模型未返回任何文本。",
+    "model_output_invalid": "模型回复不符合要求的格式。",
+    "model_failed": "模型调用失败。",
+    "render_failed": "叙事生成失败。",
+    "appraise_failed": "意图分析失败。"
   },
   "gallery": {
     "notice": {

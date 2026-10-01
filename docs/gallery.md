@@ -270,6 +270,8 @@ Recording/replay: brief calls appear in the model call log like other labeled ca
 interface ImagePort {
   readonly id: string;
   readonly tags?: readonly string[];
+  /** When false, the port is wired but cannot generate (disabled backend). Omitted means ready when present. */
+  available?(): boolean;
   generate(req: ImageRequest, opts?: { signal?: AbortSignal; onProgress?(n: number): void }): Promise<ImageResult>;
 }
 ```
@@ -282,7 +284,7 @@ Without a port, shipped preset art and listing still work; `capture()` / `render
 
 | Method | Summary |
 |--------|---------|
-| `generatorAvailable()` | Whether an `ImagePort` is wired. |
+| `generatorAvailable()` | Whether an `ImagePort` is wired and `available?.()` is not false. |
 | `ratings()` | All authored ratings with `available` flag. |
 | `list(opts?)` | Presets + captures; `includeLocked` (default true), `includeUnavailable` (default false), `debug`. |
 | `get(id, opts?)` | Single item view. |

@@ -120,6 +120,8 @@ export interface Engine {
   /** Like `query`, but runs lazy catch-up for stale player location/character paths first. */
   queryAsync(viewer: Viewer, path: string): Promise<unknown>;
   grant(viewer: Viewer, path: string, ttl?: Duration): Promise<void>;
+  /** End the temporary grants for exactly `(viewer, path)` now instead of waiting for their TTL. */
+  revoke(viewer: Viewer, path: string): Promise<void>;
   explain(turnId: TurnId, viewer: Viewer): Explanation;
   on(kind: string, h: (e: EngineEvent) => void): () => void;
   purge(scope: { characters?: string[]; memoryIds?: string[]; sessions?: string[] }): Promise<void>;

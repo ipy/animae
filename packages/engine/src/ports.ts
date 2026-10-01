@@ -128,5 +128,10 @@ export interface ImagePort {
   readonly id: string;
   /** Host-defined capability tags exposed to CEL as `image.tags`, mirroring ModelPort.tags. */
   readonly tags?: readonly string[];
+  /**
+   * When false, the port is wired but cannot generate right now (disabled backend, missing config, etc.).
+   * Omitted means the port is always ready when present.
+   */
+  available?(): boolean;
   generate(req: ImageRequest, opts?: ImageGenerateOptions): Promise<ImageResult>;
 }

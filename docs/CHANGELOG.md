@@ -4,7 +4,20 @@
 
 ### `@animae/engine`
 
+- **Model request timeout:** optional `ModelSpec.timeoutMs` (defaults: 120 s remote, 600 s `ollama`). `generateText` uses the AI SDK `timeout`; streams use an engine-owned idle watchdog (`createStreamWatchdog`: connecting + time-to-first-token, then gaps between chunks, no total cap) because the SDK's `firstChunkMs` never fires while the HTTP request is still pending. Timeouts are retried at most once in both paths.
+- **Classified model errors:** `MODEL_TIMEOUT`, `MODEL_UNREACHABLE` (now also Bun's `ConnectionRefused` / `FailedToOpenSocket` / `ConnectionClosed`), `MODEL_HTTP`, `MODEL_EMPTY`; the pipeline preserves codes instead of flattening to `RENDER_FAILED`. On the stream path the real provider error is captured through `onError` (the SDK otherwise rejects with a generic "No output generated" and prints the error to the console), so HTTP 4xx/5xx and refused connections are reported as such and 429/5xx/unreachable are retried. `syncModelPortSpec` for hot config.
+- **Character knowledge paths:** `loadCharacterFromFiles` now matches `characters/<id>/knowledge/*.md` using the same relative paths as storage (fixes mod and base character knowledge never loading).
+- **Turn prompt extensions:** optional `TurnCtx.promptExtraStatic` / `promptExtraDynamic` merge into render prompts; stage hooks receive the kernel as an optional third argument (`(ctx, next, kernel)`), so existing two-argument hooks keep working.
+- **Localized track and tier names for games:** `trackLabel(kernel, trackId)` and `tierLabel(kernel, trackId, tierName)` are exported from the pipeline entry point, so a game's own prompt blocks name a track or tier in the same prompt language as the engine's relation lines (explicit label, then `track.<id>.label` / `tier.<track>.<name>.label` / `tier.<name>.label` string-table conventions, then the prettified id).
+- **Model error classification is stricter:** output-shape errors (`NoObjectGeneratedError`, `TypeValidationError`, `JSONParseError`) quote the model's own text, so a reply that merely mentions a "timeout" is no longer classified as `MODEL_TIMEOUT`; a provider failure on a stream stops the idle watchdog so it cannot relabel the failure as a timeout afterwards.
+- **Gallery jobs never stall silently:** a queued render whose generator became unavailable before it ran now ends as `failed` with `GALLERY_NO_GENERATOR` instead of staying `queued`.
+- **Knowledge `when` failures are non-fatal:** a contextual knowledge condition that throws (for example an unguarded `fields.<id>` read while that field is inactive) no longer aborts the turn; the document is skipped and one `config.warning` (`KNOWLEDGE_WHEN_FAILED`, with the document id and path) is emitted per document and kernel.
+- **Slim LLM recordings:** stream rows in `recordings.jsonl` persist `tool` + `final` parts only (no cumulative partials); replay synthesizes one partial before final. Identical `record` appends are skipped; record/live open may compact branch files last-wins (`compactRecordingsFile` for tools). Legacy partial-heavy rows still replay verbatim.
+- **`revoke(viewer, path)`:** end a temporary introspection grant before its TTL (`Engine.revoke`, `Introspect.revoke`, RPC `revoke`); writes `visibility.expired`.
+- **Scene-scoped dialogue history:** `buildRecentHistory` filters by scene participation before the K-turn window; optional `HistoryScope` for post-`scene.end` callers.
+- **L3 field rules:** `rule_add` / `rule_override` consumed in adjudicate, scene_start, scene_end, and daily; strict schema; grant-time validation; `scene_end` stage before `scene.ended`.
 - **CG gallery:** optional `ImagePort`, `Engine.gallery` (`GalleryService`), authored ratings and preset/captured entries, CEL unlocks, model brief (`cg_brief`), job queue (cancel, retry), profile-scoped `gallery/collection.json`, events `gallery.*`, RPC `gallery.*` + `gallery.notice`. Gallery display strings resolve with `display.resolve(..., { localizeNames: true })`.
+- **Gallery generator probe:** optional `ImagePort.available?()`; `@animae/web` gallery list/jobs responses may include `generatorAvailable`.
 - **Name references:** `{{name:<id>}}` in authored text; string-table keys `character.<id>.name|nickname`; prompt glossary uses the **nickname** string when the card defines one, otherwise `name`; `DisplayText.resolve(..., { localizeNames })` for UI in another language than card prose.
 - **Locale overlays:** first locale in the content chain that provides a file/patch/append wins for that path (fallback locales do not override).
 - **Patch merge:** `$append` / `$prepend` on string values in policy and mod patches.
@@ -15,13 +28,21 @@
 - **Reflection prompt:** the static segment spells out all three output fields with the shape of their items (naming `goal_changes` / `new_claims` alone made a real model answer claims as plain strings, so every reflection was rejected by the schema) and states one output language for all text; the dynamic segment lists the character's current goals with their ids so `update` / `remove` can name one.
 - **Blank replies:** the render schema rejects a reply without text (the adapter then retries once with the repair hint, and `renderStage` fails with `RENDER_FAILED` instead of committing a blank utterance and memory); `dialogue` / `speech` / `reply` / `response` / `content` / `message` / `line` / `narration` are read as `text` when a model ignores the field name.
 
+### `@animae/i18n`
+
+- **`ResolvableText` / `resolveText`:** user-visible copy that is a fixed string or a function resolved at render time; shared by the terminal UI and headless hosts (`@animae/tui` re-exports it unchanged).
+
 ### `@animae/host`
 
 - Gallery accessors, `:gallery`, localized `GALLERY_*` errors (`gallery-errors.ts`), optional `galleryNotices` (`maskTitle`, `toasts`).
+- **Localizable action copy:** `HostAction` / `HostEntityAction` labels, hints, and argument labels accept `ResolvableText` (`string | () => string`); `SessionHost.listActions()` resolves them in the viewer's UI locale, so clients with different languages receive their own toolbar and palette text in one session. The host no longer depends on the terminal UI at run time.
+- Optional `HostCommandApi.focusTarget()`: the member the client has focused, for commands that can infer their argument from it.
 
 ### `@animae/web`
 
 - Gallery client messages, `gallery_notice` push, image HTTP route; optional host hook **`images_probe`** for generator health checks with unsaved settings draft.
+- **Diagnostics page (`/ref/`):** rebuilt as a styled, responsive console: tabs for smoke tests, model call log (`llm_log` / `llm_log_clear`), snapshot/state, live protocol feed (JSON tree) and a controller-only console; en and zh-CN catalogs for every string (parity-tested), light/dark theme. The read-only smoke runner has an injectable transport and checks socket, hello, snapshot shape, ping RTT, locale, secret masking, model log, state and resume. Overview includes an **Environment** card when the host implements `WebSessionHooks.environment` (`GET /api/environment`, same auth as other `/api/*` routes).
+- **`WebSessionHooks.environment`:** optional hook returning localized path/version rows for the diagnostics page and authenticated HTTP clients.
 - **Replay on connect:** a client that has seen nothing (`hello.resumeSeq` 0 or absent) no longer receives the buffered stream of every earlier turn, only the turn that is still running; a returning client (`resumeSeq > 0`) still gets everything after its last message. The old behaviour replayed up to 500 stale `stream` / `busy` messages to every fresh page.
 
 ### Documentation

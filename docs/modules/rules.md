@@ -15,7 +15,7 @@ CEL evaluation, dice, rule-function registry, track math primitives, and synchro
 | `buildCelContext(deps, params)` | [CEL context table](../architecture.md#44-cel-context-buildcelcontext) (+ L1 `track_offset` / `tier_shift`) |
 | `tierFor`, `marginal`, `decayedCounter`, `computeDelta`, `applyTurnCap`, `decayStep` | [Tracks, tiers, deltas](../architecture.md#42-tracks-tiers-deltas) |
 | `parseDice`, `rollDice`, `rollCheck` | [Dice and checks](../spec.md#18-dice-and-checks) |
-| `runChecks`, `adjudicate`, `decideIntent`, `runStageRules`, `decayTicks` | Pipeline stages |
+| `runChecks`, `adjudicate`, `decideIntent`, `runStageRules`, `runCustomStageRules`, `decayTicks` | Pipeline stages |
 
 `RulesDeps`: `{ state, authored, policy, cel, rules, catalog, celContext }`.
 
@@ -34,6 +34,13 @@ CEL evaluation, dice, rule-function registry, track math primitives, and synchro
 - `rule.threshold_fired` — `{ id, owner, target? }`
 
 Reducer owner should fold these into `state.windows` / `state.firedThresholds` if not already updated inline.
+
+## Custom stages and L3
+
+- `runStageRules(deps, stage, vars, l3?, fieldRules?)` runs policy `rules.custom` then field `rule_add` for `adjudicate`, `scene_start`, `scene_end`, and `daily`.
+- `adjudicate` calls the same helper with merged L3 from field resolve on the turn.
+- `rule_override` swaps `fn` in the original rule's slot (original `when` / stage); one hop only.
+- Policy or field rules with `stage: tick` fail validation (schedule items invoke registered rules with tick ctx separately).
 
 ## Edge cases
 

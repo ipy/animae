@@ -147,6 +147,14 @@ export const ClientConfigSetSchema = z.object({
     .optional(),
 });
 
+/** Optional `result.data` payload for `config_set` (host-defined; embedding app may restart the session). */
+export const ConfigSetResultSchema = z.object({
+  reloadRecommended: z.boolean().optional(),
+  /** When true, the embedding application is restarting the session in-process (not a browser reload). */
+  restarting: z.boolean().optional(),
+  message: z.string().optional(),
+});
+
 export const ClientCancelSchema = z.object({
   ...envelope,
   type: z.literal("cancel"),

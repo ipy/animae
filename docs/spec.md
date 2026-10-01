@@ -69,7 +69,7 @@ The engine provides mechanisms only. All gameplay-specific choices are injected 
 | `director` | Anchors, beats, sidenotes, exception channel |
 | `world` | World variables, locations, items, calendar, scheduler, long events, offscreen simulation, lazy catch-up |
 | `scene` | Scenes, participants, turn-taking, autonomous NPC dialogue |
-| `introspect` | `query`, `grant`, `explain`, event subscription |
+| `introspect` | `query`, `grant`, `revoke`, `explain`, event subscription |
 | `classify` | Input classification, safety classification |
 | `router` | S1/S2 routing, budget, degradation, prompt segments |
 | `dice` | Dice expressions and checks |
@@ -241,6 +241,8 @@ input -> classify -> appraise -> check -> adjudicate -> applyFields -> decide ->
 
 **Output language**: Prefer `identity.language`, else `language` in `world.yaml` (BCP 47 tag). Language affects only `render` and `entities.generate`.
 
+**Recent dialogue window**: `buildRecentHistory` supplies the last K turn ids from policy `render.recentTurns` (default 12) to appraise and render. Lines are filtered by **scene participation** before the K window is applied (invisible turns never consume K). A line is visible to speaker S in scope `{sceneId?, participants}` when: the line has no `scene` id; or it belongs to the scope scene; or S is a catalog character who participated in the line's scene (via `scene.started` participants); or S is not a character and the line's scene shares at least one non-player participant with the scope scene. Callers pass explicit scope when `state.scene` is cleared (reflection after `scene.end` passes the captured roster and ended scene id). Memory recall, reflection narrative, and scene-scoped event views use the same scene boundaries; cross-scene facts must travel via memory propagation or authored knowledge, not the dialogue window.
+
 ## 9. Memory and knowledge
 
 ### 9.1 Memory entries
@@ -329,8 +331,14 @@ cost: { payer: <entity>, effects: {...}, due: <CEL>, ttlScenes: 3, fallback: {..
 | L0 narrative conditions | Environment and timing | `world_vars`, `event_prob: {id: Δ}`, `salience: [{tags, boost}]`, `topic_access: {open[], close[]}`, `schedule_offset: {id: minutes}` |
 | L1 numeric | Tracks and checks | `track_mult: {track: {eventType\|"*": m}}`, `track_offset`, `track_caps`, `tier_shift`, `check_mod: {skill\|"*": {bonus, advantage}}` |
 | L2 intent | Intent | `intent_force`, `intent_forbid[]`, `intent_bias: {intent: score}` |
-| L3 rules | Rules | `rule_override: {ruleId: ruleId}`, `rule_add[]` |
+| L3 rules | Rules | `rule_override: {ruleId: ruleId}`, `rule_add[]` (same shape as `rules.custom` entries) |
 | L4 perception | NPC self-view | `hide_entities[]`, `disguise: {entity: asEntity}`, `inject_belief: [{text, tags, claims}]`, `suppress_memory_tags[]` |
+
+**L3 semantics (while the field is in scope)**
+
+- `rule_add`: array of `{id, fn, when?, stage?}` (`stage` defaults to `adjudicate`). Entries run like policy `rules.custom` for their stage: policy rules first, then field rules ordered by field priority (desc), field id, then array order (duplicate ids: last wins). Drafts use the same validation as policy rules; event `source` includes field provenance.
+- `rule_override`: `{originalId: replacementId}` (one hop). When `originalId` would run (policy or active `rule_add`), the replacement entry's `fn` runs in that slot; the **original** entry's `stage` and `when` still apply. Lookup is among policy custom rules and active `rule_add` entries. Conflicting overrides merge via field stacking (higher level / priority wins). Unknown ids or unregistered `fn` fail at grant/declare when checkable, otherwise throw or emit a diagnostic at run time — never silently skip.
+- Stages wired: `adjudicate`, `scene_start` (after `scene.started`), `scene_end` (after field scene-end costs, before `scene.ended`), `daily` (day boundary). Stage `tick` is reserved for schedule item hooks only; policy and field `rule_add` must not use `tick` (load validation error).
 
 ### 10.3 Grants
 
@@ -437,7 +445,7 @@ After catch-up completes, write `offscreen.simulated` event.
 | Export | `timeline.export(branch, {recordings: bool})`: exports to a single `.asave.jsonl` file. Line 1 is a manifest `{engine, preset, branch, chain[], hashes}`; each following line is `{path, content}`. Content includes world definitions, character definitions, policies, events and artifacts on the full ancestor chain from the root branch to the current branch, and optional recording data |
 | Import | `timeline.import(file)`: validates hashes on import and creates a new branch |
 | Playback | `timeline.replay(branch, {from, to})`: emits `TurnChunk` values turn by turn, all using recorded data |
-| Recording | Each line in `recordings.jsonl` is `{key: hash(model, prompt, params, seed), response}`. In replay mode, a missing recording is an error |
+| Recording | Each line in `recordings.jsonl` is `{key: hash(model, prompt, params, seed), response}` (optional `v: 2` on stream rows). Object calls store the parsed value; stream calls store slim `StreamPart[]` (`tool` + `final` only, no cumulative `partial` rows). Append is skipped when the key already resolves to the same canonical response (last-wins across the branch chain). In record/live mode the engine may compact a branch file in place (last-wins dedupe, strip legacy partials) when the file is large or redundant. Replay serves object values as-is; for slim streams it re-yields stored tools then one synthesized `partial` (final value) and `final` (legacy rows that still contain partials replay verbatim). Missing recording in replay mode is an error |
 | Hot reload | At the end of each turn, authored file hashes are compared. On change, reload and validate: if validation passes, write a `config.reloaded` event (with new hashes); if validation fails, keep the old configuration and write a `config.error` event. During replay, if configuration hashes differ, a `config.warning` event is written |
 
 ## 14. Multi-character orchestration
@@ -456,7 +464,7 @@ After catch-up completes, write `offscreen.simulated` event.
 | Viewers | Five built-in: `debug` (always fully visible), `author`, `gm`, `player`, `npc:<id>` (character self-view, with L4 effects applied). Upper layers may register custom viewers with `introspect.registerViewer` |
 | Paths | `characters/<id>/{identity,constraints,traits,tracks,tiers,goals,secrets,memory,knowledge,alias}`, `world/{vars,locations,items}`, `ledger`, `events`, `timeline` |
 | Visibility policy | `visibility.rules: [{viewer, path: <glob>, allow: bool}]`, evaluated in order; the last matching rule wins; deny when no rule matches |
-| Temporary grant | `grant(viewer, path, ttl)`: writes a `visibility.granted` event; on expiry writes a `visibility.expired` event |
+| Temporary grant | `grant(viewer, path, ttl)`: writes a `visibility.granted` event; on expiry writes a `visibility.expired` event. `revoke(viewer, path)` ends the grants for exactly that viewer and path early by writing the same `visibility.expired` event (no event when none is active) |
 | explain | `explain(turnId, viewer)` returns the event chain for that turn: input, appraisal, checks, track changes, fields, intent, routing, retrieval hits. Results are filtered by visibility |
 | Subscribe | `on(kind, handler)`; `kind` supports wildcards |
 
@@ -567,6 +575,8 @@ models:
   s2: { provider: anthropic, model: claude-opus-5-5 }
 policies: [policies/my-tweaks.yaml]
 ```
+
+Each `ModelSpec` may set optional `timeoutMs` (positive integer, max 3_600_000). When omitted, defaults are 120_000 ms for remote providers and 600_000 ms for `ollama`. Non-streaming calls use a total wall-clock limit; streaming uses the same value for first-chunk and idle-chunk timeouts (steady output is not capped by total duration). Classified failures include `MODEL_TIMEOUT`, `MODEL_UNREACHABLE`, `MODEL_HTTP`, and `MODEL_EMPTY` (see model module docs).
 
 ### 19.4 `@animae/preset-base`
 
@@ -703,6 +713,7 @@ interface Engine {
   introspect: { registerViewer(v: ViewerDef): void };
   query(viewer: Viewer, path: string): unknown;
   grant(viewer: Viewer, path: string, ttl?: Duration): void;
+  revoke(viewer: Viewer, path: string): void;
   explain(turnId: TurnId, viewer: Viewer): Explanation;
   on(kind: string, h: (e: EngineEvent) => void): () => void;
   purge(scope: { characters?: string[]; memoryIds?: string[]; sessions?: string[] }): Promise<void>;
