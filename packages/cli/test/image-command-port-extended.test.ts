@@ -104,7 +104,7 @@ printf 'not-an-image'
       `#!/bin/sh
 echo "$@" > "${marker}"
 cat >/dev/null
-printf '\\x89PNG\\r\\n\\x1a\\n'
+printf '\\211PNG\\015\\012\\032\\012'
 dd if=/dev/zero bs=1024 count=32 2>/dev/null
 `,
     );
@@ -149,7 +149,7 @@ bun -e 'process.stdout.write(Buffer.from(${JSON.stringify([...MIN_WEBP, ...MIN_P
       `#!/bin/sh
 cat >/dev/null
 sleep 10
-printf '\\x89PNG\\r\\n\\x1a\\n\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0'
+printf '\\211PNG\\015\\012\\032\\012\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000\\000'
 `,
     );
     const port = createCommandImagePort({ command: script, timeoutMs: 60_000 });

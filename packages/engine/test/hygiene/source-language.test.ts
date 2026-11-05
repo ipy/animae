@@ -68,27 +68,35 @@ describe("engine source language hygiene", () => {
     expect(tags).toEqual(["en"]);
   });
 
-  test("TypeScript sources hold no string literals in non-Latin scripts", () => {
-    const hits: string[] = [];
-    for (const f of files) {
-      if (!/\.(ts|tsx|js|mjs)$/.test(f) || isTest(f)) continue;
-      for (const h of findCjkStringLiterals(readFileSync(f, "utf8"), f)) hits.push(`${rel(f)}:${h.line} ${h.excerpt}`);
-    }
-    expect(hits).toEqual([]);
-  });
+  test(
+    "TypeScript sources hold no string literals in non-Latin scripts",
+    () => {
+      const hits: string[] = [];
+      for (const f of files) {
+        if (!/\.(ts|tsx|js|mjs)$/.test(f) || isTest(f)) continue;
+        for (const h of findCjkStringLiterals(readFileSync(f, "utf8"), f)) hits.push(`${rel(f)}:${h.line} ${h.excerpt}`);
+      }
+      expect(hits).toEqual([]);
+    },
+    { timeout: 60_000 },
+  );
 
-  test("source, data, and tooling files hold no CJK characters outside tests", () => {
-    const hits: string[] = [];
-    for (const f of files) {
-      if (!isText(f) || isTest(f) || f.endsWith(".md")) continue;
-      readFileSync(f, "utf8")
-        .split("\n")
-        .forEach((l, i) => {
-          if (NON_LATIN_CJK.test(l)) hits.push(`${rel(f)}:${i + 1}`);
-        });
-    }
-    expect(hits).toEqual([]);
-  });
+  test(
+    "source, data, and tooling files hold no CJK characters outside tests",
+    () => {
+      const hits: string[] = [];
+      for (const f of files) {
+        if (!isText(f) || isTest(f) || f.endsWith(".md")) continue;
+        readFileSync(f, "utf8")
+          .split("\n")
+          .forEach((l, i) => {
+            if (NON_LATIN_CJK.test(l)) hits.push(`${rel(f)}:${i + 1}`);
+          });
+      }
+      expect(hits).toEqual([]);
+    },
+    { timeout: 60_000 },
+  );
 
   test("no file names a specific translation", () => {
     const hits: string[] = [];

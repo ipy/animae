@@ -117,7 +117,7 @@ export function FsStorage(root: string): StoragePort {
       await mkdir(absPath(dir), { recursive: true });
     },
     async remove(path, opts) {
-      await rm(absPath(path), { recursive: opts?.recursive, force: true });
+      await rm(absPath(path), { ...(opts?.recursive ? { recursive: true } : {}), force: true });
     },
     async stat(path) {
       try {

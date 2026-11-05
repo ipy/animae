@@ -89,6 +89,9 @@ export function createCommandImagePort(opts: CommandImagePortOptions): ImagePort
           });
         });
 
+        child.stdin?.on("error", () => {
+          /* child exited before reading stdin (e.g. aborted) — ignore */
+        });
         child.stdin?.write(JSON.stringify(req));
         child.stdin?.end();
       });
