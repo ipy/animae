@@ -122,7 +122,7 @@ def stress_random(sess: PtySession, runs: int, rng: random.Random) -> dict:
     latencies: list[float] = []
     drops = 0
     alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-    cjk = "测文你好世界"
+    accented = "accentéàüöî"
     for i in range(runs):
         try:
             sess.focus_input()
@@ -131,7 +131,7 @@ def stress_random(sess: PtySession, runs: int, rng: random.Random) -> dict:
             time.sleep(0.12)
         n = rng.randint(4, 48)
         if rng.random() < 0.25:
-            expected = "".join(rng.choice(cjk) for _ in range(min(n, 20)))
+            expected = "".join(rng.choice(accented) for _ in range(min(n, 20)))
         else:
             expected = "".join(rng.choice(alphabet) for _ in range(n))
         if rng.random() < 0.35:
@@ -220,7 +220,7 @@ def run_once(*, quick: bool) -> int:
         sess.write(b"\x7f" * 48)
         time.sleep(0.12)
 
-        mix = ("a" * 40 + "测" * 40) if quick else ("a测" * 60)[:120]
+        mix = ("a" * 40 + "é" * 40) if quick else ("aé" * 60)[:120]
         metrics["paced_mix_ms"] = round(measure_typing(sess, mix, gap=0.022) * 1000, 1)
         metrics["paced_mix_ok"] = sess.draft_matches(mix)
         sess.write(b"\x7f" * 200)
@@ -288,7 +288,6 @@ def run_once(*, quick: bool) -> int:
         palette_markers = (
             os.environ.get("HOST_PTY_PALETTE_MARKER", "Command palette"),
             "Command palette",
-            "命令面板",
         )
         opened = False
         deadline = time.time() + 2.5

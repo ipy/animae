@@ -9,30 +9,86 @@ const STORAGE_KEY = "animae.ref.locale";
  * @param {string} tag
  */
 export function normalizeLocaleTag(tag) {
-  const t = (tag || "en").trim();
-  if (t.toLowerCase().startsWith("zh")) return "zh-CN";
-  return "en";
+  const t = (tag || "en").trim().replace(/_/g, "-");
+  return t || "en";
 }
 
 export function detectDefaultLocale() {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "en" || stored === "zh-CN") return stored;
+  if (stored) return normalizeLocaleTag(stored);
   return normalizeLocaleTag(navigator.language || "en");
 }
 
 /**
+ * `tag` and its less specific tags: `pt-BR` → `pt-BR`, `pt`.
+ * @param {string} tag
+ */
+function lessSpecific(tag) {
+  const parts = tag.split("-");
+  const out = [];
+  for (let n = parts.length; n >= 1; n--) out.push(parts.slice(0, n).join("-"));
+  return out;
+}
+
+/**
+ * @param {string} url
+ * @returns {Promise<any | null>}
+ */
+async function fetchJson(url) {
+  try {
+    const res = await fetch(url);
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Loads the English catalog, then lays the requested locale over it, so a key a translation lacks reads in English.
+ * A translation is looked for as `./locales/<tag>.json` next to this client, then on the server, which serves the
+ * `web-client` catalog of the locale packs registered by the host application (`/api/client-catalog`).
+ * Resolves to the locale that was actually loaded.
  * @param {string} tag
  */
 export async function loadCatalog(tag) {
-  const normalized = tag === "zh-CN" ? "zh-CN" : "en";
-  const res = await fetch(`./locales/${normalized}.json`);
-  if (!res.ok) throw new Error(`locale ${normalized}`);
-  catalog = await res.json();
-  localeTag = normalized;
-  localStorage.setItem(STORAGE_KEY, normalized);
-  document.documentElement.lang = normalized === "zh-CN" ? "zh-CN" : "en";
+  const wanted = normalizeLocaleTag(tag);
+  const base = await fetchJson("./locales/en.json");
+  if (!base) throw new Error("locale en");
+  let overlay = null;
+  let resolved = "en";
+  if (wanted.toLowerCase() !== "en") {
+    for (const candidate of lessSpecific(wanted)) {
+      overlay = await fetchJson(`./locales/${candidate}.json`);
+      if (overlay) {
+        resolved = candidate;
+        break;
+      }
+    }
+    if (!overlay) {
+      const served = await fetchJson(`/api/client-catalog?locale=${encodeURIComponent(wanted)}`);
+      if (served && served.catalog && Object.keys(served.catalog).length > 0) {
+        overlay = served.catalog;
+        resolved = String(served.locale);
+      }
+    }
+  }
+  catalog = { ...base, ...(overlay ?? {}) };
+  localeTag = resolved;
+  localStorage.setItem(STORAGE_KEY, resolved);
+  document.documentElement.lang = resolved;
   applyDocumentI18n();
-  return normalized;
+  return resolved;
+}
+
+/**
+ * The UI locales the server can serve, as `{ tag, name }`; English alone when the server does not say.
+ * @param {string} [displayLocale] locale the names are written in
+ * @returns {Promise<{ tag: string, name: string }[]>}
+ */
+export async function loadLocaleOptions(displayLocale) {
+  const served = await fetchJson(`/api/locales?locale=${encodeURIComponent(displayLocale || "en")}`);
+  const list = served && Array.isArray(served.locales) ? served.locales : [];
+  return list.length > 0 ? list : [{ tag: "en", name: "English" }];
 }
 
 export function currentLocale() {
@@ -71,14 +127,17 @@ export function applyDocumentI18n() {
 }
 
 /**
- * @param {Record<string, string>} en
- * @param {Record<string, string>} zh
+ * Compares a translated catalog with the English reference.
+ * @param {Record<string, string>} reference
+ * @param {Record<string, string>} translated
  */
-export function assertCatalogParity(en, zh) {
-  const enKeys = Object.keys(en).sort();
-  const zhKeys = Object.keys(zh).sort();
-  const missingInZh = enKeys.filter((k) => !(k in zh));
-  const missingInEn = zhKeys.filter((k) => !(k in en));
-  const empty = [...enKeys, ...zhKeys].filter((k, i, arr) => arr.indexOf(k) === i).filter((k) => !en[k]?.trim() || !zh[k]?.trim());
-  return { enKeys, zhKeys, missingInZh, missingInEn, empty };
+export function assertCatalogParity(reference, translated) {
+  const referenceKeys = Object.keys(reference).sort();
+  const translatedKeys = Object.keys(translated).sort();
+  const missingInTranslated = referenceKeys.filter((k) => !(k in translated));
+  const missingInReference = translatedKeys.filter((k) => !(k in reference));
+  const empty = [...referenceKeys, ...translatedKeys]
+    .filter((k, i, arr) => arr.indexOf(k) === i)
+    .filter((k) => !reference[k]?.trim() || !translated[k]?.trim());
+  return { referenceKeys, translatedKeys, missingInTranslated, missingInReference, empty };
 }

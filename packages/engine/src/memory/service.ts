@@ -75,9 +75,13 @@ export function createMemoryService(k: Kernel): MemoryService {
     return entries;
   }
 
-  function invalidate(owner: CharacterId): void {
+  /**
+   * Keeps the per-owner cache in step with the artifact after an append. A loaded list is extended instead of dropped:
+   * the sync introspection hooks (`explain`) read it, and a cold cache would hide the memory text of earlier turns.
+   */
+  function noteAppended(owner: CharacterId, entry: MemoryEntry): void {
     const branch = k.timeline.branch().name;
-    internal(k).cache.delete(cacheKey(branch, owner));
+    internal(k).cache.get(cacheKey(branch, owner))?.push(entry);
     internal(k).vectorCache.clear();
   }
 
@@ -102,7 +106,7 @@ export function createMemoryService(k: Kernel): MemoryService {
       };
       const path = memoryJsonlPath(owner);
       await k.timeline.artifacts.appendJsonl(path, entry);
-      invalidate(owner);
+      noteAppended(owner, entry);
       await k.emit([
         {
           kind: "memory.written",
@@ -190,46 +194,47 @@ export function createMemoryService(k: Kernel): MemoryService {
         } else if (term <= 0) continue;
 
         const score = scoreMemoryEntry(entry, terms, q.now, policy, q.salience, vectorScore, embeddingOn);
-        if (score > 0) hits.push(toMemoryHit(entry, score));
+        if (score > 0) hits.push(toMemoryHit(entry, score, q.owner));
       }
 
       for (const doc of docs) {
         const inject = doc.inject;
         const blob = `${doc.name}\n${doc.description}\n${doc.body}`;
         const term = termHitRate(terms, blob);
-        if (inject === "on-demand" && term <= 0 && !embeddingOn) continue;
-        if (inject === "on-demand" && term <= 0 && embeddingOn && k.embedding && queryVec) {
+        let vectorScore: number | undefined;
+        if (embeddingOn && k.embedding && queryVec) {
           let vecs = internal(k).vectorCache.get(`${branch}|doc|${doc.id}`);
           if (!vecs) {
             vecs = await k.embedding.embed([blob]);
             internal(k).vectorCache.set(`${branch}|doc|${doc.id}`, vecs);
           }
-          if (cosineSimilarity(queryVec, vecs[0]!) <= 0.01) continue;
-        } else if (inject !== "on-demand" && term <= 0) continue;
+          vectorScore = cosineSimilarity(queryVec, vecs[0]!);
+          if (inject === "on-demand" && term <= 0 && vectorScore <= 0.01) continue;
+        } else if (inject === "on-demand" && term <= 0) continue;
+        else if (inject !== "on-demand" && term <= 0) continue;
         if (inject === "on-demand" && !docMatchesTerms(doc, terms)) continue;
 
         const pseudoImportance = 0.4 + Math.min(0.5, doc.priority / 100);
-        const score =
-          scoreMemoryEntry(
-            {
-              id: doc.id,
-              t: q.now,
-              kind: "semantic",
-              text: blob,
-              tags: doc.tags,
-              claims: [],
-              importance: pseudoImportance,
-              valence: 0,
-              branch,
-            },
-            terms,
-            q.now,
-            policy,
-            q.salience,
-            undefined,
-            false,
-          ) || term * (policy.memory.weights?.term ?? 0.5);
-        hits.push(toKnowledgeHit(doc, score));
+        const score = scoreMemoryEntry(
+          {
+            id: doc.id,
+            t: q.now,
+            kind: "semantic",
+            text: blob,
+            tags: doc.tags,
+            claims: [],
+            importance: pseudoImportance,
+            valence: 0,
+            branch,
+          },
+          terms,
+          q.now,
+          policy,
+          q.salience,
+          vectorScore,
+          embeddingOn,
+        );
+        if (score > 0) hits.push(toKnowledgeHit(doc, score, q.owner));
       }
 
       void vecKey;
@@ -241,9 +246,11 @@ export function createMemoryService(k: Kernel): MemoryService {
 
     distort,
 
-    async propagateTick() {
+    async propagateTick(when: "day" | "scene_end" = "day") {
       const cfg = k.policy.memory.propagation ?? { enabled: false, onTick: "day" as const, distortionPerHop: 1 };
       if (!cfg.enabled) return [];
+      const onTick = cfg.onTick ?? "day";
+      if (onTick !== when) return [];
       const events: EventDraft[] = [];
       const state = k.timeline.state();
       const now = k.timeline.now();

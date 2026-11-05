@@ -32,11 +32,7 @@ export function extractSillyTavernJsonFromPng(bytes: Uint8Array): string | undef
 
   const raw = v3 ?? v2;
   if (!raw) return undefined;
-  try {
-    return Buffer.from(raw, "base64").toString("utf8");
-  } catch {
-    return undefined;
-  }
+  return Buffer.from(raw, "base64").toString("utf8");
 }
 
 function readU32(buf: Uint8Array, off: number): number {

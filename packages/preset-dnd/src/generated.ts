@@ -247,10 +247,10 @@ export const generatedBundle = {
       "dnd.check.investigation_found": "The investigation turns up something.",
       "dnd.check.perception_unusual": "You notice something unusual.",
     },
-    "zh-CN": {
-      "dnd.check.insight_lie": "对方在说谎",
-      "dnd.check.investigation_found": "调查有所发现",
-      "dnd.check.perception_unusual": "察觉到了异常",
+    fr: {
+      "dnd.check.insight_lie": "Ils ou elles mentent.",
+      "dnd.check.investigation_found": "L'enquête aboutit à une découverte.",
+      "dnd.check.perception_unusual": "Vous remarquez quelque chose d'inhabituel.",
     },
   },
 } as PresetBundle;

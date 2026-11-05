@@ -20,10 +20,11 @@ export function applyPolicyDefaults(merged: Policy): ResolvedPolicy {
 
   const routerBudget = {
     syncCallsPerTurn: 2,
+    s1PerTurn: 1,
     s2PerTurn: 1,
     s2Ratio: 0.15,
     s2ReservedForAnchors: 0.03,
-    maxOutputTokens: { s1: 400, s2: 800 },
+    maxOutputTokens: { s1: 400, s2: 800 as number | Record<string, number> },
     ...(merged.router?.budget ?? {}),
   };
 
@@ -51,6 +52,13 @@ export function applyPolicyDefaults(merged: Policy): ResolvedPolicy {
       indexMax: merged.memory?.indexMax ?? 50,
       weights: memoryWeights,
       write: merged.memory?.write ?? { episodic: true, minIntensity: 0.2, maxChars: 240 },
+      writing: {
+        backend: merged.memory?.writing?.backend ?? "rule",
+        template: merged.memory?.writing?.template ?? "{{text}}",
+        importanceByEventType: merged.memory?.writing?.importanceByEventType ?? {},
+        valenceByEventType: merged.memory?.writing?.valenceByEventType ?? {},
+        narration: merged.memory?.writing?.narration ?? "none",
+      },
       forgetting: merged.memory?.forgetting ?? { enabled: false, tau: 30, threshold: 0.2 },
       distortion: merged.memory?.distortion ?? {
         enabled: false,
@@ -60,10 +68,17 @@ export function applyPolicyDefaults(merged: Policy): ResolvedPolicy {
       },
       propagation: merged.memory?.propagation ?? { enabled: false, onTick: "day", distortionPerHop: 1 },
     },
-    reflection: merged.reflection ?? { enabled: true, accept: "!conflict" },
+    reflection: {
+      enabled: merged.reflection?.enabled ?? true,
+      accept: merged.reflection?.accept ?? "!conflict",
+      backend: merged.reflection?.backend ?? "s1",
+      summaryTemplate: merged.reflection?.summaryTemplate,
+    },
+    appraise: merged.appraise ?? {},
     characters: merged.characters ?? { lod: { promote: [] } },
-    offscreen: merged.offscreen ?? {
-      fidelity: { default: "rule", locations: {}, characters: {} },
+    offscreen: {
+      fidelity: merged.offscreen?.fidelity ?? { default: "rule", locations: {}, characters: {} },
+      narrateTemplate: merged.offscreen?.narrateTemplate,
     },
     scene: merged.scene ?? {
       turnTaking: "addressed",
@@ -82,9 +97,16 @@ export function applyPolicyDefaults(merged: Policy): ResolvedPolicy {
       knowledgeIndexMax: merged.render?.knowledgeIndexMax,
       relation: merged.render?.relation,
       recall: merged.render?.recall,
+      layers: merged.render?.layers,
+      fallback: merged.render?.fallback,
     },
     cues: merged.cues ?? { types: {} },
-    choices: merged.choices ?? { enabled: false, count: 3, filter: "true" },
+    choices: {
+      enabled: merged.choices?.enabled ?? false,
+      count: merged.choices?.count ?? 3,
+      filter: merged.choices?.filter ?? "true",
+      rules: merged.choices?.rules,
+    },
     timeline: merged.timeline ?? { allowRewind: true, carry: [] },
     visibility: merged.visibility ?? { rules: [] },
     checks: merged.checks ?? [],

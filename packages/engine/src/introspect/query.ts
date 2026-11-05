@@ -3,7 +3,8 @@ import type { EngineState, EntityAliasState } from "../state.ts";
 import type { Kernel } from "../contracts.ts";
 import type { Viewer } from "../types.ts";
 import { memorySyncList } from "../memory/service.ts";
-import { evaluateVisibility, eventKindAllowed } from "./visibility.ts";
+import { currentMode } from "../model/select.ts";
+import { evaluateVisibility, eventVisible } from "./visibility.ts";
 
 function l4ForOwner(k: Kernel, owner: string): FieldEffects {
   try {
@@ -83,8 +84,21 @@ function worldVarsForPlayer(k: Kernel, state: EngineState, viewer: Viewer): Reco
   return out;
 }
 
-export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (p: string) => boolean): unknown {
+/**
+ * Resolves `path` for `viewer`. `canRead` is the visibility decision for one path; `explicitlyDenied` tells whether a rule
+ * names that path and denies it. A child path (`characters/<id>/<sub>`, `world/locations/<id>`) is readable when its own
+ * rule or its parent's rule allows it, except that an explicit deny on the child itself wins over the parent's allow.
+ */
+export function resolveQuery(
+  k: Kernel,
+  viewer: Viewer,
+  path: string,
+  canRead: (p: string) => boolean,
+  explicitlyDenied: (p: string) => boolean = () => false,
+): unknown {
   const state = k.timeline.state();
+  const readableWithParent = (child: string, parent: string): boolean =>
+    !explicitlyDenied(child) && (canRead(child) || canRead(parent));
   const trimmed = path.replace(/\/+$/, "");
 
   if (trimmed === "characters") {
@@ -102,7 +116,7 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
     const id = slash >= 0 ? rest.slice(0, slash) : rest;
     const sub = slash >= 0 ? rest.slice(slash + 1) : "";
     const charPath = sub ? `characters/${id}/${sub}` : `characters/${id}`;
-    if (!canRead(charPath) && !canRead(`characters/${id}`)) return undefined;
+    if (!readableWithParent(charPath, `characters/${id}`)) return undefined;
 
     const c = state.characters[id];
     const def = k.catalog.character(id);
@@ -185,20 +199,19 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
   if (trimmed.startsWith("world/locations/")) {
     const id = trimmed.slice("world/locations/".length);
     const charPath = `world/locations/${id}`;
-    if (!canRead(charPath) && !canRead("world/locations")) return undefined;
-    const loc = state.locations[id] ?? k.catalog.location(id);
-    if (!loc) return undefined;
+    if (!readableWithParent(charPath, "world/locations")) return undefined;
+    // The definition (authored, or spawned at runtime) carries the prose and the exits; the world state carries
+    // the variables and the simulation clock, so a location in play reads from both.
+    const def = k.catalog.location(id);
     const st = state.locations[id];
-    const authored = loc as {
-      summary?: string;
-      connects?: Array<{ to: string; label?: string; minutes?: number }>;
-    };
+    const loc = st ?? def;
+    if (!loc) return undefined;
     return {
       id: loc.id,
       name: loc.name,
-      summary: authored.summary,
-      connects: authored.connects,
-      vars: st?.vars ?? (loc as { vars?: Record<string, unknown> }).vars ?? {},
+      summary: def?.summary,
+      connects: def?.connects,
+      vars: st?.vars ?? def?.vars ?? {},
       lastSimulated: st?.lastSimulated ?? null,
     };
   }
@@ -265,8 +278,29 @@ export function resolveQuery(k: Kernel, viewer: Viewer, path: string, canRead: (
     if (!canRead("events")) return undefined;
     const evs = k.timeline.events().slice(-200);
     return evs
-      .filter((e) => eventKindAllowed(k.policy, viewer, e.kind, state.grants, state.time))
-      .map((e) => ({ id: e.id, kind: e.kind, t: e.t, scene: e.scene, turn: e.turn }));
+      .filter((e) => eventVisible(k.policy, viewer, e as { kind: string; style?: string }, state.grants, state.time))
+      .map((e) => ({
+        id: e.id,
+        kind: e.kind,
+        t: e.t,
+        scene: e.scene,
+        turn: e.turn,
+        ...(e.kind === "narration"
+          ? { style: (e as { style?: string }).style ?? "normal", text: (e as { text?: string }).text ?? "" }
+          : {}),
+      }));
+  }
+
+  if (trimmed === "runtime/mode") {
+    if (!canRead("runtime/mode")) return undefined;
+    const rt = k.runtime;
+    const models = rt?.models();
+    return {
+      mode: currentMode(k),
+      pending: rt?.pending() ?? null,
+      switchAt: rt?.switchAt ?? "turn_boundary",
+      ...(models ? { models } : {}),
+    };
   }
 
   if (trimmed === "timeline") {

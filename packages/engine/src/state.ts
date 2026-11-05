@@ -1,5 +1,6 @@
 import type { CharacterDef, FieldDef, Goal, ItemDef, LocationDef } from "./schema/authored.ts";
 import type { CharacterId, EventId, JsonValue, Lod, SceneId, WorldTime } from "./types.ts";
+import type { RuntimeMode } from "./runtime/types.ts";
 
 /**
  * EngineState — the projection of a branch's event log (I2). CONTRACT file.
@@ -118,8 +119,20 @@ export interface EngineState {
   /** fired thresholds: `${thresholdId}|${owner}|${target}` → true */
   firedThresholds: Record<string, true>;
   grants: { viewer: string; path: string; expiresAt?: WorldTime }[];
-  /** S2/S1 usage accounting */
-  budget: { turns: number; s2Turns: number; s2Scene: number; degraded: string[] };
+  /**
+   * Usage accounting from `route.decided`: `turns` counts routed turns, `s2Turns` the turns whose render ran on an LLM
+   * tier, `s2ByTier` those turns per tier id, `escalated` the turns rendered above the default tier.
+   */
+  budget: {
+    turns: number;
+    s2Turns: number;
+    s2Scene: number;
+    degraded: string[];
+    s2ByTier?: Record<string, number>;
+    escalated?: number;
+  };
+  /** Last backend mode recorded on this timeline (`runtime.mode_changed`) and how many LLM calls fell back to rules. */
+  runtime?: { mode?: RuntimeMode; fallbacks: number };
   /** memory index: owner → entry count/ids by kind (entries themselves live in artifacts) */
   memoryIndex: Record<CharacterId, { count: number; lastId?: string }>;
   config: {

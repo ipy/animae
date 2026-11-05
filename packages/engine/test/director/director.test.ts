@@ -106,3 +106,27 @@ test("afterRender sidenote echo event", async () => {
   await k.director.afterRender("npc", "said 1234567890 today");
   expect(k.timeline.events().some((e) => e.kind === "sidenote.echoed")).toBe(true);
 });
+
+test("a sidenote lasts for its ttlTurns turns and lapses when the last of them ends", async () => {
+  const k = buildTestKernel(minimalAuthored());
+  await k.director.sidenote("npc", "remember the key", { ttlTurns: 2 });
+  expect(k.director.sidenotesFor("npc").map((n) => n.text)).toEqual(["remember the key"]);
+  await k.timeline.append([{ kind: "turn.ended", turn: "t1" }]);
+  expect(k.director.sidenotesFor("npc")).toHaveLength(1);
+  await k.timeline.append([{ kind: "turn.ended", turn: "t2" }]);
+  expect(k.director.sidenotesFor("npc")).toEqual([]);
+});
+
+test("afterRender writes sidenote.expired for the speaker's notes whose lifetime is used up", async () => {
+  const k = buildTestKernel(minimalAuthored());
+  await k.director.sidenote("npc", "only for this turn", { ttlTurns: 0 });
+  await k.director.sidenote("npc", "for a while", { ttlTurns: 3 });
+  await k.director.sidenote("other", "someone else's", { ttlTurns: 0 });
+  const [spent] = k.director.sidenotesFor("npc");
+
+  await k.director.afterRender("npc", "nothing of the notes is repeated here");
+  const expired = k.timeline.events().filter((e) => e.kind === "sidenote.expired") as unknown as { npc: string; noteId: string }[];
+  expect(expired.map((e) => [e.npc, e.noteId])).toEqual([["npc", spent!.noteId]]);
+  expect(k.director.sidenotesFor("npc").map((n) => n.text)).toEqual(["for a while"]);
+  expect(k.director.sidenotesFor("other")).toHaveLength(1);
+});

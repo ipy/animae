@@ -25,15 +25,22 @@ function flattenStringTable(obj: Record<string, unknown>, prefix = ""): Record<s
   return out;
 }
 
+/** `locales/<locale>/strings.yaml` of every locale directory the package ships, as flat key tables. */
 async function collectDisplayStrings(): Promise<Record<string, Record<string, string>> | undefined> {
   const out: Record<string, Record<string, string>> = {};
-  for (const locale of ["en", "zh-CN"]) {
-    const path = join(pkgRoot, "locales", locale, "strings.yaml");
+  const base = join(pkgRoot, "locales");
+  let entries;
+  try {
+    entries = await readdir(base, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  for (const ent of entries.filter((e) => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
     try {
-      const text = await readFile(path, "utf8");
-      out[locale] = flattenStringTable(parseYaml(text) as Record<string, unknown>);
+      const text = await readFile(join(base, ent.name, "strings.yaml"), "utf8");
+      out[ent.name] = flattenStringTable(parseYaml(text) as Record<string, unknown>);
     } catch {
-      /* locale table optional */
+      /* a locale directory without a string table is skipped */
     }
   }
   return Object.keys(out).length ? out : undefined;

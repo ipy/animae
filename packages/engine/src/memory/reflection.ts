@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { AnimaeError, type CharacterId, type EventDraft, type SceneId } from "../types.ts";
 import type { Kernel } from "../contracts.ts";
+import { currentMode, llmRoles, modelErrorContext, ruleModelOf, s1SpecOf } from "../model/select.ts";
+import { resolveModelTimeoutMs } from "../model/timeout.ts";
+import { buildCallContext, EMPTY_SEGMENTS } from "../pipeline/call-context.ts";
+import { rethrowPipelineModelError } from "../pipeline/model-error.ts";
+import { routerBudgetK } from "../router/policy-access.ts";
+import { withRuleFallback } from "../runtime/fallback.ts";
 import { stringifyYaml } from "../store/util.ts";
 import { summaryMdPath } from "./util.ts";
 import { buildReflectionPromptSegments } from "./reflect-prompt.ts";
@@ -87,21 +93,62 @@ export async function runReflectionForOwner(
   const def = k.catalog.character(owner);
   if (!def) return { owner, accepted: false };
 
-  const segments = buildReflectionPromptSegments(k, sceneId, owner);
+  // Reflection is structured judgment: the S1 role. It runs on the backend the mode names when it starts and finishes
+  // there, even if the mode changes meanwhile.
+  const wantsModel = (k.policy.reflection.backend ?? "s1") === "s1";
+  const useModel = wantsModel && currentMode(k).appraise === "llm" && llmRoles(k).s1;
+
+  const callRule = (): Promise<ReflectionOutput> =>
+    ruleModelOf(k).object({
+      label: "reflect",
+      purpose: "reflection",
+      segments: EMPTY_SEGMENTS,
+      schema: ReflectionResponseSchema,
+      maxOutputTokens: routerBudgetK(k).maxOutputTokens.s1,
+      context: buildCallContext(k, {
+        purpose: "reflection",
+        self: owner,
+        sceneId,
+        rngKey: `reflection:${sceneId}:${owner}`,
+        extra: { sceneId, owner },
+      }),
+    }) as Promise<ReflectionOutput>;
+
+  const callModel = async (): Promise<ReflectionOutput> => {
+    const segments = buildReflectionPromptSegments(k, sceneId, owner);
+    try {
+      return (await k.models.s1.object({
+        label: "reflect",
+        purpose: "reflection",
+        segments,
+        schema: ReflectionResponseSchema,
+        maxOutputTokens: routerBudgetK(k).maxOutputTokens.s1,
+      })) as ReflectionOutput;
+    } catch (err) {
+      rethrowPipelineModelError(
+        err,
+        "REFLECTION_FAILED",
+        "Reflection model call failed",
+        modelErrorContext(s1SpecOf(k), resolveModelTimeoutMs),
+      );
+    }
+  };
 
   let proposal: ReflectionOutput;
   try {
-    proposal = await k.models.s2.object({
-      label: "reflect",
-      segments,
-      schema: ReflectionResponseSchema,
-      maxOutputTokens: k.policy.router.budget?.maxOutputTokens.s2 ?? 800,
-    });
+    proposal = useModel
+      ? (await withRuleFallback(k, "reflection", "memory", callModel, callRule)).value
+      : await callRule();
   } catch (err) {
     // Reflection is a background nicety: an unusable answer or a provider hiccup must not fail the end of the scene.
     // A replay miss is still an error, because it means the recording does not match the run.
     if (err instanceof AnimaeError && err.code === "RECORDING_MISSING") throw err;
     k.warn("REFLECTION_FAILED", err instanceof Error ? err.message : String(err), { owner, sceneId });
+    return { owner, accepted: false };
+  }
+
+  // The rule backend with no `reflection.summaryTemplate` has nothing to say: no event, no empty proposal.
+  if (!useModel && proposal.summaries.length === 0 && proposal.goal_changes.length === 0 && proposal.new_claims.length === 0) {
     return { owner, accepted: false };
   }
 

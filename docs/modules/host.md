@@ -8,6 +8,16 @@ Register `HostAction` / `HostEntityAction` labels, hints, and argument field lab
 
 Wire protocol snapshots may still run `localizeSnapshot()` for late-bound `LocalizableValue` fields on action rows.
 
+## Turn streaming
+
+`consumeTurnStream` maps engine `TurnChunk`s to transcript rows and Web **`stream`** messages:
+
+- One start/delta/end cycle per **utterance** (`text`) or **narration paragraph** (`narration`, with `style`).
+- **`reset`:** drop rows and open stream segments since the actor's echoed line; emit Web `phase: "reset"` with `reason`.
+- Subscribe to engine events for tooling (`route.decided`, `runtime.mode_changed`, `runtime.fallback_used`).
+
+Snapshots expose `transcript[].kind` including `narration`. See [embedding.md](../embedding.md) and [protocol.md](../../packages/web/docs/protocol.md).
+
 ## Command API
 
 `HostCommandApi` mirrors the TUI `CommandApi` surface. Optional `focusTarget()` exposes the host UI focus id so colon commands can infer a member when no argument is given.

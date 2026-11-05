@@ -6,26 +6,30 @@ Source of truth: `packages/engine/src/events.ts` (kinds + payload interfaces), [
 
 Per player/NPC turn inside an active scene:
 
-| Step | Sync LLM? | Emits (principal) |
-|------|-----------|-------------------|
+| Step | Sync model calls | Emits (principal) |
+|------|------------------|-------------------|
 | 1. Input | — | `turn.started`, `input.received` |
-| 2. Appraise | **S1 #1** | `appraisal`, `input.classified`; optional `safety.flagged` |
+| 2. Appraise | **S1 role** (0 or 1 LLM call) | `appraisal`, `input.classified`; optional `safety.flagged` |
 | 3. Apply fields (L0–L1) | — | `field.applied`, `field.rejected` (L1 effects visible to check/adjudicate) |
 | 4. Check | — | `check.rolled` (0..n policy checks) |
 | 5. Adjudicate | — | `track.delta`, `tier.changed`, `rule.window_opened`, `rule.threshold_fired`, rule-emitted drafts |
 | 6. Apply fields (L2+) | — | `field.applied`, `field.rejected` |
 | 7. Decide intent | — | `intent.decided` |
-| 8. Route | — | `route.decided`; may `budget.degraded` |
-| 9. Render | **S1 or S2 #2** | streams `TurnChunk` text/cue; `utterance`, `intent.mismatch`, `choice.offered` / `choice.filtered` |
+| 8. Route | — | `route.decided` (S2 tier / backends / budget entitlement); may `budget.degraded` |
+| 9. Render | **S2 role** (0 or 1 LLM call) | streams `TurnChunk` `narration` / `text` / `cue` / `choices` / `reset`; `narration`, `utterance`, `intent.mismatch`, `choice.offered` / `choice.filtered` |
 | 10. Commit | — | `memory.written`, director hooks, `turn.ended`, `TurnChunk.done` |
 
-**Default sync budget:** `router.budget.syncCallsPerTurn = 2` (appraise + render). S2 routing is optional per turn (`s2PerTurn`, triggers, scene pool). Scene end may add **S2 reflection** (not counted in the two sync turn slots) and offscreen narrate when fidelity demands.
+**Default sync budget:** `router.budget.syncCallsPerTurn = 2` (at most one S1 + one S2 LLM call). With runtime mode `rule` or per-role `rule` backend, the corresponding slot makes no call. Escalation picks an **S2 tier** above the default when triggers fire and budget allows ([Section 17](./spec.md#17-routing-budget-s2-tiers-and-caching)). Scene end may add **S1 reflection**, **S2 offscreen narrate**, and **S2 autonomous** dialogue (not counted in the two sync turn slots). Side jobs respect the same degrade flags as sync routing.
+
+**Runtime:** `runtime.mode_changed` and `runtime.fallback_used` are recorded separately from `route.decided` ([Section 22](./spec.md#22-event-type-catalog), [Appendix D](./spec.md#appendix-d-replay-semantics)).
 
 Field L1 effects are resolved after appraise so `event.type` is known for check/adjudicate.
 
 ### `TurnChunk` streaming (render step)
 
-Render emits incremental `TurnChunk` values (`text`, `cue`, `choices`, `done`). Text chunks may carry optional `speaker`, `autonomous`, and **`newUtterance`**.
+Render emits incremental `TurnChunk` values: `text`, `narration`, `cue`, `choices`, `reset`, `done` ([Section 20.1](./spec.md#201-typescript-api)). Text and narration chunks may carry optional `speaker` (text/cue only), `autonomous` (text), **`newUtterance`** (text), and **`newParagraph`** (narration). Narration streams before the speaking character's `text` for the turn.
+
+**Narration fragments:** consecutive `narration` chunks with the same `style` merge into one paragraph unless `newParagraph: true`. A paragraph ends when a different chunk type arrives or `done` is emitted.
 
 **Utterance contract** (shared helper `createUtteranceStreamState` / `applyTextTurnChunk` / `closeUtteranceStream` in `@animae/engine`):
 
@@ -101,9 +105,10 @@ Reducer: no-op for gameplay state; authoritative data lives in `gallery/collecti
 |------|---------|
 | `intent.decided` | `{ owner, intent, scores{}, forced? }` |
 | `intent.mismatch` | render vs decided intent |
-| `route.decided` | `{ tier: s1\|s2, reasons[], degraded? }` |
-| `budget.degraded` | `{ degraded?, action?, kind_detail? }` |
-| `utterance` | `{ speaker, text, cues[], addressee?, intent?, autonomous? }` |
+| `route.decided` | `{ appraise: { backend, slot?, model? } \| { backend: "rule" }, render: { backend, slot?, tier?, model? } \| { backend: "rule" }, triggers[], escalated?, budget: { s1Calls, s2CallsByTier }, degraded?[] }` — authoritative for replay ([Appendix D](./spec.md#appendix-d-replay-semantics)) |
+| `budget.degraded` | `{ action, from?, to?, reason?, kind_detail?, degraded?[] }` — tier ids in `from`/`to`, or `rule` / `skipped` / `deferred` ([Section 17.4](./spec.md#174-degradation)) |
+| `narration` | `{ text, style?: "normal" \| "scene_break" }` — no speaker; source `pipeline:render` |
+| `utterance` | `{ speaker, text, cues[], addressee?, intent?, autonomous?, recording?, retrieval? }` — optional `retrieval`: `{ kind, id, score, owner }[]` (no body text; for `explain`) |
 | `choice.offered` / `choice.taken` / `choice.filtered` | choice flow |
 
 ### Memory
@@ -111,15 +116,18 @@ Reducer: no-op for gameplay state; authoritative data lives in `gallery/collecti
 | Kind | Payload |
 |------|---------|
 | `memory.written` | `{ owner, memoryId, kind, importance, src?, path }` |
-| `memory.distorted` / `memory.propagated` | forgetting pipeline |
+| `memory.distorted` | `{ owner, memoryId, distortionKind }` |
+| `memory.propagated` | `{ from, to, memoryId, newMemoryId, hops }` — shareable gossip one hop per tick |
 | `reflection.proposed` / `accepted` / `rejected` | `{ owner, summaries[], goal_changes[], new_claims[] }` on accept |
 
 ### Entities & world
 
 | Kind | Payload |
 |------|---------|
+| `entity.generate` | `{ request: { kind, template, id?, hints?, brief? }, reason? }` — request only; fulfilled live into `entity.created` (reducer no-op) |
 | `entity.created` | `{ entity, template?, data{} }` |
 | `character.promoted` | `{ id, from, to, data? }` |
+| `character.secret_unlocked` | `{ id, secret }` — emitted after adjudication when a locked secret's `unlock` expression holds; the reducer adds `secret` to `characters[id].unlockedSecrets` |
 | `world.var_set` | `{ path, value, previous? }` |
 | `time.advanced` | `{ from, to, minutes, reason? }` |
 | `world.moved` | `{ who, from?, to }` |
@@ -148,6 +156,8 @@ Reducer: no-op for gameplay state; authoritative data lives in `gallery/collecti
 | `branch.header` / `branch.forked` | branch metadata |
 | `carry.applied` / `purge.applied` | rewind/carry |
 | `config.reloaded` / `config.warning` / `config.error` | hot reload |
+| `runtime.mode_changed` | `{ before, after, reason, trigger? }` — backend per role (+ optional `s2Tier`) |
+| `runtime.fallback_used` | `{ phase, from: "llm", to: "rule", error }` — one failed LLM call served by rule backend |
 
 Host applications may emit **additional kinds** via rule drafts (e.g. `myapp.pair.formed`); those must be handled by reducers or tolerated as informational.
 

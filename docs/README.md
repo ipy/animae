@@ -4,7 +4,7 @@ Package overview and install: [../README.md](../README.md).
 
 | Document | Audience | Contents |
 |----------|----------|----------|
-| [spec.md](./spec.md) | Product | Product specification (English; [Chinese edition](./spec.zh-CN.md)) |
+| [spec.md](./spec.md) | Product | Product specification (canonical) |
 | [architecture.md](./architecture.md) | Engineers | Repo layout, pinned decisions, contract changelog |
 | [getting-started.md](./getting-started.md) | Authors / integrators | Minimal game, models, TUI / plain / RPC |
 | [authoring-guide.md](./authoring-guide.md) | Content authors | Every authored file format + validated examples |
@@ -43,7 +43,7 @@ Implementation-facing notes (purpose, public API, edge cases):
 | Pipeline | [modules/pipeline.md](./modules/pipeline.md) |
 | Scene | [modules/scene.md](./modules/scene.md) |
 | Engine kernel | [modules/engine.md](./modules/engine.md) |
-| Host session shell | [modules/host.md](./modules/host.md) · [modules/host.zh-CN.md](./modules/host.zh-CN.md) |
+| Host session shell | [modules/host.md](./modules/host.md) |
 | Gallery | [modules/gallery.md](./modules/gallery.md) |
 | RPC | [modules/rpc.md](./modules/rpc.md) |
 | CLI | [modules/cli.md](./modules/cli.md) |

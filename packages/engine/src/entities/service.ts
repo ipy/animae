@@ -8,6 +8,7 @@ import { exportAcard } from "./acard.ts";
 import { importSillyTavernCard } from "./import-card.ts";
 import { generateFromBrief, resolveEntity, retireEntity, setEntityAlias, spawnEntity } from "./lifecycle.ts";
 import { buildEntityGeneratePrompt, buildEntityPromotePrompt } from "./generate-prompt.ts";
+import { entityObject } from "./object-call.ts";
 
 export function createEntityService(k: Kernel): EntityService {
   return {
@@ -40,14 +41,14 @@ async function generateEntity(
   const schema = templateFieldsSchema(tpl.fields);
   const language = outputLanguage(k, r.hints);
   const segments = buildEntityGeneratePrompt(k, tpl, r, language);
-  const port = tpl.lod === "principal" ? k.models.s2 : k.models.s1;
 
   let proposal: Record<string, unknown>;
   try {
-    const raw = await port.object({
-      label: "generate",
-      segments,
+    const raw = await entityObject(k, {
       schema,
+      segments,
+      extra: { template: tpl, templateId: r.template, ...(r.hints ? { hints: r.hints } : {}) },
+      key: `entity:${r.kind}:${r.template}:${JSON.stringify(r.hints ?? {})}:${k.timeline.state().seq}`,
       maxOutputTokens: 4096,
       temperature: 0.7,
     });
@@ -115,12 +116,16 @@ async function promoteCharacter(
     language,
   );
 
-  const port = to === "principal" ? k.models.s2 : k.models.s1;
   const patch = schema.parse(
-    await port.object({
-      label: "generate",
-      segments,
+    await entityObject(k, {
       schema,
+      segments,
+      extra: {
+        template: tpl,
+        templateId: tpl.id ?? `lod:${to}`,
+        current: currentFieldsOf(def),
+      },
+      key: `entity:promote:${id}:${to}`,
       maxOutputTokens: 4096,
     }),
   ) as Record<string, unknown>;
@@ -157,6 +162,20 @@ function stripCharacterForPrompt(def: CharacterDef): unknown {
   return {
     id: def.id,
     card: def.card,
+    persona: def.persona,
+    traits: def.traits,
+    tracks: def.tracks,
+    goals: def.goals,
+    secrets: def.secrets,
+    relations: def.relations,
+  };
+}
+
+/** The character's present values under the names a promotion proposal uses (see `mergeCharacterPatch`). */
+function currentFieldsOf(def: CharacterDef): Record<string, unknown> {
+  return {
+    identity: def.card.identity,
+    constraints: def.card.constraints,
     persona: def.persona,
     traits: def.traits,
     tracks: def.tracks,

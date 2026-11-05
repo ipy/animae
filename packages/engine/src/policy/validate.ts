@@ -1,6 +1,8 @@
+import { celCheck } from "../rules/cel.ts";
+import { templateExpressions } from "../rule-backend/template.ts";
 import type { Level } from "../schema/common.ts";
 import type { FieldDef } from "../schema/authored.ts";
-import type { Policy, ResolvedPolicy } from "../schema/policy.ts";
+import type { Policy, ResolvedPolicy, RuleLayer } from "../schema/policy.ts";
 import { PolicySchema } from "../schema/policy.ts";
 import { applyPolicyDefaults, levelRank } from "./defaults.ts";
 
@@ -166,6 +168,127 @@ function validateCues(policy: Policy, file: string, issues: ValidationIssue[]): 
   }
 }
 
+function isNarrationStyle(style: string | undefined): boolean {
+  return style === "narration" || style === "narration_break";
+}
+
+/** Every `{{ CEL }}` placeholder of a template must compile; a typo is a configuration error, not a runtime surprise. */
+function checkTemplate(template: string | undefined, file: string, path: string, issues: ValidationIssue[]): void {
+  if (!template) return;
+  for (const expr of templateExpressions(template)) {
+    const err = celCheck(expr);
+    if (err) issues.push({ file, path, message: `template expression "${expr}": ${err}` });
+  }
+}
+
+function checkRegex(source: string, flags: string, file: string, path: string, issues: ValidationIssue[]): void {
+  try {
+    new RegExp(source, flags);
+  } catch (e) {
+    issues.push({ file, path, message: `invalid regular expression: ${e instanceof Error ? e.message : String(e)}` });
+  }
+}
+
+function validateLayers(
+  layers: readonly RuleLayer[] | undefined,
+  base: string,
+  file: string,
+  issues: ValidationIssue[],
+  intentTypes: ReadonlySet<string>,
+  cues: ReadonlySet<string>,
+): void {
+  const ids = new Set<string>();
+  for (const [i, layer] of (layers ?? []).entries()) {
+    const at = `${base}[${i}]`;
+    if (ids.has(layer.id)) issues.push({ file, path: `${at}.id`, message: `duplicate layer id "${layer.id}"` });
+    ids.add(layer.id);
+    const narration = layer.pool.filter((e) => isNarrationStyle(e.style)).length;
+    if (narration > 0 && narration < layer.pool.length) {
+      issues.push({
+        file,
+        path: `${at}.pool`,
+        message: "a layer is either an utterance layer or a narration layer: its pool mixes narration and utterance entries",
+      });
+    }
+    for (const [j, entry] of layer.pool.entries()) {
+      const where = `${at}.pool[${j}]`;
+      checkTemplate(entry.text, file, `${where}.text`, issues);
+      if (entry.intent && !intentTypes.has(entry.intent)) {
+        issues.push({ file, path: `${where}.intent`, message: `unknown intent "${entry.intent}"` });
+      }
+      if (isNarrationStyle(entry.style) && (entry.cues.length > 0 || entry.intent)) {
+        issues.push({ file, path: where, message: "a narration entry has no speaker: it cannot carry cues or an intent" });
+      }
+      for (const [c, cue] of entry.cues.entries()) {
+        if (cues.size > 0 && !cues.has(cue.type)) {
+          issues.push({ file, path: `${where}.cues[${c}].type`, message: `unknown cue type "${cue.type}"`, warn: true });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Checks the keys the rule backend reads: every referenced event type, intent and cue type exists, every regular
+ * expression compiles, every `{{ CEL }}` template placeholder type-checks, and narration pools stay separate from
+ * utterance pools. The rule backend is a full backend, so it is held to the same standard as the authored policy.
+ */
+function validateRuleBackend(policy: Policy, file: string, issues: ValidationIssue[]): void {
+  const eventTypes = new Set(Object.keys(policy.events?.types ?? {}));
+  eventTypes.add("other");
+  const intentTypes = new Set(policy.intent?.types ?? []);
+  const cueTypes = new Set(Object.keys(policy.cues?.types ?? {}));
+  const needType = (type: string, path: string) => {
+    if (!eventTypes.has(type)) issues.push({ file, path, message: `unknown event type "${type}"` });
+  };
+
+  const appraise = policy.appraise;
+  for (const [i, p] of (appraise?.patterns ?? []).entries()) {
+    checkRegex(p.match, p.flags ?? "i", file, `appraise.patterns[${i}].match`, issues);
+    needType(p.event.type, `appraise.patterns[${i}].event.type`);
+  }
+  if (appraise?.fallback) needType(appraise.fallback.type, "appraise.fallback.type");
+  for (const [word, type] of Object.entries(appraise?.commands ?? {})) needType(type, `appraise.commands.${word}`);
+  for (const [i, src] of (appraise?.inputClass?.injection ?? []).entries()) {
+    checkRegex(src, "i", file, `appraise.inputClass.injection[${i}]`, issues);
+  }
+  for (const [i, src] of (appraise?.inputClass?.metaProbe ?? []).entries()) {
+    checkRegex(src, "i", file, `appraise.inputClass.metaProbe[${i}]`, issues);
+  }
+
+  validateLayers(policy.render?.layers, "render.layers", file, issues, intentTypes, cueTypes);
+  validateLayers(policy.scene?.autonomous?.rules, "scene.autonomous.rules", file, issues, intentTypes, cueTypes);
+  for (const [i, layer] of (policy.scene?.autonomous?.rules ?? []).entries()) {
+    if (layer.pool.some((e) => isNarrationStyle(e.style))) {
+      issues.push({ file, path: `scene.autonomous.rules[${i}].pool`, message: "autonomous exchanges are spoken: a pool entry cannot be narration" });
+    }
+  }
+
+  const fallback = policy.render?.fallback;
+  if (fallback) {
+    checkTemplate(fallback.text, file, "render.fallback.text", issues);
+    if (fallback.intent && !intentTypes.has(fallback.intent)) {
+      issues.push({ file, path: "render.fallback.intent", message: `unknown intent "${fallback.intent}"` });
+    }
+  }
+
+  for (const [i, rule] of (policy.choices?.rules ?? []).entries()) {
+    needType(rule.event_type, `choices.rules[${i}].event_type`);
+    checkTemplate(rule.text, file, `choices.rules[${i}].text`, issues);
+  }
+
+  const writing = policy.memory?.writing;
+  checkTemplate(writing?.template, file, "memory.writing.template", issues);
+  for (const type of Object.keys(writing?.importanceByEventType ?? {})) {
+    needType(type, `memory.writing.importanceByEventType.${type}`);
+  }
+  for (const type of Object.keys(writing?.valenceByEventType ?? {})) {
+    needType(type, `memory.writing.valenceByEventType.${type}`);
+  }
+  checkTemplate(policy.reflection?.summaryTemplate, file, "reflection.summaryTemplate", issues);
+  checkTemplate(policy.offscreen?.narrateTemplate, file, "offscreen.narrateTemplate", issues);
+}
+
 export function validatePolicyDocument(
   merged: unknown,
   opts: CrossValidateOptions = {},
@@ -187,6 +310,7 @@ export function validatePolicyDocument(
   validateGrants(policy, file, issues, opts.authoredFields);
   validateVisibility(policy, file, issues);
   validateCues(policy, file, issues);
+  validateRuleBackend(policy, file, issues);
   for (const cr of policy.rules?.custom ?? []) {
     if (cr.stage === "tick") {
       issues.push({

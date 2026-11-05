@@ -30,7 +30,7 @@ describe("prompt leak guards", () => {
       scene: { id: "scn_0001", location: "loc", participants: ["player", "npc2"], turn: 2, firstTurn: false },
       history: [],
       fieldEffects: {},
-      tier: "s1",
+      tier: "standard",
       intent: { intent: "respond", scores: { respond: 1 } },
     });
     const blob = [seg.static, seg.semiStatic, seg.dynamic, seg.user, ...(seg.history ?? []).map((h) => h.content)].join("\n");
@@ -92,7 +92,7 @@ describe("prompt leak guards", () => {
         disguise: { player: "stranger" },
         inject_belief: [{ text: "I believe the gate is open.", tags: [], claims: [] }],
       },
-      tier: "s1",
+      tier: "standard",
       intent: { intent: "respond", scores: { respond: 1 } },
     });
     expect(seg.dynamic).toContain("ghost-npc");

@@ -136,7 +136,8 @@ function createDirectorImpl(k: Kernel, getFields: () => FieldSystem): Director {
         });
       }
 
-      if (deadline <= now && !anchorTargetMet(anchor, recentEvents, k.rules.cel, ctx) && st.status !== "fallback") {
+      // A passed deadline is reported once; the anchor stays in status `hard` until its target is met.
+      if (deadline <= now && !anchorTargetMet(anchor, recentEvents, k.rules.cel, ctx) && st.status !== "hard") {
         eventDrafts.push({
           kind: "anchor.progress",
           anchor: anchor.id,

@@ -60,6 +60,15 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
     };
   }
 
+  /**
+   * The authored fields that apply on their own: `source: author` ones, while their scope holds. A definition authored
+   * with another source (`rule`, `anchor`, `runtime`) is a template for a grant; it enters play through `grant` (and
+   * then lives in `state.fields`), never by merely sitting in `world/fields/`.
+   */
+  function authoredFieldsInPlay(): Record<string, FieldDef> {
+    return Object.fromEntries(Object.entries(k.authored.fields).filter(([, def]) => def.source === "author"));
+  }
+
   function collectApplicable(q: FieldQuery): FieldDef[] {
     const out: FieldDef[] = [];
     const tryAdd = (def: FieldDef, meta?: { turnsElapsed?: number; scenesElapsed?: number; turnsActive?: number }) => {
@@ -68,7 +77,7 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
     };
 
     const state = k.timeline.state();
-    for (const def of Object.values(k.authored.fields)) {
+    for (const def of Object.values(authoredFieldsInPlay())) {
       const tr = sessionActive[def.id];
       tryAdd(def, { turnsActive: tr?.turnsActive ?? 0 });
     }
@@ -86,7 +95,7 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
     const state = k.timeline.state();
     if (!state.scene) return;
     const probe = scopeCtx({ ctx: k.celContext({ sceneId: state.scene.id }) });
-    for (const def of [...Object.values(k.authored.fields), ...Object.values(declared)]) {
+    for (const def of [...Object.values(authoredFieldsInPlay()), ...Object.values(declared)]) {
       if (!def.scope.turns) continue;
       if (!scopeMatches(def, { ...probe, turnsActive: sessionActive[def.id]?.turnsActive ?? 0 })) continue;
       const tr = sessionActive[def.id] ?? { def, turnsActive: 0 };
@@ -122,6 +131,9 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
       for (const f of fields) {
         const { effects: fx, clamped } = clampEffects(f.effects, caps, bypassCap());
         const holderKey = `${f.holder.kind}:${f.holder.ref ?? ""}`;
+        const clampedPaths = clamped.length ? clamped : levelClamped;
+        // `applied` describes every field in play; only the ledger entry is deduped.
+        applied.push({ id: f.id, level: lvl, clamped: clampedPaths });
         const sig = JSON.stringify({ effects: fx, clamped });
         const dedupeKey = `${turnKey}|${f.id}`;
         if (resolveDedupe.get(dedupeKey) === sig) continue;
@@ -134,10 +146,9 @@ export function createFieldSystem(k: Kernel, opts?: { bypassArmed?: (what: strin
           level: lvl,
           holder: holderKey,
           effects: fx,
-          clamped: clamped.length ? clamped : levelClamped.length ? levelClamped : undefined,
+          clamped: clampedPaths.length ? clampedPaths : undefined,
           owner: lvl === "L4" ? q.owner : undefined,
         });
-        applied.push({ id: f.id, level: lvl, clamped: clamped.length ? clamped : levelClamped });
       }
     }
 

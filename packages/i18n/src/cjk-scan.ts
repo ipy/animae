@@ -2,8 +2,11 @@
 const CJK_IN_STRING =
   /(["'`])(?:(?:\\.|(?!\1)[\s\S])*?[\u3000-\u9fff\uff00-\uffef](?:\\.|(?!\1)[\s\S])*?)\1/g;
 
-const ALLOWLIST_PATH_RE =
-  /(?:^|\/)(?:locales|prompts)\/|display-width\.|tier-display\.|dev-session\.|cjk-|fuzzy-match\.|segment-utils\.|prompt\.ts$|\/generated\.ts$|i18n\/test\//;
+/**
+ * Paths whose string literals are resources, not code: locale catalogs, prompt bundles, generated bundles that embed
+ * authored string tables, and tests (which use non-Latin samples to exercise width and tokenization logic).
+ */
+const ALLOWLIST_PATH_RE = /(?:^|\/)(?:locales|prompts|test)\/|\/generated\.ts$|\.test\.tsx?$/;
 
 export function findCjkStringLiterals(source: string, filePath: string): { line: number; excerpt: string }[] {
   if (ALLOWLIST_PATH_RE.test(filePath.replace(/\\/g, "/"))) return [];

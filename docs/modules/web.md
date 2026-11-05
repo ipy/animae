@@ -27,7 +27,7 @@ Static **`ref-client/`** tree (no bundler): developer console for the same WebSo
 | `token` | Session auth token (required on LAN binds); passed in the `hello` frame only, never shown in the UI |
 | `ws` | Override WebSocket URL (default `ws(s)://<host>/ws`) |
 | `role` | Optional `controller` or `spectator` (default spectator for read-only diagnostics) |
-| `locale` | Optional initial UI locale (`en`, `zh-CN`) |
+| `locale` | Optional initial BCP-47 UI locale (e.g. `en`, `de`) |
 
 Features: connection metadata after `hello_ok`, an **Environment** card (host-provided config/data paths via authenticated `GET /api/environment?locale=`), read-only **smoke tests** (socket, hello/protocol v1, snapshot shape, ping RTT, locale list + `set_locale` no-op, `config_get` secret masking, `llm_log`, `get_state` version match, resume quiet), **model call log** table with live poll and JSONL export, collapsible snapshot JSON, redacted protocol frame feed, and a **console** tab (player `input` / `command` / raw JSON — controller only). Smoke tests never send mutating game frames.
 
@@ -49,5 +49,6 @@ Security: uses the normal session token and read-only queries where possible; tr
 
 ## Changelog
 
+- **Stream contract:** `stream` messages use `segment: narration|dialogue|…` and `phase: start|delta|end|reset`; narration `style` on `start`; `reset` voids segments since the player's line ([protocol.md](../../packages/web/docs/protocol.md)).
 - **2026-10-30:** Per-client locale negotiation; `locale` server message; ref-client locale selector.
 - **2026-11-01:** Diagnostics ref-client redesign (smoke tests, model call log viewer, themed UI, i18n).

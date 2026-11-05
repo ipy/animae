@@ -12,20 +12,25 @@ export function normalizeLocaleTag(raw: string): string {
   return [lang, ...rest].join("-");
 }
 
-/** Build fallback chain: zh-TW → zh-CN → en style matching. */
+/** The tag followed by each less specific tag, most specific first: `pt-BR` → `pt-BR`, `pt`. */
+function lessSpecificTags(tag: string): string[] {
+  const parts = tag.split("-");
+  const out: string[] = [];
+  for (let n = parts.length; n >= 1; n--) out.push(parts.slice(0, n).join("-"));
+  return out;
+}
+
+/**
+ * Fallback chain of a locale: the tag, its less specific tags (`pt-BR` → `pt`), then `extra`, and `en` as the root of
+ * every chain, so a locale with no catalog of its own reads the English one.
+ */
 export function buildFallbackChain(locale: string, extra?: readonly string[]): string[] {
   const tag = normalizeLocaleTag(locale);
   const chain: string[] = [];
   const push = (t: string) => {
     if (!chain.includes(t)) chain.push(t);
   };
-  push(tag);
-  const lang = tag.split("-")[0]!;
-  if (lang === "zh") {
-    if (tag !== "zh-CN") push("zh-CN");
-    if (tag.startsWith("zh-") && tag !== "zh-Hans") push("zh-Hans");
-  }
-  // Every tag other than `en` itself ends in `en` (so `en-US` and `en-GB` reach the `en` catalog, as `zh-TW` does).
+  for (const t of lessSpecificTags(tag)) push(t);
   if (tag !== "en") push("en");
   for (const t of extra ?? []) push(normalizeLocaleTag(t));
   return chain;
@@ -78,16 +83,19 @@ export function textDirection(locale: string): "ltr" | "rtl" {
   return RTL_LOCALES.has(lang) ? "rtl" : "ltr";
 }
 
-/** Best matching locale from available catalog tags. */
+/**
+ * Best matching locale from available catalog tags: the requested tag or a less specific one (`pt-BR` → `pt`), else
+ * another variant of the same language (`pt` → `pt-BR`), else `en` when it is available.
+ */
 export function matchAvailableLocale(requested: string, available: readonly string[]): string | undefined {
-  const chain = buildFallbackChain(requested);
+  const tag = normalizeLocaleTag(requested);
   const set = new Set(available.map(normalizeLocaleTag));
-  for (const tag of chain) {
-    if (set.has(tag)) return tag;
+  for (const t of lessSpecificTags(tag)) {
+    if (set.has(t)) return t;
   }
+  const lang = tag.split("-")[0]!;
   for (const a of available) {
-    const lang = normalizeLocaleTag(a).split("-")[0]!;
-    if (lang === normalizeLocaleTag(requested).split("-")[0]!) return a;
+    if (normalizeLocaleTag(a).split("-")[0] === lang) return a;
   }
-  return undefined;
+  return set.has("en") ? "en" : undefined;
 }

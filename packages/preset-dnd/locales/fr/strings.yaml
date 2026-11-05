@@ -1,0 +1,5 @@
+dnd:
+  check:
+    insight_lie: Ils ou elles mentent.
+    investigation_found: L'enquête aboutit à une découverte.
+    perception_unusual: Vous remarquez quelque chose d'inhabituel.

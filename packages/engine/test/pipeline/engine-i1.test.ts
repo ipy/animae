@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const PIPELINE_DIR = join(import.meta.dir, "../../src/pipeline");
-const GAMEPLAY_MARKERS = [/百合园/, /撮合/, /调情/, /威信/, /温室/];
+const GAMEPLAY_MARKERS = [/\u767e\u5408\u56ed/, /\u63a5\u5408/, /\u8c03\u60c5/, /\u5a01\u4fe1/, /\u6e29\u5ba4/];
 
 function listTsFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

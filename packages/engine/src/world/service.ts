@@ -100,7 +100,7 @@ export function createWorldService(k: Kernel): WorldServiceImpl {
         all.push(...(await emitAll(runDailyStageRules(k, at))));
         all.push(...(await emitAll(runDeckDrawsForDay(k, at))));
         if (k.policy.memory.propagation?.enabled && k.policy.memory.propagation.onTick === "day") {
-          all.push(...(await k.m.memory.propagateTick()));
+          all.push(...(await k.m.memory.propagateTick("day")));
         }
       }
       cursorM = ms.abs;

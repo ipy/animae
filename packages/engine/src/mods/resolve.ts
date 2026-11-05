@@ -75,11 +75,6 @@ export async function loadModManifestFromDir(storage: StoragePort, modId: string
   return r.data;
 }
 
-async function listFilesystemModIds(storage: StoragePort): Promise<string[]> {
-  const entries = await storage.list("mods");
-  return entries.filter((e) => e.endsWith("/")).map((e) => e.slice(0, -1));
-}
-
 export async function resolveMods(
   storage: StoragePort,
   configMods: string[],
@@ -140,12 +135,7 @@ export async function resolveMods(
     }
   }
 
-  let ordered: string[];
-  try {
-    ordered = topoSort(enabled, manifests, enabled);
-  } catch (e) {
-    throw e;
-  }
+  const ordered = topoSort(enabled, manifests, enabled);
 
   const orderedResolved: ResolvedMod[] = ordered.map((id) => {
     const m = manifests.get(id)!;

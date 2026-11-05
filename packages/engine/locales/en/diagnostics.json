@@ -1,6 +1,8 @@
 {
   "mod.drift": "Enabled mods differ from the timeline record",
   "config.warning": "Configuration warning: {code}",
+  "entity.generate_failed": "Entity generation failed: {code}",
+  "entity.generate_invalid": "Invalid entity.generate payload: {message}",
   "locale.missing_string": "Missing content translation: {key}",
   "output_language_directive": "Write all player-facing narration, dialogue, and choice text in {language} ({tag}). Internal structured fields may use the working prompt language.",
   "prompt.working_language": "Working language for this request: {language} ({tag})."

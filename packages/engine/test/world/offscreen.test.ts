@@ -21,10 +21,10 @@ test("catchUp rule emits offscreen.simulated", async () => {
   expect(fk.state().locations.tavern?.lastSimulated).toEqual({ day: 1, minute: 100 });
 });
 
-test("catchUp narrate uses S1 and artifact when allowed", async () => {
+test("catchUp narrate uses S2 and artifact when allowed", async () => {
   const fk = createFakeKernel({
     policyLayer: { offscreen: { fidelity: { default: "narrate", locations: {}, characters: {} } } },
-    s1Handler: () => ({ text: "Ash marks the floor." }),
+    s2Handler: () => ({ text: "Ash marks the floor." }),
   });
   fk.reloadState({
     ...fk.state(),

@@ -14,7 +14,9 @@ from pty_lib import PtySession, spawn_pty  # noqa: E402
 
 DEV_SESSION = PKG / "scripts" / "dev-session.ts"
 
-EN_FORBIDDEN_IN_ZH = (
+EN_MARKERS = ("Side panel", "Help (F1)", "Participants")
+
+EN_FORBIDDEN_IN_FR = (
     "Side panel",
     "Participants",
     "Tracks",
@@ -24,11 +26,7 @@ EN_FORBIDDEN_IN_ZH = (
     "Please enlarge",
 )
 
-ZH_MARKERS = ("侧栏", "帮助 (F1)", "参与者")
-
-EN_MARKERS = ("Side panel", "Help (F1)", "Participants")
-
-CJK_UI = ("\u4e00", "\u8bf7", "\u5e2e", "\u4fa7")
+FR_MARKERS = ("Panneau latéral", "Aide (F1)", "Personnes")
 
 
 def _screen(sess: PtySession) -> str:
@@ -54,13 +52,7 @@ def _assert_any(screen: str, needles: tuple[str, ...], label: str) -> None:
         raise AssertionError(f"{label}: expected one of {needles!r}\n{screen[-800:]}")
 
 
-def _assert_no_cjk_ui(screen: str, label: str) -> None:
-    for ch in CJK_UI:
-        if ch in screen:
-            raise AssertionError(f"{label}: unexpected CJK UI char {ch!r}")
-
-
-def run_locale(initial: str, *, batch: str = "sidepanel") -> None:
+def run_locale(initial: str, *, batch: str = "sidepanel", fr_markers: tuple[str, ...] = FR_MARKERS) -> None:
     env = os.environ.copy()
     env["TERM"] = "xterm-256color"
     env["TUI_PTY_DRIVER"] = "1"
@@ -76,12 +68,11 @@ def run_locale(initial: str, *, batch: str = "sidepanel") -> None:
         _wait_ready(sess)
         time.sleep(0.45)
         screen = _screen(sess)
-        if initial.startswith("zh"):
-            _assert_none(screen, EN_FORBIDDEN_IN_ZH, f"zh-CN boot ({batch})")
-            _assert_any(screen, ZH_MARKERS, f"zh-CN boot ({batch})")
+        if initial.startswith("fr"):
+            _assert_none(screen, EN_FORBIDDEN_IN_FR, f"fr boot ({batch})")
+            _assert_any(screen, fr_markers, f"fr boot ({batch})")
         else:
             _assert_any(screen, EN_MARKERS, f"en boot ({batch})")
-            _assert_no_cjk_ui(screen, f"en boot ({batch})")
     finally:
         sess.write(b":quit\n")
         try:
@@ -108,10 +99,11 @@ def run_lang_switch() -> None:
         _wait_ready(sess)
         time.sleep(0.35)
         _assert_any(_screen(sess), ("Help (F1)", "Side panel"), "en before switch")
-        sess.write(b":lang zh-CN\n")
+        sess.write(b":lang fr\n")
         deadline = time.time() + 4.0
         while time.time() < deadline:
-            if "界面语言" in _screen(sess) or "侧栏" in _screen(sess):
+            scr = _screen(sess)
+            if "Panneau latéral" in scr or "Langue définie" in scr:
                 break
             time.sleep(0.06)
         sess.write(b":lang en\n")
@@ -133,7 +125,7 @@ def run_lang_switch() -> None:
 
 
 def main() -> int:
-    run_locale("zh-CN", batch="sidepanel")
+    run_locale("fr", batch="sidepanel")
     run_locale("en", batch="sidepanel")
     run_lang_switch()
     sys.stderr.write("pty_locale_harness: OK\n")

@@ -2,3 +2,4 @@ export { createMemoryService, memoryCacheFor, memorySyncList } from "./service.t
 export { termHitRate, scoreMemoryEntry, forgettingRetention, passesForgetting, recencyScore } from "./retrieval.ts";
 export { ageWorldDays } from "./util.ts";
 export { ReflectionOutputSchema } from "./reflection.ts";
+export { MemoryWriteSchema, writeNarrationMemory, writeTurnMemory, type MemoryWrite, type TurnMemoryInput } from "./writing.ts";

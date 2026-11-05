@@ -17,7 +17,7 @@ Narrative director ([Section 11](../spec.md#11-narrative-director)): **anchors**
 | `tick(when)` | Anchors + beats; returns grants, events, `nearestAnchorScenes`, `anchorNear` |
 | `sidenote(npc, text, opts?)` | `sidenote.added` (default `ttlTurns: 3`) |
 | `sidenotesFor(npc)` | Active sidenotes |
-| `afterRender(npc, generated)` | Non-verbatim echo → `sidenote.echoed`; expiry → `sidenote.expired` |
+| `afterRender(npc, generated)` | Non-verbatim echo → `sidenote.echoed`; a note of this speaker that is already spent (`ttlTurns` 0) → `sidenote.expired` |
 | `invokeException(id, target)` | Charge check → `exception.used`, arms bypass for this turn |
 | `bypassArmed(what)` | `field_cap`, `cost_due`, `track_cap`, `rule:*`, `constraint:*` |
 | `anchorsReferencing(ref)` | Anchors referencing a character/knowledge id |
@@ -42,6 +42,8 @@ Clear exception bypass on `tick("turn_end")`.
 
 Deadline: `WorldTime` or CEL (absolute minutes or bool). Fulfilled → `anchor.fulfilled`.
 
+An anchor that does not list `hard` and whose deadline passes with the target unmet gets one `anchor.progress` stage `hard` (status `hard`) and no fallback events; later ticks do not repeat it.
+
 `nearestAnchorScenes` / `anchorNear` use `policy.router.triggers.anchor_near.n`.
 
 ## Beats
@@ -55,6 +57,8 @@ Ordered list; at most one active. On `scene_start` / `turn_start` / `time_advanc
 ## Sidenotes
 
 Injected into dynamic prompts. `verbatim: false` — if generated text contains a run of ≥ 8 characters from the note, emit `sidenote.echoed`.
+
+A note lives for its `ttlTurns` turns: every `turn.ended` counts one down, and the reducer drops the note when the count reaches 0, so a note with `ttlTurns: 1` or `0` is seen by one turn only. The `sidenote.expired` event is written by `afterRender` for a note that is already spent when its speaker has just been rendered (`ttlTurns: 0`); a note that runs out at the end of its last turn leaves the state without an event.
 
 ## Exceptions
 

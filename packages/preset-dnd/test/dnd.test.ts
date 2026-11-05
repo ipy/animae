@@ -32,19 +32,19 @@ test("skill check info_arrival copy localizes via preset displayStrings", () => 
 
   const tables = generatedBundle.displayStrings;
   expect(tables?.en).toBeDefined();
-  expect(tables?.["zh-CN"]).toBeDefined();
+  expect(tables?.fr).toBeDefined();
   const en = createTranslator({
     locale: "en",
     catalogs: { strings: { en: tables!.en! } },
     defaultNamespace: "strings",
   });
-  const zh = createTranslator({
-    locale: "zh-CN",
-    catalogs: { strings: { "zh-CN": tables!["zh-CN"]! } },
+  const fr = createTranslator({
+    locale: "fr",
+    catalogs: { strings: { fr: tables!.fr! } },
     defaultNamespace: "strings",
   });
   expect(localizeDeep({ text: textRef }, en.t.bind(en))).toEqual({ text: "They seem to be lying." });
-  expect(localizeDeep({ text: textRef }, zh.t.bind(zh))).toEqual({ text: "对方在说谎" });
+  expect(localizeDeep({ text: textRef }, fr.t.bind(fr))).toEqual({ text: "Ils ou elles mentent." });
 });
 
 test("SRD notice shipped in README, NOTICE, and export", () => {

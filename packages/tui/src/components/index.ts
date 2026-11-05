@@ -11,6 +11,7 @@ export { EventLog } from "./EventLog.tsx";
 export { TimelineBrowser } from "./TimelineBrowser.tsx";
 export { ExplainView } from "./ExplainView.tsx";
 export { Inspector } from "./Inspector.tsx";
+export { ModePanel } from "./ModePanel.tsx";
 export { Overlay } from "./Overlay.tsx";
 export { Clickable } from "./Clickable.tsx";
 export { Button } from "./Button.tsx";

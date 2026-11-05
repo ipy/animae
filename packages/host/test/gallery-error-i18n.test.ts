@@ -8,7 +8,7 @@ import {
   galleryJobFailureReason,
 } from "../src/index.ts";
 
-const LOCALES = ["en", "zh-CN"] as const;
+const LOCALES = ["en", "fr"] as const;
 
 function hostT(locale: string) {
   const i18n = createHostI18n(locale);

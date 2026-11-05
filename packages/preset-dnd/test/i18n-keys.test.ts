@@ -32,18 +32,18 @@ function collectI18nKeys(value: unknown, out: Set<string>): void {
   for (const v of Object.values(o)) collectI18nKeys(v, out);
 }
 
-test("every $t key in bundled policies exists in en and zh-CN displayStrings", () => {
+test("every $t key in bundled policies exists in en and fr displayStrings", () => {
   const keys = new Set<string>();
   for (const p of generatedBundle.policies) collectI18nKeys(p.doc, keys);
   const tables = generatedBundle.displayStrings!;
   for (const key of keys) {
     expect(tables.en?.[key], `missing en string for ${key}`).toBeTruthy();
-    expect(tables["zh-CN"]?.[key], `missing zh-CN string for ${key}`).toBeTruthy();
+    expect(tables.fr?.[key], `missing fr string for ${key}`).toBeTruthy();
   }
 });
 
 test("locale YAML matches generated displayStrings", () => {
-  for (const locale of ["en", "zh-CN"] as const) {
+  for (const locale of ["en", "fr"] as const) {
     const yaml = flattenStrings(
       parseYaml(readFileSync(join(pkgRoot, "locales", locale, "strings.yaml"), "utf8")) as Record<string, unknown>,
     );

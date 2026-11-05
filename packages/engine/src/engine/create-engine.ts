@@ -1,5 +1,5 @@
 import type { CreateEngineOptions, Engine } from "../api.ts";
-import type { DisplayText, Kernel, Stage, StageHook, ViewerDef } from "../contracts.ts";
+import type { DisplayText, Kernel, KernelModels, Stage, StageHook, ViewerDef } from "../contracts.ts";
 import { createEngineModContext, type EngineModContext } from "./mod-context.ts";
 import { modDrift } from "../mods/resolve.ts";
 import { modRecordFromResolved, syncModTimelineRecord } from "./mod-sync.ts";
@@ -15,6 +15,10 @@ import { FsStorage } from "../store/fs.ts";
 import { withRecording } from "../model/recording.ts";
 import { createModelCallLog, withModelCallLog, type ModelCallLog } from "../model/call-log.ts";
 import { resolveEngineModels } from "../model/config.ts";
+import { availabilityOf, modelsInfoOf, resolveInitialMode } from "../model/mode.ts";
+import { createRuleModelPort } from "../model/rule-port.ts";
+import { createTierResolver } from "../model/tier-resolver.ts";
+import { createModeController, type FallbackFlags } from "../runtime/mode-controller.ts";
 import { createFieldSystem } from "../fields/field-system.ts";
 import { createDirector } from "../director/director.ts";
 import { createWorldService } from "../world/service.ts";
@@ -29,8 +33,9 @@ import { HookRegistry } from "../pipeline/hooks.ts";
 import { createSceneService } from "../scene/scene-service.ts";
 import { createMutationGate } from "./mutation-gate.ts";
 import { replayChunks } from "../timeline/replay.ts";
-import type { EventId, TurnChunk } from "../types.ts";
-import type { ModelMode } from "../ports.ts";
+import { missingRecordings, replayPlan } from "../timeline/replay-plan.ts";
+import { AnimaeError, type EventId, type TurnChunk } from "../types.ts";
+import type { ModelMode, ModelPort } from "../ports.ts";
 import { message as systemMessage } from "../i18n/system-message.ts";
 import { collectPresetDisplayStrings } from "../i18n/preset-display-strings.ts";
 import { StringTableCache } from "../i18n/string-table-cache.ts";
@@ -38,6 +43,7 @@ import { liftStringRefs } from "../i18n/string-resolve.ts";
 import { expandNameRefs } from "../entities/name-refs.ts";
 import { normalizeLocaleTag } from "@animae/i18n";
 import { createGalleryService } from "../gallery/service.ts";
+import { fulfillEntityGenerateBatch } from "../entities/fulfill-generate.ts";
 
 function sessionId(opts: CreateEngineOptions): string {
   return opts.sessionId ?? `sess_${Date.now().toString(36)}`;
@@ -130,14 +136,25 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
   } else if (opts.modelCallLog && typeof opts.modelCallLog === "object") {
     modelCallLog = createModelCallLog(opts.modelCallLog);
   }
-  const wrapSlot = (port: typeof rawModels.s1, slot: "s1" | "s2") => {
+  const wrapSlot = (port: ModelPort, slot: "s1" | "s2", tier?: string) => {
     let p = withRecording(port, timeline.recordings);
-    if (modelCallLog) p = withModelCallLog(p, { slot, log: modelCallLog });
+    if (modelCallLog) p = withModelCallLog(p, { slot, log: modelCallLog, tier });
     return p;
   };
-  const models = {
-    s1: wrapSlot(rawModels.s1, "s1"),
-    s2: wrapSlot(rawModels.s2, "s2"),
+  const s1Llm = rawModels.s1 ? wrapSlot(rawModels.s1, "s1") : undefined;
+  const tiers = rawModels.tiers
+    ? createTierResolver(
+        rawModels.tiers.list.map((t) => ({ id: t.id, port: wrapSlot(t.port, "s2", t.id) })),
+        { default: rawModels.tiers.defaultId, routing: rawModels.tiers.routing },
+      )
+    : undefined;
+  const defaultS2 = tiers?.forJob("render").port;
+  // `s1` / `s2` are filled in below, once the kernel exists to build the rule port from.
+  const models: KernelModels = {
+    s1: s1Llm as ModelPort,
+    s2: defaultS2 as ModelPort,
+    tiers,
+    llm: { s1: s1Llm !== undefined, s2: tiers !== undefined },
   };
 
   const warn = (code: string, messageText: string, extra?: Record<string, unknown>) => {
@@ -208,7 +225,11 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     embedding: opts.ports?.embedding,
     image: opts.ports?.image,
     catalog,
-    emit: (drafts, ctx) => timeline.append(drafts, ctx),
+    emit: async (drafts, ctx) => {
+      const persisted = await timeline.append(drafts, ctx);
+      await fulfillEntityGenerateBatch(kernel, persisted);
+      return persisted;
+    },
     celContext: (p) =>
       buildCelContext(
         { state: timeline.state(), authored: live.authored, policy: live.policy, catalog },
@@ -219,6 +240,11 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
     acquireExclusive: () => mutationGate.acquire(),
     m: {} as Kernel["m"],
   };
+
+  const rulePort = createRuleModelPort(kernel);
+  models.rule = rulePort;
+  models.s1 = s1Llm ?? rulePort;
+  models.s2 = defaultS2 ?? rulePort;
 
   const director = createDirector(kernel);
   const fields = createFieldSystem(kernel, { bypassArmed: (w) => director.bypassArmed(w) });
@@ -234,6 +260,32 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
   kernel.m = { fields, director, world, memory, introspect, router, entities, gallery };
 
   await timeline.open();
+
+  const runtimeCfg = live.authored.config.runtime;
+  const resolvedForInfo = { s1: s1Llm, tiers };
+  const initialMode = resolveInitialMode(live.authored.config, availabilityOf(resolvedForInfo), opts.mode);
+  const fallbackOnError = runtimeCfg?.fallbackOnError;
+  const fallbackFlags: FallbackFlags = {
+    appraise: fallbackOnError?.appraise ?? false,
+    render: fallbackOnError?.render ?? false,
+    reflection: fallbackOnError?.reflection ?? false,
+    entity: fallbackOnError?.entity ?? false,
+    memory_write: fallbackOnError?.memoryWrite ?? false,
+    offscreen: fallbackOnError?.offscreen ?? false,
+    autonomous: fallbackOnError?.autonomous ?? false,
+  };
+  const runtime = createModeController({
+    initial: initialMode,
+    initialReason: opts.modeSource?.reason ?? (opts.mode !== undefined ? "api" : "config"),
+    initialTrigger: opts.modeSource?.trigger,
+    switchAt: runtimeCfg?.switchAt ?? "turn_boundary",
+    fallback: fallbackFlags,
+    available: () => ({ s1: s1Llm !== undefined, s2Tiers: tiers?.list.map((t) => t.id) ?? [] }),
+    models: () => modelsInfoOf(resolvedForInfo),
+    recordedMode: () => timeline.state().runtime?.mode,
+    emit: (drafts) => kernel.runExclusive(() => kernel.emit(drafts)),
+  });
+  kernel.runtime = runtime;
 
   const bootEvents = await timeline.events();
   if (bootEvents.length === 0) {
@@ -353,6 +405,18 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
         }),
       replay: async function* (b, r) {
         const events = await timeline.readRange(b, r);
+        if (timeline.recordings.mode === "replay") {
+          // `route.decided` says which turns a model served; those need their recordings, rule turns need nothing.
+          const missing = missingRecordings(replayPlan(events), (key) => {
+            const hit = timeline.recordings.lookup(key);
+            return hit !== undefined && hit !== null;
+          });
+          if (missing.length > 0) {
+            throw new AnimaeError("RECORDING_MISSING", `No recording for ${missing.length} model call(s) of the replayed range`, {
+              missing,
+            });
+          }
+        }
         for (const chunk of replayChunks(events)) yield chunk;
       },
       saves: () => timeline.saves(),
@@ -423,6 +487,13 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
         );
       },
     },
+    runtime: {
+      mode: () => runtime.mode(),
+      pending: () => runtime.pending(),
+      switchAt: runtime.switchAt,
+      setMode: (req, o) => runtime.setMode(req, o),
+      models: () => runtime.models(),
+    },
     info: () => ({
       root: opts.root,
       preset: live.authored.config.preset,
@@ -433,7 +504,8 @@ export async function createEngine(opts: CreateEngineOptions): Promise<Engine> {
       contentLocale: engineLocale.contentLocale,
       branch: timeline.branch().name,
       sessionId: timeline.sessionId,
-      models: { s1: models.s1.id, s2: models.s2.id },
+      models: runtime.models(),
+      mode: runtime.mode(),
       modelMode,
     }),
     modelCallLog,

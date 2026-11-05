@@ -58,10 +58,10 @@ function setup(opts: {
 
 describe("gallery notices in the host", () => {
   test("an unlock names the entry by its title in the viewer's language, never by its id", async () => {
-    const s = setup({ views: { dawn: view("dawn", { title: "Greenhouse dawn" }) }, uiLocale: "zh-CN" });
+    const s = setup({ views: { dawn: view("dawn", { title: "Greenhouse dawn" }) }, uiLocale: "fr" });
     s.emit({ type: "unlocked", item: "dawn" });
     await s.flush();
-    expect(s.gets[0]).toEqual({ id: "dawn", locale: "zh-CN" });
+    expect(s.gets[0]).toEqual({ id: "dawn", locale: "fr" });
     expect(s.toasts).toHaveLength(1);
     expect(s.toasts[0]!.text).toContain("Greenhouse dawn");
     expect(s.toasts[0]!.text).not.toContain("dawn,");

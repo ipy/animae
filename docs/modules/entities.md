@@ -7,7 +7,8 @@ Runtime entity generation, LOD promotion, and SillyTavern card import/export ([6
 ## Public API
 
 - `createEntityService(kernel): EntityService`
-  - `generate({ kind, template, hints? })` — S1/S2 (`template.lod === principal` → S2), prompt includes world language ([Section 8](../spec.md#8-cognitive-pipeline)), validates template zod schema, adjudicates id/uniqueness/defaults/LOD, persists under `timelines/<branch>/entities/`, emits `entity.created`.
+  - `generate({ kind, template, hints? })` — **S1 role** structured `object()` with purpose `entity` (LLM or rule backend); prompt includes world language ([Section 8](../spec.md#8-cognitive-pipeline)), validates template zod schema, adjudicates id/uniqueness/defaults/LOD, persists under `timelines/<branch>/entities/`, emits `entity.created`.
+  - **`entity.generate` events** — rules, field costs, or director anchor `hard` drafts may emit `{ kind: "entity.generate", request: { kind, template, id?, hints?, brief? }, reason? }`. The reducer is a no-op; on **live** append the engine runs the same S1 path inside the mutation gate and emits `entity.created` with `because: [<request event id>]`. Failures emit `config.warning` (`entity.generate_failed` / `entity.generate_invalid`) without aborting the surrounding mutation. Replay/load/rewind do not re-run generation.
   - `promote(id, to)` — one LOD step up only; model fill via target LOD template; emits `character.promoted` with optional `data` payload.
   - `checkPromotions(ids)` — policy `characters.lod.promote` + template `promote` CEL rules (`anchor_ref` extra via director).
   - `importCard(file)` — ST V2/V3 JSON, PNG (`chara`/`ccv3`), or `.acard.jsonl`.

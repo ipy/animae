@@ -24,7 +24,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
   }
 
   if (opts.preset && !(await resolvePresetId(opts.preset))) {
-    process.stderr.write(`Note: preset "${opts.preset}" is not registered yet (built-ins load from @animae/preset-base / @animae/preset-dnd).\n`);
+    process.stderr.write(`Note: preset "${opts.preset}" is not registered yet (built-ins load from @animae/preset-base, @animae/preset-dnd and @animae/preset-rule).\n`);
   }
 
   await mkdir(target, { recursive: true });
@@ -35,9 +35,21 @@ export async function runInit(opts: InitOptions): Promise<number> {
     `# Animae engine config (see docs/authoring-guide.md)
 ${presetLine}seed: 1
 policies: []
+
+# Models are optional: without them the engine plays on the rule backend (zero tokens, deterministic).
+#   s1 = structured judgment (appraise, reflection, ...); s2 = free-text generation (render, offscreen, autonomous).
 # models:
 #   s1: { provider: anthropic, model: claude-haiku-4-5 }
-#   s2: { provider: anthropic, model: claude-sonnet-4-5 }
+#   s2:
+#     default: std
+#     tiers:
+#       - { id: std, provider: anthropic, model: claude-sonnet-4-5 }
+#       - { id: pro, provider: anthropic, model: claude-opus-4-5, tags: [premium] }
+#     routing: { render: std, escalate_to: pro }
+#
+# mode: llm | hybrid | rule      # default: llm when models are configured, otherwise rule
+# runtime:
+#   switchAt: turn_boundary       # when \`animae --mode ...\` / :mode changes apply while a turn runs
 `,
     "utf8",
   );

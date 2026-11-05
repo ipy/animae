@@ -17,7 +17,7 @@ JSON messages over WebSocket (`/ws`). Every message includes `"v": 1` (`WEB_PROT
 
 | `type` | Purpose |
 |--------|---------|
-| `hello` | `{ role?: "controller" \| "spectator", resumeSeq?, token?, clientId?, locale? }` — optional BCP-47 UI locale (e.g. `"en"`, `"zh-CN"`) |
+| `hello` | `{ role?: "controller" \| "spectator", resumeSeq?, token?, clientId?, locale? }` — optional BCP-47 UI locale (e.g. `"en"`, `"de"`, `"pt-BR"`) |
 | `set_locale` | `{ id, locale }` — switch this client's UI locale; server responds with `result` + fresh localized `snapshot` |
 | `claim_controller` | `{ id, force? }` — take the controller seat |
 | `release_control` | `{ id }` — voluntary spectator mode |
@@ -74,7 +74,7 @@ Hosts may expose additional authenticated `/api/…` routes (for example generat
 | `locale` | `{ locale }` — negotiated UI locale for this client (after `hello` or `set_locale`) |
 | `snapshot` | Full UI state (see below) |
 | `patch` | `{ ops: [{ op, path, value? }] }` — incremental snapshot updates when diff is small |
-| `stream` | Per-**utterance** narration/dialogue (`start` / `delta` / `end`); each `delta` is a text **fragment**, not a full line |
+| `stream` | Per-**segment** narration/dialogue (`start` / `delta` / `end`, and `reset` when the engine replaced the output); each `delta` is a text **fragment**, not a full line |
 | `event` | `{ kind, payload }` — engine timeline events |
 | `error` | `{ code, message, id?, params? }` — `message` localized per client; `code`/`params` stable for clients |
 | `toast` | `{ level, text }` — `text` localized per client |
@@ -115,13 +115,18 @@ Core keys emitted by `@animae/host` `SessionHost.buildSnapshot()`:
   "type": "stream",
   "seq": 12,
   "requestId": "r7",
-  "phase": "start" | "delta" | "end",
+  "phase": "start" | "delta" | "end" | "reset",
   "segment": "narration" | "dialogue" | "thought" | "system" | "event",
   "speaker": "optional",
   "text": "delta text when phase=delta",
-  "turnId": "when phase=end"
+  "turnId": "when phase=end",
+  "style": "normal | scene_break — narration segments, phase=start",
+  "reason": "fallback | retry — when phase=reset"
 }
 ```
+
+- A `narration` segment is a speaker-less paragraph of the narrator. `style: "scene_break"` asks the client to show a divider instead of an indented line.
+- `reset` means the engine replaced the output of the turn in flight (for example the rule backend took over after the model failed mid-stream). Every segment streamed since the player's own line is void, open segments included (no `end` follows for them); the replacement is streamed next. The next `snapshot` / `patch` carries the corrected transcript. `reset` never follows the `end` of the turn's last segment.
 
 ### `event`
 
@@ -137,7 +142,7 @@ Core keys emitted by `@animae/host` `SessionHost.buildSnapshot()`:
 ## Locale (additive, v1-compatible)
 
 1. Client sends `hello` with optional `locale` (BCP-47).
-2. Server negotiates against supported tags (`en`, `zh-CN`, …), stores locale per WebSocket client, and includes negotiated `locale` plus `locales: [{ tag, name }]` on `hello_ok`.
+2. Server negotiates against host-registered locale tags, stores locale per WebSocket client, and includes negotiated `locale` plus `locales: [{ tag, name }]` on `hello_ok`.
 3. Initial `snapshot` (and subsequent `patch` / per-client `get_state`) is localized for that client: header/footer labels, system transcript lines, action labels, panel display strings, `turnError`, etc.
 4. Client may send `set_locale { id, locale }` → `{ type: "locale", locale }`, `{ type: "result", id, ok: true, data: { locale } }`, plus a full localized `snapshot` for that client only.
 5. Machine fields stay neutral (`id`, `code`, `params`, entity ids, event kinds). Human-readable server fields (`error.message`, `toast.text`, snapshot display copy) are localized per client; broadcast paths (events, toasts) send **different JSON per client** when locales differ.
@@ -146,7 +151,7 @@ Core keys emitted by `@animae/host` `SessionHost.buildSnapshot()`:
 Example messages:
 
 ```json
-{ "v": 1, "type": "hello", "role": "controller", "clientId": "tab-abc12345", "locale": "zh-CN" }
+{ "v": 1, "type": "hello", "role": "controller", "clientId": "tab-abc12345", "locale": "de" }
 ```
 
 ```json
@@ -158,8 +163,8 @@ Example messages:
   "role": "controller",
   "controllerPresent": true,
   "protocolVersion": 1,
-  "locale": "zh-CN",
-  "locales": [{ "tag": "en", "name": "英语" }, { "tag": "zh-CN", "name": "中文（简体）" }]
+  "locale": "de",
+  "locales": [{ "tag": "en", "name": "English" }, { "tag": "de", "name": "Deutsch" }]
 }
 ```
 

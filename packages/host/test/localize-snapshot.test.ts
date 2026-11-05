@@ -13,7 +13,7 @@ describe("localizeSnapshot preset display strings", () => {
         host: { en: {} },
         strings: {
           en: { "dnd.check.perception_unusual": "You notice something unusual." },
-          "zh-CN": { "dnd.check.perception_unusual": "察觉到了异常" },
+          fr: { "dnd.check.perception_unusual": "Vous remarquez quelque chose d'inhabituel." },
         },
       },
     });
@@ -36,9 +36,9 @@ describe("localizeSnapshot preset display strings", () => {
 
   test("does not leak web: missing-key markers when strings catalog is absent", () => {
     const i18n = createI18n({
-      locale: "zh-CN",
+      locale: "fr",
       defaultNamespace: "web",
-      catalogs: { web: { "zh-CN": {} }, host: { "zh-CN": {} } },
+      catalogs: { web: { fr: {} }, host: { fr: {} } },
     });
     const out = localizeSnapshot(
       {
@@ -60,13 +60,13 @@ describe("localizeSnapshot preset display strings", () => {
 
   test("bindLocalizeTranslator resolves preset keys with web default namespace", () => {
     const i18n = createI18n({
-      locale: "zh-CN",
+      locale: "fr",
       defaultNamespace: "web",
       catalogs: {
-        web: { "zh-CN": {} },
-        host: { "zh-CN": {} },
+        web: { fr: {} },
+        host: { fr: {} },
         strings: {
-          "zh-CN": { "dnd.check.perception_unusual": "察觉到了异常" },
+          fr: { "dnd.check.perception_unusual": "Vous remarquez quelque chose d'inhabituel." },
         },
       },
     });
@@ -74,7 +74,7 @@ describe("localizeSnapshot preset display strings", () => {
     const out = localizeDeep({ text: { i18n: { key: "dnd.check.perception_unusual" } } }, lt) as {
       text: string;
     };
-    expect(out.text).toBe("察觉到了异常");
+    expect(out.text).toBe("Vous remarquez quelque chose d'inhabituel.");
   });
 
   test("still resolves host header keys", () => {
@@ -95,12 +95,12 @@ describe("localizeSnapshot preset display strings", () => {
 
   test("resolves keys owned by the transport's default namespace after preset and host lookups", () => {
     const i18n = createI18n({
-      locale: "zh-CN",
+      locale: "fr",
       defaultNamespace: "web",
       catalogs: {
-        web: { "zh-CN": { "error.read_only": "旁观者无法控制会话" } },
-        host: { "zh-CN": {} },
-        strings: { "zh-CN": {} },
+        web: { fr: { "error.read_only": "Les spectateurs ne peuvent pas contrôler la session" } },
+        host: { fr: {} },
+        strings: { fr: {} },
       },
     });
     const lt = bindLocalizeTranslator(i18n.t.bind(i18n));
@@ -108,27 +108,27 @@ describe("localizeSnapshot preset display strings", () => {
       detail: string;
       ref: string;
     };
-    expect(out.detail).toBe("旁观者无法控制会话");
-    expect(out.ref).toBe("旁观者无法控制会话");
+    expect(out.detail).toBe("Les spectateurs ne peuvent pas contrôler la session");
+    expect(out.ref).toBe("Les spectateurs ne peuvent pas contrôler la session");
   });
 
   test("probing with has() resolves without missing-key warnings for the namespaces that do not own the key", () => {
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const i18n = createI18n({
-        locale: "zh-CN",
+        locale: "fr",
         defaultNamespace: "web",
         dev: true,
         catalogs: {
-          web: { "zh-CN": { "error.read_only": "旁观者无法控制会话" } },
-          host: { "zh-CN": { "header.speaker_busy": "正在发言…" } },
-          strings: { "zh-CN": { "dnd.check.perception_unusual": "察觉到了异常" } },
+          web: { fr: { "error.read_only": "Les spectateurs ne peuvent pas contrôler la session" } },
+          host: { fr: { "header.speaker_busy": "En train de parler…" } },
+          strings: { fr: { "dnd.check.perception_unusual": "Vous remarquez quelque chose d'inhabituel." } },
         },
       });
       const lt = bindLocalizeTranslator(i18n.t.bind(i18n), i18n.has.bind(i18n));
-      expect(lt("error.read_only")).toBe("旁观者无法控制会话");
-      expect(lt("header.speaker_busy")).toBe("正在发言…");
-      expect(lt("dnd.check.perception_unusual")).toBe("察觉到了异常");
+      expect(lt("error.read_only")).toBe("Les spectateurs ne peuvent pas contrôler la session");
+      expect(lt("header.speaker_busy")).toBe("En train de parler…");
+      expect(lt("dnd.check.perception_unusual")).toBe("Vous remarquez quelque chose d'inhabituel.");
       expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();

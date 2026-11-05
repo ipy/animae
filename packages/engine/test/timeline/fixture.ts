@@ -21,6 +21,7 @@ export function minimalPolicy(overrides?: Partial<ResolvedPolicy>): ResolvedPoli
     intent: { types: ["talk"] },
     intent_rules: [],
     memory: {},
+    appraise: {},
     router: { budget: { syncCallsPerTurn: 2, s2PerTurn: 1, s2Ratio: 0.15, s2ReservedForAnchors: 0.03, maxOutputTokens: { s1: 400, s2: 800 } } },
     render: { retryOnMismatch: 0, recentTurns: 12 },
     cues: { types: {} },

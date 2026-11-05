@@ -4,6 +4,16 @@ import { printError } from "../errors.ts";
 import { openEngine, type OpenEngineOptions } from "../engine-open.ts";
 import { createCommandImagePort } from "../image-command-port.ts";
 
+/**
+ * The lines of an input stream, each terminated by a newline. The RPC server splits its input at newlines itself, so a
+ * line handed over without its terminator would be glued to the next request instead of being answered at once.
+ */
+function terminatedLines(rl: AsyncIterable<string>): AsyncIterable<string> {
+  return (async function* () {
+    for await (const line of rl) yield `${line}\n`;
+  })();
+}
+
 export async function runServe(
   opts: OpenEngineOptions & { stdio: boolean; imageCommand?: string; imageCommandArgs?: string[] },
 ): Promise<number> {
@@ -24,12 +34,9 @@ export async function runServe(
   }
 
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  const read = (async function* () {
-    for await (const line of rl) yield line;
-  })();
 
   const server = createRpcServer(engine, {
-    read,
+    read: terminatedLines(rl),
     write(line: string) {
       process.stdout.write(line);
     },
@@ -59,11 +66,8 @@ export function createStdioRpcSession(
   output: NodeJS.WritableStream,
 ): { run(): Promise<void>; close(): void } {
   const rl = createInterface({ input, crlfDelay: Infinity });
-  const read = (async function* () {
-    for await (const line of rl) yield line;
-  })();
   return createRpcServer(engine, {
-    read,
+    read: terminatedLines(rl),
     write(line: string) {
       output.write(line);
     },

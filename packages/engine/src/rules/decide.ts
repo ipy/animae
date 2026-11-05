@@ -15,48 +15,8 @@ export interface DecideIntentInput {
 export function decideIntent(
   deps: RulesDeps,
   input: DecideIntentInput,
-): { intent: string; scores: Record<string, number>; forced?: boolean; emitEventType?: string } {
+): { intent: string; scores: Record<string, number>; forced?: boolean } {
   const { policy } = deps;
-  const inputClass = input.appraisal.input_class;
-  const resp =
-    inputClass === "normal"
-      ? undefined
-      : policy.input.response[inputClass as "injection_suspect" | "meta_probe"];
-  if (resp && "emit" in resp && (resp.emit || resp.intent)) {
-    if (resp.emit) {
-      // pipeline emits appraisal override separately; intent override here
-    }
-    if (resp.intent || resp.emit) {
-      return {
-        intent: resp.intent ?? policy.intent.types[0] ?? "respond",
-        scores: { [resp.intent ?? ""]: 1 },
-        forced: true,
-        emitEventType: resp.emit,
-      };
-    }
-  }
-  if (resp && "hook" in resp) {
-    const fn = deps.rules.fn(resp.hook);
-    if (fn) {
-      const ctx = buildCelContext(deps, {
-        self: input.owner,
-        other: input.actor,
-        actor: input.actor,
-        event: input.appraisal,
-        sceneId: input.sceneId,
-      });
-      const drafts = deps.rules.run(resp.hook, {
-        stage: "decide",
-        state: deps.state,
-        authored: deps.authored,
-        policy: deps.policy,
-        time: deps.state.time,
-        vars: ctx,
-        rngKey: `decide:${inputClass}`,
-      });
-      void drafts;
-    }
-  }
 
   const l2 = input.fieldEffects;
   if (l2?.intent_force) {

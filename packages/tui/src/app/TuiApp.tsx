@@ -1,4 +1,4 @@
-import { Box, Text, useApp, useWindowSize } from "ink";
+import { Box, Text, useApp } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import type { SgrMouseEvent } from "../input/mouse-sgr.ts";
 import { useTheme } from "../hooks/use-theme.ts";
@@ -17,6 +17,7 @@ import { EventLog } from "../components/EventLog.tsx";
 import { TimelineBrowser } from "../components/TimelineBrowser.tsx";
 import { ExplainView } from "../components/ExplainView.tsx";
 import { Inspector } from "../components/Inspector.tsx";
+import { ModePanel } from "../components/ModePanel.tsx";
 import { LoadSlots } from "../components/LoadSlots.tsx";
 import { SidePanel } from "../components/SidePanel.tsx";
 import { Overlay } from "../components/Overlay.tsx";
@@ -47,6 +48,13 @@ import { buildPaletteEntries } from "../utils/action-list.ts";
 import { TuiI18nProvider, useTuiI18n } from "../i18n/context.tsx";
 import { GalleryPanel } from "../components/GalleryPanel.tsx";
 import { localizeError, type FormatParams } from "@animae/i18n";
+import type { EngineEvent, RouteDecided, RuntimeFallbackUsed, RuntimeModeChanged } from "@animae/engine";
+import { describeModeOutcome } from "../commands/mode.ts";
+import { formatMode, hasRuntime, modePanelRows } from "../utils/mode-display.ts";
+import { requestMode } from "../utils/mode-switch.ts";
+import { lastTurnRewindTarget } from "../utils/rewind-target.ts";
+import { notifyTimelineNavigated } from "../utils/engine-events.ts";
+import { TerminalSizeProvider, useTerminalSize } from "../context/terminal-size-context.tsx";
 
 export interface TuiAppProps extends RunTuiOptions {
   onReady?: () => void;
@@ -119,8 +127,14 @@ export function TuiApp(props: TuiAppProps) {
   );
 
   const Layout = (props.layout ?? defaultLayout) as ComponentType<LayoutProps>;
+  const stdout = props.stdout as { columns?: number; rows?: number } | undefined;
+  const terminalSize =
+    stdout && typeof stdout.columns === "number" && typeof stdout.rows === "number"
+      ? { columns: stdout.columns, rows: stdout.rows }
+      : undefined;
 
   return (
+    <TerminalSizeProvider size={terminalSize}>
     <EngineProvider value={{ engine: props.engine, viewer, actor, displayName: props.displayName }}>
       <ThemeProvider theme={theme}>
         <KeymapProvider keymap={props.keymap}>
@@ -151,6 +165,7 @@ export function TuiApp(props: TuiAppProps) {
         </KeymapProvider>
       </ThemeProvider>
     </EngineProvider>
+    </TerminalSizeProvider>
   );
 }
 
@@ -205,7 +220,7 @@ function TuiShellInner({
   const { state, dispatch, commandApi, config } = useAppState();
   const { submit } = useTurn();
   const { keymap } = useKeymapContext();
-  const { columns, rows } = useWindowSize();
+  const { columns, rows } = useTerminalSize();
   const theme = useTheme();
   const mode = selectLayoutMode(columns, rows);
   const scrollPage = transcriptPageStep(rows);
@@ -215,9 +230,11 @@ function TuiShellInner({
   const handleMouse = useCallback((ev: SgrMouseEvent) => dispatchMouse(ev), [dispatchMouse]);
   const [timelineIdx, setTimelineIdx] = useState(0);
   const [loadIdx, setLoadIdx] = useState(0);
+  const [modeIdx, setModeIdx] = useState(0);
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [galleryRevealed, setGalleryRevealed] = useState<Set<string>>(() => new Set());
-  const [galleryDeletePending, setGalleryDeletePending] = useState(false);
+  /** The captured entry whose removal waits for a second `d`; any other key, or closing the list, withdraws it. */
+  const [galleryDeletePending, setGalleryDeletePending] = useState<string | undefined>(undefined);
   const [galleryTick, setGalleryTick] = useState(0);
   useEffect(() => {
     const hostT = createHostI18n(uiLocale);
@@ -245,6 +262,9 @@ function TuiShellInner({
     useActionRunner();
   const stateRef = useRef(state);
   stateRef.current = state;
+  /** Where the history walk is. Written by every step, so that steps arriving before the next render build on each other. */
+  const historyIndexRef = useRef(state.historyIndex);
+  historyIndexRef.current = state.historyIndex;
 
   useEffect(() => {
     const s = stateRef.current;
@@ -281,11 +301,48 @@ function TuiShellInner({
   };
 
   useEffect(() => {
-    return engine.on("route.decided", (e) => {
-      const tier = (e as { tier?: string }).tier;
-      if (tier === "s1" || tier === "s2") dispatch({ type: "setLastRoute", route: tier });
-    });
-  }, [engine, dispatch]);
+    const offs = [
+      engine.on("route.decided", (e) => {
+        const route = e as EngineEvent & Partial<RouteDecided>;
+        if (!route.appraise || !route.render) return;
+        dispatch({
+          type: "setLastRoute",
+          route: {
+            appraise: route.appraise.backend,
+            render: route.render.backend,
+            ...(route.render.backend === "llm" ? { tier: route.render.tier } : {}),
+          },
+        });
+      }),
+      engine.on("runtime.mode_changed", (e) => {
+        dispatch({ type: "bumpMode" });
+        const change = e as EngineEvent & RuntimeModeChanged;
+        // `before: null` is the mode a timeline starts under; the footer shows it, nothing changed.
+        if (!change.before || !hasRuntime(engine)) return;
+        const models = engine.runtime.models();
+        const before = formatMode(change.before, models);
+        const after = formatMode(change.after, models);
+        if (before === after) return;
+        const explained = change.reason === "budget" || change.reason === "fallback";
+        dispatch({
+          type: "systemLine",
+          text: t(explained ? "mode.switched_reason" : "mode.switched", {
+            before: `[${before}]`,
+            after: `[${after}]`,
+            reason: t(`mode.reason.${change.reason}`),
+          }),
+        });
+      }),
+      engine.on("runtime.fallback_used", (e) => {
+        const fallback = e as EngineEvent & RuntimeFallbackUsed;
+        dispatch({
+          type: "systemLine",
+          text: `⚠ ${t("mode.fallback", { phase: fallback.phase, error: fallback.error?.message ?? "" })}`,
+        });
+      }),
+    ];
+    return () => offs.forEach((off) => off());
+  }, [engine, dispatch, t]);
 
   useEffect(() => {
     const onSignal = () => {
@@ -312,6 +369,17 @@ function TuiShellInner({
     [syncAutocomplete],
   );
 
+  /** An engine call started from a key press failed: say so in the transcript instead of leaving the rejection unhandled. */
+  const reportFailure = (err: unknown) =>
+    commandApi.notify(localizeError(err, (key, params) => t(key, params as FormatParams)), "warn");
+  /** Closes the overlay and withdraws what it was asking for (a rewind, a gallery removal). */
+  const closeOverlay = () => {
+    dispatch({ type: "setOverlay", overlay: undefined });
+    dispatch({ type: "setPendingRewind", eventId: undefined });
+    dispatch({ type: "setFocus", focus: "input" });
+    setGalleryDeletePending(undefined);
+  };
+
   useParsedInput(
     (ev) => {
       const s = stateRef.current;
@@ -327,20 +395,15 @@ function TuiShellInner({
           return;
         }
         if (ev.key.upArrow) {
-          dispatch({ type: "setPalette", open: true, index: Math.max(0, s.paletteIndex - 1) });
+          dispatch({ type: "paletteMove", delta: -1 });
           return;
         }
         if (ev.key.downArrow) {
-          dispatch({ type: "setPalette", open: true, index: s.paletteIndex + 1 });
+          dispatch({ type: "paletteMove", delta: 1 });
           return;
         }
         if (ev.key.backspace) {
-          dispatch({
-            type: "setPalette",
-            open: true,
-            query: s.paletteQuery.slice(0, -1),
-            index: 0,
-          });
+          dispatch({ type: "paletteBackspace" });
           return;
         }
         if (ev.key.return) {
@@ -373,12 +436,7 @@ function TuiShellInner({
           return;
         }
         if (!ev.ctrl && ev.input) {
-          dispatch({
-            type: "setPalette",
-            open: true,
-            query: s.paletteQuery + ev.input,
-            index: 0,
-          });
+          dispatch({ type: "paletteInsert", text: ev.input });
           return;
         }
         return;
@@ -420,10 +478,7 @@ function TuiShellInner({
       });
 
       if (action === "commandPalette") {
-        if (s.overlay) {
-          dispatch({ type: "setOverlay", overlay: undefined });
-          dispatch({ type: "setPendingRewind", eventId: undefined });
-        }
+        if (s.overlay) closeOverlay();
         dispatch({ type: "setPalette", open: true, query: "", index: 0 });
         dispatch({ type: "setFocus", focus: "input" });
         return;
@@ -431,41 +486,90 @@ function TuiShellInner({
 
       if (s.overlay) {
         if (action === "closeOverlay" || ev.key.escape) {
-          dispatch({ type: "setOverlay", overlay: undefined });
-          dispatch({ type: "setPendingRewind", eventId: undefined });
-          dispatch({ type: "setFocus", focus: "input" });
+          closeOverlay();
           return;
         }
         if (s.overlay === "timeline") {
           if (ev.key.upArrow) setTimelineIdx((i) => Math.max(0, i - 1));
-          if (ev.key.downArrow) setTimelineIdx((i) => i + 1);
+          if (ev.key.downArrow) {
+            // stay on the list: a selection past its end would highlight nothing and make Enter do nothing
+            void engine.timeline
+              .branches()
+              .then((bs) => setTimelineIdx((i) => Math.min(Math.max(0, bs.length - 1), i + 1)))
+              .catch(reportFailure);
+          }
           if (ev.key.return) {
-            void engine.timeline.branches().then((bs) => {
-              const name = bs[timelineIdx]?.name;
-              if (name) void engine.timeline.switch(name);
-            });
+            void engine.timeline
+              .branches()
+              .then(async (bs) => {
+                const name = bs[timelineIdx]?.name;
+                if (!name) return;
+                await engine.timeline.switch(name);
+                notifyTimelineNavigated(engine);
+              })
+              .catch((err) => {
+                closeOverlay();
+                reportFailure(err);
+              });
+          }
+        }
+        if (s.overlay === "mode") {
+          const rows = hasRuntime(engine) ? modePanelRows(engine.runtime.mode(), engine.runtime.models()) : [];
+          if (ev.key.upArrow) setModeIdx((i) => Math.max(0, i - 1));
+          if (ev.key.downArrow) setModeIdx((i) => Math.min(Math.max(0, rows.length - 1), i + 1));
+          if (ev.key.return) {
+            const row = rows[Math.min(modeIdx, rows.length - 1)];
+            if (row?.available) {
+              const request = row.kind === "preset" ? row.preset : { s2Tier: row.tier.id };
+              void requestMode(engine, request, "tui:mode-panel")
+                .then((outcome) => {
+                  dispatch({ type: "bumpMode" });
+                  const text = describeModeOutcome(outcome, { t });
+                  if (text) commandApi.notify(text);
+                })
+                .catch((err) =>
+                  commandApi.notify(localizeError(err, (key, params) => t(key, params as FormatParams)), "warn"),
+                );
+            }
           }
         }
         if (s.overlay === "loadSlots") {
           if (ev.key.upArrow) setLoadIdx((i) => Math.max(0, i - 1));
-          if (ev.key.downArrow) setLoadIdx((i) => i + 1);
+          if (ev.key.downArrow) {
+            void engine.timeline
+              .saves()
+              .then((saves) => setLoadIdx((i) => Math.min(Math.max(0, saves.length - 1), i + 1)))
+              .catch(reportFailure);
+          }
           if (ev.key.return) {
-            void engine.timeline.saves().then((saves) => {
-              const slot = saves[loadIdx];
-              if (slot) {
-                void engine.timeline
-                  .load(slot)
-                  .then(() => commandApi.notify(t("command.loaded", { label: slot.label })));
-              }
-            });
+            void engine.timeline
+              .saves()
+              .then(async (saves) => {
+                const slot = saves[loadIdx];
+                if (!slot) return;
+                await engine.timeline.load(slot);
+                notifyTimelineNavigated(engine);
+                closeOverlay();
+                commandApi.notify(t("command.loaded", { label: slot.label }));
+              })
+              .catch((err) => {
+                closeOverlay();
+                reportFailure(err);
+              });
           }
         }
         if (s.overlay === "gallery") {
           const bump = () => setGalleryTick((n) => n + 1);
           const fail = (err: unknown) =>
             commandApi.notify(localizeError(err, (key, params) => t(key, params as FormatParams)), "warn");
+          if (ev.name !== "d") setGalleryDeletePending(undefined);
           if (ev.key.upArrow) setGalleryIdx((i) => Math.max(0, i - 1));
-          if (ev.key.downArrow) setGalleryIdx((i) => i + 1);
+          if (ev.key.downArrow) {
+            void engine.gallery
+              .list({ locale: uiLocale })
+              .then((items) => setGalleryIdx((i) => Math.min(Math.max(0, items.length - 1), i + 1)))
+              .catch(fail);
+          }
           if (ev.key.return) {
             void engine.gallery.list({ locale: uiLocale }).then((items) => {
               const item = items[galleryIdx];
@@ -516,30 +620,34 @@ function TuiShellInner({
             void engine.gallery.list({ locale: uiLocale }).then((items) => {
               const item = items[galleryIdx];
               if (!item || item.kind !== "captured") return;
-              if (!galleryDeletePending) {
-                setGalleryDeletePending(true);
+              if (galleryDeletePending !== item.id) {
+                setGalleryDeletePending(item.id);
                 commandApi.notify(t("gallery.delete_confirm"), "warn");
                 return;
               }
-              setGalleryDeletePending(false);
+              setGalleryDeletePending(undefined);
               void engine.gallery.remove(item.id).then(bump).catch(fail);
             });
           }
-          if (ev.key.escape && galleryDeletePending) {
-            setGalleryDeletePending(false);
-          }
         }
         if (s.overlay === "rewindConfirm" && ev.key.return && s.pendingRewindEventId) {
-          void engine.timeline.rewind(s.pendingRewindEventId).then(() => {
-            dispatch({ type: "setPendingRewind", eventId: undefined });
-            dispatch({ type: "setOverlay", overlay: undefined });
-            commandApi.notify(t("rewind.rewound_branch"));
-          });
+          void engine.timeline
+            .rewind(s.pendingRewindEventId)
+            .then(() => {
+              notifyTimelineNavigated(engine);
+              closeOverlay();
+              commandApi.notify(t("rewind.rewound_branch"));
+            })
+            .catch((err) => {
+              closeOverlay();
+              reportFailure(err);
+            });
         }
         return;
       }
 
       if (s.choices) {
+        if (s.pending) return;
         if (ev.key.escape) {
           if (s.focus === "input") {
             dispatch({ type: "setChoices", choices: undefined });
@@ -553,20 +661,11 @@ function TuiShellInner({
           return;
         }
         if (ev.key.upArrow || action === "choiceUp") {
-          dispatch({
-            type: "setChoices",
-            choices: { ...s.choices, selected: Math.max(0, s.choices.selected - 1) },
-          });
+          dispatch({ type: "moveChoice", delta: -1 });
           return;
         }
         if (ev.key.downArrow || action === "choiceDown") {
-          dispatch({
-            type: "setChoices",
-            choices: {
-              ...s.choices,
-              selected: Math.min(s.choices.choices.length - 1, s.choices.selected + 1),
-            },
-          });
+          dispatch({ type: "moveChoice", delta: 1 });
           return;
         }
         const pick = choiceIndexFromKey(ev.name, ev.input);
@@ -719,24 +818,25 @@ function TuiShellInner({
       if (action === "timeline") dispatch({ type: "setOverlay", overlay: "timeline" });
       if (action === "explain") dispatch({ type: "setOverlay", overlay: "explain" });
       if (action === "inspector") dispatch({ type: "setOverlay", overlay: "inspector" });
+      if (action === "mode") dispatch({ type: "setOverlay", overlay: "mode" });
       if (action === "save") {
         void engine.timeline
           .save()
-          .then((s) =>
-            commandApi.notify(t("command.saved", { label: s.label, eventId: s.eventId })),
-          );
+          .then((s) => commandApi.notify(t("command.saved", { label: s.label, eventId: s.eventId })))
+          .catch(reportFailure);
       }
       if (action === "load") dispatch({ type: "setOverlay", overlay: "loadSlots" });
       if (action === "rewindTurn") {
-        void engine.timeline.events({ limit: 80 }).then((events) => {
-          const target = events.at(-2)?.id;
-          if (!target) {
-            commandApi.notify(t("rewind.no_prior_turn"), "warn");
-            return;
-          }
-          dispatch({ type: "setPendingRewind", eventId: target });
-          dispatch({ type: "setOverlay", overlay: "rewindConfirm" });
-        });
+        void lastTurnRewindTarget(engine)
+          .then((target) => {
+            if (!target) {
+              commandApi.notify(t("rewind.no_prior_turn"), "warn");
+              return;
+            }
+            dispatch({ type: "setPendingRewind", eventId: target });
+            dispatch({ type: "setOverlay", overlay: "rewindConfirm" });
+          })
+          .catch(reportFailure);
       }
     },
     {
@@ -772,16 +872,13 @@ function TuiShellInner({
   }
 
   function applyHistory(delta: number) {
-    const hist = state.inputHistory;
+    const hist = stateRef.current.inputHistory;
     if (hist.length === 0) return;
-    const idx =
-      state.historyIndex === undefined
-        ? delta < 0
-          ? hist.length - 1
-          : undefined
-        : state.historyIndex + delta;
+    const at = historyIndexRef.current;
+    const idx = at === undefined ? (delta < 0 ? hist.length - 1 : undefined) : at + delta;
     if (idx === undefined || idx < 0 || idx >= hist.length) return;
     const line = hist[idx]!;
+    historyIndexRef.current = idx;
     patchInputDraft(line, graphemeCount(line));
     dispatch({ type: "setHistoryIndex", index: idx });
   }
@@ -810,6 +907,7 @@ function TuiShellInner({
       {state.overlay === "timeline" ? <TimelineBrowser selectedBranch={timelineIdx} /> : null}
       {state.overlay === "explain" ? <ExplainView /> : null}
       {state.overlay === "inspector" ? <Inspector /> : null}
+      {state.overlay === "mode" ? <ModePanel selected={modeIdx} /> : null}
       {state.overlay === "loadSlots" ? <LoadSlots selected={loadIdx} /> : null}
       {state.overlay === "gallery" ? (
         <GalleryPanel

@@ -1,6 +1,6 @@
 {
   "command": {
-    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :help :quit",
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :mode [preset] :help :quit",
     "saved": "Saved {label} @ {eventId}",
     "load_usage": "Usage: :load <slot>",
     "loaded": "Loaded {slot}",
@@ -11,7 +11,13 @@
     "query_usage": "Usage: :query <viewer> <path>",
     "advance_usage": "Usage: :advance <duration>",
     "advanced": "Advanced {duration}",
-    "unknown": "Unknown command: {name}"
+    "unknown": "Unknown command: {name}",
+    "mode_status": "Mode {mode} (preset: {preset}; presets: {presets}; S2 tiers: {tiers})",
+    "mode_pending": "-> {mode} after this turn",
+    "mode_usage": "Usage: :mode [status] | :mode <full|judge-only|narrate-only|rule> | :mode s1 llm|rule | :mode s2 llm|rule|<tier>",
+    "mode_queued": "Mode change to {mode} takes effect after this turn.",
+    "mode_unchanged": "Already in mode {mode}.",
+    "mode_changed": "Mode {before} -> {after}"
   },
   "gallery": {
     "help": "Usage: animae gallery list|show|capture|render|cancel|remove|pin|ratings|jobs [--json]",
@@ -39,5 +45,8 @@
     "gallery_busy": "Gallery queue is full; try again later (GALLERY_BUSY).",
     "gallery_brief_invalid": "Could not build a valid image brief (GALLERY_BRIEF_INVALID).",
     "gallery_generation_failed": "Image generation failed (GALLERY_GENERATION_FAILED)."
+  },
+  "plain": {
+    "reset": "(the reply above was discarded: {reason} - the engine answers again below)"
   }
 }

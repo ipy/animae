@@ -1,4 +1,5 @@
 import type { Engine } from "../../src/api.ts";
+import { RUNTIME_MODE_PRESET_VALUES, type ModelsInfo, type RuntimeMode } from "../../src/runtime/types.ts";
 import type { EngineEvent, TurnChunk, TurnId } from "../../src/types.ts";
 
 export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
@@ -7,6 +8,15 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
   const emit = (kind: string, partial: Partial<EngineEvent> = {}) => {
     const e = { id: "evt_0001", kind, t: { day: 1, minute: 0 }, sid: "s1", source: "test", because: [], ...partial } as EngineEvent;
     listeners.get(kind)?.forEach((h) => h(e));
+  };
+
+  let runtimeMode: RuntimeMode = { appraise: "llm", render: "llm" };
+  const modelsInfo: ModelsInfo = {
+    s1: "s1",
+    s2: "s2",
+    s1Llm: true,
+    s2Tiers: [{ id: "only", model: "s2", tags: [] }],
+    s2Default: "only",
   };
 
   const base: Engine = {
@@ -97,14 +107,27 @@ export function createFakeEngine(overrides: Partial<Engine> = {}): Engine {
       root: "/tmp",
       language: "en",
       locale: "en",
-      promptLocale: "zh-CN",
+      promptLocale: "fr",
       outputLocale: "en",
       contentLocale: "en",
       branch: "main",
       sessionId: "sess",
-      models: { s1: "s1", s2: "s2" },
+      models: modelsInfo,
+      mode: { ...runtimeMode },
       modelMode: "record",
     }),
+    runtime: {
+      mode: () => ({ ...runtimeMode }),
+      pending: () => null,
+      switchAt: "turn_boundary",
+      setMode: async (req) => {
+        const before = { ...runtimeMode };
+        runtimeMode = typeof req === "string" ? { ...RUNTIME_MODE_PRESET_VALUES[req] } : { ...runtimeMode, ...req };
+        emit("runtime.mode_changed", { before, after: { ...runtimeMode }, reason: "api" } as Partial<EngineEvent>);
+        return { before, after: { ...runtimeMode }, pending: false };
+      },
+      models: () => modelsInfo,
+    },
     gallery: {
       generatorAvailable: () => false,
       ratings: () => [],

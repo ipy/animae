@@ -65,7 +65,7 @@ Generate TS from a directory: `bun scripts/gen-mod-bundle.ts` (see `packages/eng
 
 Same logical path: **later layer wins** (full file replace). **`*.patch.yaml`** deep-merges into the target. Character **`card.patch.yaml`** merges frontmatter; **`card.append.md`** appends to persona body.
 
-**Mod locale overlays:** After a mod layer wins on a path, the engine applies `mods/<modId>/locales/<locale>/…` the same way as root `locales/<locale>/…` (full replace, `.patch.yaml`, `card.append.md`). Use this for LLM-facing mod prose without CJK in neutral mod files.
+**Mod locale overlays:** After a mod layer wins on a path, the engine applies `mods/<modId>/locales/<locale>/…` the same way as root `locales/<locale>/…` (full replace, `.patch.yaml`, `card.append.md`). Use this for LLM-facing mod prose in another language without putting it in the neutral mod files.
 
 ### Patch operators
 
@@ -86,6 +86,8 @@ summary: overridden
 tags:
   $append: [modded]
 ```
+
+**Patching a policy document.** A patch may target a game policy that itself carries an unresolved `$append` / `$prepend` marker (the policy extends an array of the preset it sits on, for example `appraise.patterns`). The patch composes with the marker (`$append` lists concatenate after the marker's list, `$prepend` lists go before it) instead of flattening it into a plain array, so the policy merge still adds to the preset's array rather than replacing it. A game uses this to keep a language-neutral placeholder (`patterns: { $append: [] }`) in its policy and let each `locales/<tag>/policies/<name>.patch.yaml` append that language's keyword patterns.
 
 ## Activation
 

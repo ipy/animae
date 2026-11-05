@@ -15,7 +15,9 @@ const engine = await createEngine({
   modBundles: [embeddedModFromGenScript], // optional embedded ModBundle (+ setup())
   modelMode: "record", // default if omitted in many CLI paths
   seed: 42,
-  models: { s1: modelPort, s2: modelPort },
+  // models optional: omit both roles → rule backend only (zero tokens)
+  models: { s1: modelPort, s2: modelPort }, // or s2: { default, tiers: [{ id, port }], routing }
+  mode: "full", // optional override of animae.yaml: full | judge-only | narrate-only | rule
   ports: {
     storage: FsStorage("/path/to/data"), // optional; defaults to root
     embedding: embeddingPort,            // optional vector search
@@ -30,19 +32,48 @@ for await (const chunk of engine.scene.turn({
   text: "Hello",
   addressee: "npc",
 })) {
-  if (chunk.type === "text") process.stdout.write(chunk.text);
+  if (chunk.type === "narration") process.stdout.write(`[${chunk.style ?? "normal"}] ${chunk.text}`);
+  else if (chunk.type === "text") process.stdout.write(chunk.text);
+  else if (chunk.type === "reset") { /* discard buffered output since the player's line */ }
 }
 
 await engine.close();
 ```
 
-Public surface: `api.ts` `Engine` interface (world, scene, timeline, entities, fields, director, query, …).
+Public surface: `api.ts` `Engine` interface (world, scene, timeline, entities, fields, director, `runtime`, query, …).
+
+### Runtime mode (library)
+
+```typescript
+const before = engine.runtime.mode(); // { appraise: "llm"|"rule", render: "llm"|"rule", s2Tier? }
+const { after, pending } = await engine.runtime.setMode("rule", { reason: "api", trigger: "settings-ui" });
+// pending === true when switchAt is turn_boundary and a turn is streaming
+engine.runtime.models(); // { s1, s2, s1Llm, s2Tiers, s2Default?, s2Escalate? } — safe for UI labels
+```
+
+Presets: `full` (LLM/LLM), `judge-only` (LLM/rule), `narrate-only` (rule/LLM), `rule` (rule/rule). See [spec Appendix B](./spec.md#appendix-b-runtime-modes-and-switching).
+
+### Zero-token setup
+
+```typescript
+import { createEngine } from "@animae/engine";
+import { preset as presetRule } from "@animae/preset-rule";
+
+const engine = await createEngine({
+  root: "/path/to/data",
+  presets: [presetRule],
+  mode: "rule",
+  // no models — both S1 and S2 roles are served by createRuleModelPort internally
+});
+```
+
+Author rule-backend copy in policy (`render.layers`, `appraise.patterns`, `choices.rules`, …) or extend `@animae/preset-base` / `@animae/preset-rule`. Validate with `animae validate --mode rule`.
 
 ## Ports
 
 | Port | Role |
 |------|------|
-| `ModelPort` | Structured LLM calls (appraise, render, reflect, generate) |
+| `ModelPort` | S1 structured calls (`object`) and S2 streaming (`stream`); id `rule` for the built-in rule backend (`createRuleModelPort`) |
 | `StoragePort` | Authored files + timeline JSONL |
 | `EmbeddingPort` | Optional memory vector retrieval |
 | `ImagePort` | Optional CG gallery image generation ([gallery.md](./gallery.md)) |
@@ -80,7 +111,13 @@ Wrapping order: `withRecording` (inner) then `withModelCallLog` (outer). Full AP
 
 ### Turn stream consumption
 
-When bridging `engine.scene.turn` or `timeline.replay` to UI, use `applyTextTurnChunk` so transcript rows and stream callbacks stay **one row per utterance** (see [pipeline-and-events.md](./pipeline-and-events.md#turnchunk-streaming-render-step)). `@animae/host` exports `consumeTurnStream` with `onStreamStart` once per utterance, `onStreamDelta(requestId, fragment)` for true deltas, and `onStreamEnd` on `done` or abort.
+When bridging `engine.scene.turn` or `timeline.replay` to UI:
+
+- **`text`:** `createUtteranceStreamState`, `applyTextTurnChunk`, `closeUtteranceStream` — one row per utterance.
+- **`narration`:** `createParagraphStreamState`, `applyNarrationTurnChunk`, `closeParagraphStream` — one row per paragraph; `style` is `normal` or `scene_break`.
+- **`reset`:** drop all streamed `text` / `narration` / `cue` / `choices` since the actor's echoed line (`isActorEcho` helps identify the line to keep).
+
+`@animae/host` `consumeTurnStream` implements the full contract (including Web `stream` phases). See [spec Section 20.1](./spec.md#201-typescript-api) and [pipeline-and-events.md](./pipeline-and-events.md) (`TurnChunk` streaming section).
 
 ## Determinism checklist
 

@@ -76,6 +76,7 @@ export interface FakeKernelOpts {
   world?: Partial<Kernel["m"]["world"]>;
   director?: Partial<Kernel["m"]["director"]>;
   embedding?: Kernel["embedding"];
+  s1Handler?: (req: { label: string }) => unknown;
   s2Handler?: (req: { label: string }) => unknown;
   i18n?: Partial<Kernel["i18n"]>;
   displayText?: Kernel["displayText"];
@@ -113,7 +114,7 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
     rng: (key) => createRng(authored.config.seed, "main", key),
     artifacts,
     recordings: { mode: "live", lookup: () => undefined, record: async () => {} },
-    append: async (drafts) => {
+    append: async (drafts, ctx?) => {
       const out: EngineEvent[] = [];
       for (const d of drafts) {
         seq += 1;
@@ -124,8 +125,10 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
           kind,
           t: state.time,
           sid: "sess",
-          source: source ?? "test",
-          because: because ?? [],
+          source: ctx?.source ?? source ?? "test",
+          because: ctx?.because ?? because ?? [],
+          ...(ctx?.turn ? { turn: ctx.turn } : {}),
+          ...(ctx?.scene ? { scene: ctx.scene } : {}),
         } as EngineEvent;
         events.push(e);
         state = reduce(state, e, policy);
@@ -173,10 +176,17 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
     rules,
     timeline,
     models: {
-      s1: { id: "test/s1", object: async <T>() => ({}) as T, stream: async function* () {}, usage: () => ({ inputTokens: 0, outputTokens: 0 }) },
+      s1: {
+        id: "test/s1",
+        // reflection is an S1 job; every other structured call answers an empty object unless a test scripts it
+        object: async <T>(req: { label: string }) =>
+          (opts.s1Handler?.(req) ?? (req.label === "reflect" ? { summaries: ["s1"], goal_changes: [], new_claims: [] } : {})) as T,
+        stream: async function* () {},
+        usage: () => ({ inputTokens: 0, outputTokens: 0 }),
+      },
       s2: {
         id: "test/s2",
-        object: async <T>(req: { label: string }) => (opts.s2Handler?.(req) ?? { summaries: ["s1"], goal_changes: [], new_claims: [] }) as T,
+        object: async <T>(req: { label: string }) => (opts.s2Handler?.(req) ?? {}) as T,
         stream: async function* () {},
         usage: () => ({ inputTokens: 0, outputTokens: 0 }),
       },
@@ -191,9 +201,9 @@ export function createFakeKernel(opts: FakeKernelOpts = {}): { k: Kernel; emitte
       template: () => undefined,
       knowledge: () => authored.knowledge,
     },
-    emit: async (drafts) => {
+    emit: async (drafts, ctx?) => {
       emitted.push(...drafts);
-      return timeline.append(drafts);
+      return timeline.append(drafts, ctx);
     },
     m: {
       fields: opts.fields ?? ({

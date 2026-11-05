@@ -6,9 +6,9 @@ import type { PromptSegments } from "../ports.ts";
 import type { KnowledgeDoc } from "../schema/authored.ts";
 import type { CharacterId } from "../types.ts";
 import { memorySyncList } from "../memory/service.ts";
-import { routerBudgetK } from "../router/policy-access.ts";
+import { s2MaxOutputTokens } from "../router/policy-access.ts";
 import type { PromptInput } from "./types.ts";
-import { modelCelExtra } from "./model-cel.ts";
+import { modelCelExtra, type ModelCelSelector } from "./model-cel.ts";
 import { historyToMessages } from "./history.ts";
 import { promptText } from "./prompt-text.ts";
 import { prepareAuthoredProse } from "./prompt-prose.ts";
@@ -100,12 +100,16 @@ function nameGlossary(k: Kernel, i: PromptInput, lang: string): string {
   return getPromptSection(promptLocale(k), "name_glossary", { tag: lang, rows: list });
 }
 
-function tierLengthHint(k: Kernel, tier: PromptInput["tier"]): string {
-  const budget = routerBudgetK(k).maxOutputTokens;
-  const max = tier === "s2" ? budget.s2 : budget.s1;
+/** Length guidance for an S2 render: a short main beat on the default tier, a richer one on the escalation tier. */
+function renderLengthHint(k: Kernel, tier: string, escalated: boolean): string {
+  const max = s2MaxOutputTokens(k.policy, tier);
   const loc = promptLocale(k);
-  if (tier === "s2") return getPromptSection(loc, "tier_s2", { max });
-  return getPromptSection(loc, "tier_s1", { max });
+  return getPromptSection(loc, escalated ? "render_length_escalated" : "render_length_standard", { max });
+}
+
+/** Which model answers this prompt, as the `model` CEL variable sees it: S1 for appraise, an S2 tier for render. */
+function promptModel(i: PromptInput): ModelCelSelector {
+  return i.purpose === "render" ? { kind: "s2", ...(i.tier !== undefined ? { tier: i.tier } : {}) } : { kind: "s1" };
 }
 
 function formatCueSpec(k: Kernel): string {
@@ -219,7 +223,7 @@ function staticSegment(k: Kernel, i: PromptInput): { text: string; dropped: stri
     other: i.addressee,
     sceneId: i.scene.id,
     event: i.appraisal,
-    extra: modelCelExtra(k, i.tier),
+    extra: modelCelExtra(k, promptModel(i)),
   });
   const inj = k.m.memory.knowledge({ owner: i.speaker, location: i.scene.location, sceneId: i.scene.id, ctx });
   const alwaysCap = maxStatic ? Math.floor(maxStatic * 0.28) : undefined;
@@ -367,7 +371,7 @@ function semiStaticSegment(k: Kernel, i: PromptInput, attachedDocIds: Set<string
     other: i.addressee,
     sceneId: i.scene.id,
     event: i.appraisal,
-    extra: modelCelExtra(k, i.tier),
+    extra: modelCelExtra(k, promptModel(i)),
   });
   const inj = k.m.memory.knowledge({ owner: i.speaker, location: i.scene.location, sceneId: i.scene.id, ctx });
   const indexCandidates = inj.index.filter((x) => !attachedDocIds.has(x.id)).slice(0, knowledgeIndexMax(k));
@@ -436,6 +440,14 @@ function fieldEffectsText(k: Kernel, fx: PromptInput["fieldEffects"]): string {
     parts.push(
       getPromptSection(loc, "field_salience", {
         rows: fx.salience.map((s) => `${s.tags.join("+")}:${s.boost}`).join("; "),
+      }),
+    );
+  }
+  if (fx.event_prob && Object.keys(fx.event_prob).length) {
+    const keys = Object.keys(fx.event_prob).sort();
+    parts.push(
+      getPromptSection(loc, "field_event_prob", {
+        rows: keys.map((id) => `${id}:${fx.event_prob![id]}`).join("; "),
       }),
     );
   }
@@ -511,7 +523,7 @@ function recalledLines(k: Kernel, i: PromptInput, shownDocIds: ReadonlySet<strin
       if (shownDocIds.has(h.doc?.id ?? h.id)) continue;
       const body = prepareAuthoredProse(k, h.text);
       const text = trimAtBoundary(body, caps.knowledgeChars);
-      const more = i.tier === "s2" && text.length < body.length ? getPromptSection(loc, "recall_knowledge_more", { id: h.id }) : "";
+      const more = i.tier !== undefined && text.length < body.length ? getPromptSection(loc, "recall_knowledge_more", { id: h.id }) : "";
       out.push(
         getPromptSection(loc, "recall_knowledge_item", {
           name: prepareAuthoredProse(k, h.doc?.name ?? h.id),
@@ -531,7 +543,7 @@ function dynamicSegment(
   whenDocs: KnowledgeDoc[],
   attachedDocIds: Set<string>,
 ): { text: string; dropped: string[] } {
-  const lengthHint = i.purpose === "render" && i.tier ? tierLengthHint(k, i.tier) : "";
+  const lengthHint = i.purpose === "render" && i.tier !== undefined ? renderLengthHint(k, i.tier, i.escalated === true) : "";
 
   // Most important document first: when the budget is tight the lowest-priority documents are the ones omitted.
   // Contextual knowledge steers how the narration is written; the appraisal only classifies the player's line (and
@@ -621,13 +633,16 @@ function userMessage(k: Kernel, i: PromptInput): string {
 
 /** Build prompt segments for the turn pipeline (deterministic ordering; see docs/pipeline-and-events.md). */
 export function buildPromptSegments(k: Kernel, i: PromptInput): PromptSegments {
+  const eventText =
+    i.purpose === "render" ? (i.playerText ?? "") : (i.actorText ?? i.appraisal?.type ? "" : "");
+  const appraisal = i.appraisal;
   const ctx = k.celContext({
     self: i.speaker,
     other: i.addressee,
     actor: i.addressee,
-    event: i.appraisal,
+    event: appraisal ? { ...appraisal, text: eventText } : { text: eventText },
     sceneId: i.scene.id,
-    extra: modelCelExtra(k, i.tier),
+    extra: modelCelExtra(k, promptModel(i)),
   });
   const inj = k.m.memory.knowledge({ owner: i.speaker, location: i.scene.location, sceneId: i.scene.id, ctx });
 
@@ -635,7 +650,7 @@ export function buildPromptSegments(k: Kernel, i: PromptInput): PromptSegments {
   for (const d of inj.always) attachedDocIds.add(d.id);
 
   const staticBuilt = staticSegment(k, i);
-  const showKnowledgeIndex = i.purpose === "render" && i.tier === "s2";
+  const showKnowledgeIndex = i.purpose === "render" && i.tier !== undefined;
   const semiBuilt = semiStaticSegment(k, i, attachedDocIds, showKnowledgeIndex);
   const dynamicBuilt = dynamicSegment(k, i, inj.when, attachedDocIds);
 

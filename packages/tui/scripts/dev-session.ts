@@ -9,10 +9,11 @@ import { defaultLayout } from "../src/layout/default-layout.tsx";
 import { copyDemoDataRoot } from "./copy-demo-data.ts";
 import { createDemoScriptedModels, type TurnScript } from "./scripted-models.ts";
 import { DemoSidePanel } from "../src/panels/demo-side-panel.tsx";
-import type { ModelPort, PromptSegments } from "@animae/engine";
+import type { ModelPort, PresetBundle, PromptSegments } from "@animae/engine";
 import type { CustomCommand } from "../src/types.ts";
 import type { ThemePatch } from "../src/theme/schema.ts";
 import qaKeys from "./qa-scenario-keys.json";
+import { registerPtyFrenchLocalePack } from "./pty-locale-pack.ts";
 
 /** The appraise user message wraps the actor's text in locale-independent `<<<ACTOR_INPUT>>>` markers. */
 function actorTextFromSegments(segments: PromptSegments | undefined): string {
@@ -46,8 +47,17 @@ function injectMidStreamErrors(port: ModelPort): ModelPort {
   };
 }
 
-const CJK_RENDER: TurnScript["render"] = {
-  text: "Hello — demo CJK 你好，世界！",
+/** The e2e fixture with quick replies on, so scripted renders may carry `choices`. */
+const demoPreset: PresetBundle = {
+  ...e2ePreset,
+  policies: [
+    ...e2ePreset.policies,
+    { name: "dev-choices.yaml", doc: { choices: { enabled: true, count: 3, filter: "true" } } },
+  ],
+};
+
+const DEMO_RENDER: TurnScript["render"] = {
+  text: "Hello — demo with accents: café, naïve, résumé.",
   cues: [
     { type: "expression", args: { name: "smile" }, at: 0 },
     { type: "action", args: { text: "waves" }, at: 4 },
@@ -58,6 +68,13 @@ const CJK_RENDER: TurnScript["render"] = {
   ],
 };
 
+/** East Asian wide characters (fullwidth forms occupy two terminal columns) mixed with narrow text. */
+const WIDE_RENDER: TurnScript["render"] = {
+  text: "Wide samples: \uff21\uff22\uff23 \uff11\uff12\uff13 \uff57\uff49\uff44\uff45 then narrow text again.",
+  cues: [{ type: "expression", args: { name: "focus" }, at: 0 }],
+  choices: [],
+};
+
 const SLOW_RENDER: TurnScript["render"] = {
   text: "Typewriter demo: longer line for mid-screenshot capture.",
   cues: [{ type: "expression", args: { name: "focus" }, at: 0 }],
@@ -65,7 +82,7 @@ const SLOW_RENDER: TurnScript["render"] = {
 };
 
 const SCRIPTS: TurnScript[] = [
-  { match: "", appraise: { type: "chat", intensity: 0.5 }, render: CJK_RENDER },
+  { match: "", appraise: { type: "chat", intensity: 0.5 }, render: DEMO_RENDER },
   { match: "chat", appraise: { type: "chat", intensity: 0.45 } },
   {
     match: "trigger-error",
@@ -73,6 +90,7 @@ const SCRIPTS: TurnScript[] = [
     render: { text: "This line fails mid-stream.", cues: [], choices: [] },
   },
   { match: "slow", appraise: { type: "chat", intensity: 0.4 }, render: SLOW_RENDER },
+  { match: "wide", appraise: { type: "chat", intensity: 0.5 }, render: WIDE_RENDER },
 ];
 
 type ScenarioKeys = { readyMs: number; delayMs: number; keys: string[] };
@@ -94,7 +112,7 @@ const SCENARIO_META: Record<string, Omit<Scenario, keyof ScenarioKeys>> = {
     theme: { typewriter: { charsPerSecond: 40, enabled: true } },
   },
   typewriter: { scene: { location: "tavern", participants: ["player", "npc1"] } },
-  cjk: { scene: { location: "tavern", participants: ["player", "npc1"] } },
+  wide: { scene: { location: "tavern", participants: ["player", "npc1"] } },
   choices: { scene: { location: "tavern", participants: ["player", "npc1"] } },
   sidepanel: { scene: { location: "tavern", participants: ["player", "npc1", "npc2"] } },
   help: { scene: false },
@@ -164,6 +182,9 @@ function scheduleKeyInjection(scenario: Scenario) {
 }
 
 async function main() {
+  if (process.env.TUI_PTY_DRIVER === "1") {
+    registerPtyFrenchLocalePack();
+  }
   const { batch, cols, rows } = parseArgs(process.argv.slice(2));
   const scenario = batch ? SCENARIOS[batch] : undefined;
   if (batch && !scenario) {
@@ -177,7 +198,7 @@ async function main() {
     s1: injectMidStreamErrors(baseModels.s1),
     s2: injectMidStreamErrors(baseModels.s2),
   };
-  const engine = await createEngine({ root, presets: [e2ePreset], models, modelMode: "record", seed: 7 });
+  const engine = await createEngine({ root, presets: [demoPreset], models, modelMode: "record", seed: 7 });
 
   if (batch) {
     process.env.COLUMNS = String(cols);

@@ -59,13 +59,14 @@ export function buildHandlerMap(
     return opts.turnMutex.run(async () => {
       const bag = params as Record<string, unknown>;
       const requestId = bag.__requestId as string | number | undefined;
-      const p = paramsObject(bag, ["sceneId", "actor", "text", "addressee", "choiceId"]);
+      const p = paramsObject(bag, ["sceneId", "actor", "text", "addressee", "choiceId", "outputLocale"]);
       const iter = engine.scene.turn({
         sceneId: requireString(p.sceneId, "sceneId") as never,
         actor: requireString(p.actor, "actor"),
         text: requireString(p.text, "text"),
         addressee: p.addressee as string | undefined,
         choiceId: p.choiceId as string | undefined,
+        outputLocale: typeof p.outputLocale === "string" ? p.outputLocale : undefined,
       });
       return consumeTurnStream(iter, opts.onStreamChunk, requestId);
     });
@@ -142,6 +143,28 @@ export function buildHandlerMap(
     return engine.entities.promote(requireString(p.id, "id"), p.to as never);
   });
 
+  bind("entities.setAlias", async (params) => {
+    const p = paramsObject(params, ["input"]);
+    await engine.entities.setAlias(p.input as never);
+    return null;
+  });
+
+  bind("entities.spawn", async (params) => {
+    const p = paramsObject(params, ["spec", "opts"]);
+    return engine.entities.spawn(p.spec as never, p.opts as never);
+  });
+
+  bind("entities.retire", async (params) => {
+    const p = paramsObject(params, ["ref", "opts"]);
+    await engine.entities.retire(requireString(p.ref, "ref"), p.opts as never);
+    return null;
+  });
+
+  bind("entities.generateFromBrief", async (params) => {
+    const p = paramsObject(params, ["brief", "opts"]);
+    return engine.entities.generateFromBrief(p.brief as never, p.opts as never);
+  });
+
   bind("fields.declare", (params) => {
     const p = paramsObject(params, ["f"]);
     engine.fields.declare(p.f as never);
@@ -215,7 +238,45 @@ export function buildHandlerMap(
 
   bind("reload", () => engine.reload());
 
+  bind("setUiLocale", (params) => {
+    const p = paramsObject(params, ["locale"]);
+    engine.setUiLocale(requireString(p.locale, "locale"));
+    return null;
+  });
+
+  bind("display.resolve", (params) => {
+    const p = paramsObject(params, ["value", "opts"]);
+    return engine.display.resolve(p.value, p.opts as never);
+  });
+
+  bind("display.entityDisplayName", (params) => {
+    const p = paramsObject(params, ["entityId", "opts"]);
+    return engine.display.entityDisplayName(requireString(p.entityId, "entityId"), p.opts as never);
+  });
+
+  bind("mods", () => engine.mods());
+
   bind("info", () => engine.info());
+
+  bind("runtime.mode", () => ({
+    mode: engine.runtime.mode(),
+    pending: engine.runtime.pending(),
+    switchAt: engine.runtime.switchAt,
+    models: engine.runtime.models(),
+  }));
+
+  // Not behind the turn mutex: a switch requested while a turn streams is queued and applies at the turn boundary.
+  bind("runtime.setMode", async (params) => {
+    const p = paramsObject(params, ["mode", "trigger"]);
+    const mode = p.mode;
+    if (typeof mode !== "string" && (mode === null || typeof mode !== "object" || Array.isArray(mode))) {
+      throw new RpcParamError("mode must be a preset name or an object");
+    }
+    return engine.runtime.setMode(mode as never, {
+      reason: "api",
+      trigger: typeof p.trigger === "string" ? p.trigger : "rpc:runtime.setMode",
+    });
+  });
 
   bind("gallery.list", async (params) => {
     const p = paramsObject(params, ["opts"]);

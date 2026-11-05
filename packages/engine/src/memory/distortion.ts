@@ -28,15 +28,17 @@ export async function applyDistortion(k: Kernel, hits: RetrievalHit[], rngKey: s
     const instruction = INSTRUCTIONS[kind] ?? INSTRUCTIONS.intensify!;
     const distorted: RetrievalHit = { ...hit, distortion: instruction, distortionKind: kind };
     out.push(distorted);
-    await k.emit([
-      {
-        kind: "memory.distorted",
-        source: "memory",
-        memoryId: hit.id,
-        distortionKind: kind,
-        owner: hit.entry?.branch ? undefined : undefined,
-      } as import("../types.ts").EventDraft,
-    ]);
+    if (hit.owner) {
+      await k.emit([
+        {
+          kind: "memory.distorted",
+          source: "memory",
+          memoryId: hit.id,
+          distortionKind: kind,
+          owner: hit.owner,
+        } as import("../types.ts").EventDraft,
+      ]);
+    }
   }
   return out;
 }

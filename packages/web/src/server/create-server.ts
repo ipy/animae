@@ -3,9 +3,9 @@ import type { SessionHost } from "@animae/host";
 import { randomUUID } from "node:crypto";
 import type { AssetProvider } from "../assets/types.ts";
 import { serveAssetRequest } from "../assets/serve-asset.ts";
-import { localizeValue, matchAvailableLocale } from "@animae/i18n";
+import { flattenCatalog, localeCatalogs, localizeValue, matchAvailableLocale, registeredLocales } from "@animae/i18n";
 import { WEB_PROTOCOL_VERSION } from "../protocol/version.ts";
-import { WEB_SUPPORTED_LOCALES, createWebI18n } from "../i18n/web-i18n.ts";
+import { webSupportedLocales, createWebI18n, localeDisplayNames } from "../i18n/web-i18n.ts";
 import {
   checkOrigin,
   extractToken,
@@ -104,12 +104,23 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
         });
       }
 
+      if (url.pathname === "/api/locales") {
+        const ui = matchAvailableLocale(url.searchParams.get("locale") ?? "en", webSupportedLocales()) ?? "en";
+        return Response.json({ locales: localeDisplayNames(ui) });
+      }
+      if (url.pathname === "/api/client-catalog") {
+        // The reference client's strings for a locale, from the locale packs the host application registered.
+        const tag = matchAvailableLocale(url.searchParams.get("locale") ?? "en", registeredLocales("web-client"));
+        const catalog = tag ? localeCatalogs("web-client", {})[tag] : undefined;
+        return Response.json({ locale: catalog ? tag : "en", catalog: catalog ? flattenCatalog(catalog) : {} });
+      }
+
       if (url.pathname === "/api/environment") {
         const hook = room.hooks.environment;
         if (!hook) {
           return new Response("Not Found", { status: 404 });
         }
-        const locale = matchAvailableLocale(url.searchParams.get("locale") ?? "en", WEB_SUPPORTED_LOCALES);
+        const locale = matchAvailableLocale(url.searchParams.get("locale") ?? "en", webSupportedLocales());
         const t = createWebI18n(locale).t;
         const raw = await hook();
         const entries = raw.map((entry) => ({
@@ -198,8 +209,20 @@ export function createWebServer(opts: CreateWebServerOptions): WebServerHandle {
     },
   });
 
+  const boundPort = server.port ?? opts.port;
+  if (boundPort !== opts.port) {
+    const refreshed = resolveSecurityConfig({
+      host: bindHost,
+      token: security.authToken,
+      port: boundPort,
+      extraOrigins: opts.extraOrigins,
+    });
+    security.allowedOrigins.length = 0;
+    security.allowedOrigins.push(...refreshed.allowedOrigins);
+  }
+
   const displayHost = bindHost === "0.0.0.0" ? "127.0.0.1" : bindHost;
-  const url = `http://${displayHost}:${opts.port}/`;
+  const url = `http://${displayHost}:${boundPort}/`;
   const tokenQuery = security.authToken ? `?token=${encodeURIComponent(security.authToken)}` : "";
   opts.onListen?.({ url: url + tokenQuery, token: security.authToken });
 

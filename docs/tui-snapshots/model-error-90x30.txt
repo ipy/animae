@@ -15,9 +15,10 @@
                                                                                           
                                                                                           
                                                                                           
-                                                                                          
-                                                                                          
-                                                                                          
+player:                                                                                   
+trigger-error                                                                             
+npc1:                                                                                     
+Hello — demo with accents: café, naïve, résumé.                                           
 Render model call failed                                                                  
  ⚠ Render model call failed                                                               
  ┌──────────────────────────────────────────────────────────────────────────────────────┐ 
@@ -25,6 +26,5 @@ Render model call failed
  └──────────────────────────────────────────────────────────────────────────────────────┘ 
 > :quit                                                                                   
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load · Mouse ·       S2  │
-│ Shift+drag selects text                                                                │
+│ F1/Alt+1 help · F2/Alt+2 log · F6/Alt+6 mode · Ctrl+P palette · Ctrl…  [S1:LLM S2:LLM] │
 └────────────────────────────────────────────────────────────────────────────────────────┘

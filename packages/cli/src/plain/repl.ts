@@ -1,5 +1,7 @@
 import { createInterface } from "node:readline";
-import type { Engine, SceneId, TurnChunk, Viewer } from "@animae/engine";
+import type { Engine, SceneId, Viewer } from "@animae/engine";
+import { createCliI18n } from "../i18n/cli-i18n.ts";
+import { ChunkPrinter } from "./chunk-printer.ts";
 import { runColonCommand } from "./colon-commands.ts";
 
 export interface PlainReplOptions {
@@ -9,20 +11,8 @@ export interface PlainReplOptions {
   viewer?: Viewer;
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
-}
-
-function formatChunk(chunk: TurnChunk, output: NodeJS.WritableStream): void {
-  if (chunk.type === "text") {
-    const prefix = chunk.speaker ? `${chunk.speaker}: ` : "";
-    output.write(`${prefix}${chunk.text}\n`);
-  } else if (chunk.type === "cue") {
-    const name = typeof chunk.cue.args.name === "string" ? chunk.cue.args.name : JSON.stringify(chunk.cue.args);
-    output.write(`[${chunk.cue.type}: ${name}]\n`);
-  } else if (chunk.type === "choices") {
-    for (const [i, c] of chunk.choices.entries()) {
-      output.write(`  ${i + 1}. ${c.text}\n`);
-    }
-  }
+  /** BCP-47 UI locale for REPL messages (default: negotiate from env). */
+  locale?: string;
 }
 
 export async function runPlainRepl(opts: PlainReplOptions): Promise<number> {
@@ -30,10 +20,12 @@ export async function runPlainRepl(opts: PlainReplOptions): Promise<number> {
   const output = opts.output ?? process.stdout;
   const actor = opts.actor ?? "player";
   const viewer = opts.viewer ?? "player";
+  const i18n = createCliI18n(opts.locale);
 
   const api = {
     engine: opts.engine,
     viewer,
+    locale: opts.locale,
     notify(msg: string) {
       output.write(`${msg}\n`);
     },
@@ -42,7 +34,10 @@ export async function runPlainRepl(opts: PlainReplOptions): Promise<number> {
   output.write("Plain mode — type dialogue or :help. Ctrl+D to quit.\n");
 
   const rl = createInterface({ input, output, terminal: input === process.stdin });
+  /** The input ended or was closed: nothing more to prompt for. */
   let closed = false;
+  /** `:quit` was entered: lines already read after it are not run. */
+  let quit = false;
 
   const prompt = () => {
     if (!closed) rl.prompt();
@@ -51,42 +46,52 @@ export async function runPlainRepl(opts: PlainReplOptions): Promise<number> {
   rl.setPrompt("> ");
 
   await new Promise<void>((resolve) => {
-    rl.on("line", (line) => {
-      void (async () => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          prompt();
-          return;
-        }
+    const handle = async (line: string): Promise<void> => {
+      // Lines after :quit (a piped script) are not run.
+      if (quit) return;
+      const trimmed = line.trim();
+      if (!trimmed) {
+        prompt();
+        return;
+      }
+      try {
         if (trimmed.startsWith(":")) {
-          const quit = await runColonCommand(trimmed, api);
-          if (quit === "quit") {
+          const result = await runColonCommand(trimmed, api);
+          if (result === "quit") {
+            quit = true;
             closed = true;
             rl.close();
-            resolve();
             return;
           }
           prompt();
           return;
         }
 
+        const printer = new ChunkPrinter(output, {
+          resetNotice: (reason) => i18n.t("plain.reset", { reason }, { ns: "cli" }),
+        });
         try {
-          for await (const chunk of opts.engine.scene.turn({
-            sceneId: opts.sceneId,
-            actor,
-            text: trimmed,
-          })) {
-            formatChunk(chunk, output);
+          for await (const chunk of opts.engine.scene.turn({ sceneId: opts.sceneId, actor, text: trimmed })) {
+            printer.write(chunk);
           }
-        } catch (err) {
-          output.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        } finally {
+          printer.finish();
         }
-        prompt();
-      })();
+      } catch (err) {
+        output.write(`${err instanceof Error ? err.message : String(err)}\n`);
+      }
+      prompt();
+    };
+
+    // One line at a time, in order: a piped script must not quit, or start its next turn, while an earlier turn is
+    // still running; and the REPL only returns once the last line has been handled.
+    let queue: Promise<void> = Promise.resolve();
+    rl.on("line", (line) => {
+      queue = queue.then(() => handle(line));
     });
     rl.on("close", () => {
       closed = true;
-      resolve();
+      void queue.then(resolve);
     });
     prompt();
   });

@@ -116,11 +116,15 @@ async function main() {
     models: { s1: baseSpec, s2: baseSpec },
   };
 
-  let ports: { s1: ModelPort; s2: ModelPort };
+  let ports: ReturnType<typeof createModelsFromConfig>;
   try {
     ports = createModelsFromConfig(config, { env: {} });
   } catch (e) {
     console.error("createModelsFromConfig failed:", e);
+    process.exit(1);
+  }
+  if (!ports.s1) {
+    console.error("createModelsFromConfig returned no S1 port");
     process.exit(1);
   }
   const port = wrapTimed(ports.s1);
@@ -192,6 +196,7 @@ async function main() {
       { seed: 0, policies: [], models: { s1: thinkSpec, s2: thinkSpec } },
       { env: {} },
     ).s1;
+    if (!thinkPort) throw new Error("createModelsFromConfig returned no S1 port");
     const r = await timedObject(thinkPort, {
       label: `smoke.think.${think}`,
       segments: {

@@ -3,6 +3,17 @@ export { createTranslator } from "./create-translator.ts";
 export { negotiateLocale, parseAcceptLanguage, buildFallbackChain, normalizeLocaleTag, matchAvailableLocale, textDirection } from "./negotiate.ts";
 export { formatMessage, flattenCatalog, unflattenCatalog, extractPlaceholders, placeholderSetsMatch } from "./format-message.ts";
 export { applyPseudoLocale, isPseudoLocale } from "./pseudo-locale.ts";
+export {
+  LOCALE_NAMESPACES,
+  registerLocalePack,
+  clearLocalePacks,
+  registeredLocales,
+  localeCatalogs,
+  localePacksVersion,
+  resolveCatalogLocale,
+  type LocalePack,
+  type LocaleNamespace,
+} from "./locale-packs.ts";
 export { runI18nCheck, scanSourceRoots } from "./check.ts";
 export { findCjkStringLiterals } from "./cjk-scan.ts";
 export { runWithLocale, getRequestLocale, scopedI18n, onLocaleChange, emitLocaleChange } from "./locale-context.ts";

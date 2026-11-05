@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Terminal game shell built on **Ink 8** and **React 19**. All panel data is read via `engine.query(viewer, path)` (default viewer `player`).
+Terminal game shell built on **Ink 8** and **React 19**. Panel data uses the `useQuery` hook, which reads via `engine.queryAsync` for the `player` viewer (lazy catch-up, spec 12.6) and synchronous `engine.query` for other viewers.
 
 ## Public API
 
 - `runTui(opts: RunTuiOptions): Promise<void>` — alternate screen, restores terminal on exit; closes engine. Uses Ink `incrementalRendering: true` and `maxFps: 30` to limit full redraw flicker.
 - `defaultLayout` — [default layout (Section 21.2)](../spec.md#212-default-layout) (Header, Transcript 70% / SidePanel 30%, ChoiceMenu, InputLine, Footer).
-- `components` — Header, Footer, Transcript, Typewriter, ChoiceMenu, InputLine, SidePanel, TrackBar, FieldList, EventLog, TimelineBrowser, ExplainView, Inspector, Overlay.
-- `hooks` — useEngine, useTurn, useQuery, useEvents, useTheme, useKeymap (`bind` for overrides).
+- `components` — Header, Footer, Transcript, Typewriter, ChoiceMenu, InputLine, SidePanel, TrackBar, FieldList, EventLog, TimelineBrowser, ExplainView, Inspector, **ModePanel**, Overlay.
+- `hooks` — useEngine, useTurn, useQuery, useEvents, useTheme, useKeymap (`bind` for overrides), **useRuntimeMode**.
 
 ## Spec-compat extensions
 
@@ -50,9 +50,9 @@ Host applications dispatch `setFocusTarget` / `setEntityMenu` via `useAppState()
 
 ## Input pipeline
 
-Real TTY stdin is consumed once in `createPreparsedStdin` (50ms Esc window, UTF-8 reassembly, SGR mouse stripped to `preparsedMouseBus`); Ink reads a synthetic TTY `PassThrough` so Ink’s 20ms flush never splits SS3/CSI. On stdin `end`/`close`/`error`, SIGHUP/SIGTERM, or stdout/stderr `EPIPE`/`EIO`, `installTerminalShutdown` unmounts Ink and `runTui` stops waiting on `waitUntilExit` (hard `process.exit` after 2s if needed) so closing the terminal never leaves a render loop spinning. `useParsedInput` listens to Ink’s emitter only (no second OS reader), maps via vendored `parseKeypress`, and must **not** flush pending Esc on the next chunk. Input draft: ref-first, microtask-coalesced dispatch; React state must never overwrite a longer ref (fixes ASCII+CJK mixed bursts). Ctrl-letter shortcuts match **only with Ctrl**; **Alt+1–5** mirror F1–F5.
+Real TTY stdin is consumed once in `createPreparsedStdin` (50ms Esc window, UTF-8 reassembly, SGR mouse stripped to `preparsedMouseBus`); Ink reads a synthetic TTY `PassThrough` so Ink’s 20ms flush never splits SS3/CSI. On stdin `end`/`close`/`error`, SIGHUP/SIGTERM, or stdout/stderr `EPIPE`/`EIO`, `installTerminalShutdown` unmounts Ink and `runTui` stops waiting on `waitUntilExit` (hard `process.exit` after 2s if needed) so closing the terminal never leaves a render loop spinning. `useParsedInput` listens to Ink’s emitter only (no second OS reader), maps via vendored `parseKeypress`, and must **not** flush pending Esc on the next chunk. Input draft: ref-first, microtask-coalesced dispatch; React state must never overwrite a longer ref (fixes mixed bursts of narrow and wide characters). Ctrl-letter shortcuts match **only with Ctrl**; **Alt+1–5** mirror F1–F5.
 
-PTY rigor (compiled host binary, vendored **pyte** under `scripts/vendor/`): `python3 scripts/pty_tui_rigor.py --quick` — typical quick gate: stress drops **0**, mixed 80-char ASCII+CJK **ok**, Esc close ≈ **0.1–0.15 s** (the 50 ms escape-sequence window plus one 30 fps frame; the gate warns above 200 ms), stress p95 **&lt;80ms** (120×40). The harness decodes the PTY byte stream with an incremental UTF-8 decoder, so a multi-byte character split across two reads never turns into U+FFFD on the emulated screen.
+PTY rigor (compiled host binary, vendored **pyte** under `scripts/vendor/`): `python3 scripts/pty_tui_rigor.py --quick` — typical quick gate: stress drops **0**, mixed 80-char narrow+wide text **ok**, Esc close ≈ **0.1–0.15 s** (the 50 ms escape-sequence window plus one 30 fps frame; the gate warns above 200 ms), stress p95 **&lt;80ms** (120×40). The harness decodes the PTY byte stream with an incremental UTF-8 decoder, so a multi-byte character split across two reads never turns into U+FFFD on the emulated screen.
 
 ## Layout contract (Ink 8 / Yoga)
 
@@ -68,13 +68,15 @@ When touching layout code, check the result with an emulator that is not the har
 
 ## Keys ([Section 21.3](../spec.md#213-overlays-and-keys))
 
-Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ autocomplete), **Ctrl+P** or **`/`** (empty input) command palette, Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, wheel on transcript, **F1–F5** overlays (**Alt+1–5** same, for macOS F-keys as media keys), Ctrl+S/L/Z/M, Esc, Ctrl+C quit.
+Enter, ↑/↓, 1–9, skip typewriter (any key), Tab focus (+ autocomplete), **Ctrl+P** or **`/`** (empty input) command palette, Tab focus (+ SidePanel overlay when &lt;100 cols), PgUp/PgDn scroll, wheel on transcript, **F1–F6** overlays (**Alt+1–6** same, for macOS F-keys as media keys; **F6** = runtime mode panel), Ctrl+S/L/Z/M, Esc, Ctrl+C quit.
 
 **Choice digits vs input:** `1`–`9` pick choices only when the input draft is **empty** and focus is **not** on the input line. With focus on input (including while choices are visible), digits are inserted as text.
 
-## Cues ([Section 21.4](../spec.md#214-cue-rendering))
+## Cues and narration ([Section 21.4](../spec.md#214-cue-and-narration-rendering))
 
 `CueRenderer` registry; built-ins `expression`, `action`, `sfx` (optional terminal bell via `theme.bell`). Unregistered cue types hidden in transcript (still in EventLog via engine events).
+
+**Narration** (`TurnChunk` `narration`): indented lines in `theme.colors.narration`; `scene_break` renders as a horizontal rule. **`reset`** removes in-flight transcript rows (player echo kept) before replacement streams. Footer shows runtime mode (`modeIndicator`); mode changes and fallbacks may add system lines.
 
 ## Theme ([Section 21.5](../spec.md#215-theme))
 
@@ -87,8 +89,8 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 | Header | Compact `Day N HH:MM · location · chapter · branch` |
 | Speakers | `characters/*/identity.color` when query allows; else theme `npc` / `player` |
 | SidePanel tracks | `ParticipantTracks`: tier/track labels from `locales/*/tui.json` (`tiers.*`, `tracks.*`) using active UI locale (`useTuiI18n().locale`) — no chapter-language heuristics |
-| Transcript | CJK wrap via display width; typewriter wraps live; tail-anchored `Viewport` (newest line sits on the input line, older rows clip at the top); scroll window scales with terminal height; store capped at 400 entries |
-| InputLine | Grapheme cursor with inverse cell; horizontal scroll for long CJK/ASCII lines |
+| Transcript | Wide-character wrap via display width; typewriter wraps live; tail-anchored `Viewport` (newest line sits on the input line, older rows clip at the top); scroll window scales with terminal height; store capped at 400 entries |
+| InputLine | Grapheme cursor with inverse cell; horizontal scroll for long lines of narrow and wide characters |
 | Errors | Turn failures show warning banner; transcript system line; UI stays usable |
 | Ink | `incrementalRendering` + `maxFps` on `runTui` |
 
@@ -98,9 +100,9 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 |--------|---------|
 | `scripts/dev-session.ts` | Temp data root via `copyDemoDataRoot()` (`seedE2eAuthored`), `createEngine` + `e2ePreset`, `ScriptedModel`, custom `DemoSidePanel`, optional QA actions |
 | `scripts/qa-scenario-keys.json` | Shared keystroke schedules (kept in sync with batch scenarios) |
-| `scripts/pty-render.py` | Python `pty` driver; waits for `TUI_READY` on stderr, injects keys on the PTY master; sizes 120×40, 100×30, 90×30, 79×23, 160×50; writes grids to `animae/docs/tui-snapshots/` |
-| `scripts/pty-input-harness.py` | PTY regression: burst/paced typing (ASCII+CJK), F-keys/Esc (full mode), `TUI_PTY_DRIVER=1`; `bun run test:pty` (quick), `test:pty:full` |
-| `scripts/pty_locale_harness.py` | Locale gate: zh-CN/en boot chrome + `:lang` flip (no English leaks on zh UI) |
+| `scripts/pty-render.py` | Python `pty` driver; waits for `TUI_READY` on stderr, injects keys on the PTY master; sizes 120×40, 100×30, 90×30, 79×23, 160×50; writes grids to `docs/tui-snapshots/` |
+| `scripts/pty-input-harness.py` | PTY regression: burst/paced typing (narrow and wide characters), F-keys/Esc (full mode), `TUI_PTY_DRIVER=1`; `bun run test:pty` (quick), `test:pty:full` |
+| `scripts/pty_locale_harness.py` | Locale gate: alternate UI locale boot + `:lang` flip |
 | `scripts/pty_tui_rigor.py` | Compiled host TUI binary: pyte screen, stress typing, F1/Esc/palette; `--quick` for CI/build gates |
 | `scripts/pty_lib.py` | Shared PTY reader thread + optional vendored pyte (`scripts/vendor/`) |
 | `scripts/demo.ts` | Fake engine interactive demo |
@@ -108,10 +110,10 @@ YAML or object; Zod-validated (`theme/load.ts`). Defaults in `theme/defaults.ts`
 Batch mode writes `TUI_READY` once the shell is mounted and any initial `scene.start` has finished (`onReady`). Set `TUI_PTY_DRIVER=1` when an external driver owns keystrokes (pty-render).
 
 ```bash
-cd animae/packages/tui
+cd packages/tui
 bun run scripts/dev-session.ts              # interactive (PTY recommended)
 python3 scripts/pty-render.py               # regenerate snapshot grids
-TUI_SNAPSHOT_SCENARIOS=empty,cjk python3 scripts/pty-render.py
+TUI_SNAPSHOT_SCENARIOS=empty,wide python3 scripts/pty-render.py
 ```
 
 ## Tests
@@ -137,11 +139,11 @@ TUI_SNAPSHOT_SCENARIOS=empty,cjk python3 scripts/pty-render.py
 |----------|--------|--------|
 | SidePanel tracks | Placeholder mood bar + numeric value | Participant tier labels (no hidden track numbers) |
 | Long sessions | Transcript array unbounded; fixed 12-entry viewport | 400-entry cap; viewport scales with rows |
-| CJK typewriter | Single-line reveal; borders could mis-wrap | Wrapped lines during typewriter |
+| Wide-character typewriter | Single-line reveal; borders could mis-wrap | Wrapped lines during typewriter |
 | InputLine | Truncated text, cursor at end only | Grapheme-aware cursor + scroll window |
 | Choice `1`–`9` | Always stole digits when choices open | Respects non-empty input / input focus |
 | Rendering | Full redraw default | Incremental + 30 fps cap |
 | Speaker colors | player/npc only | Card `color` via `characters/*/identity` |
 | Header | Mixed time formats | `Day N HH:MM` compact line |
 
-Snapshot grids under `animae/docs/tui-snapshots/*.txt` for empty, scene-start, typewriter, cjk, choices, help, narrow at listed sizes.
+Snapshot grids under `docs/tui-snapshots/*.txt` for empty, scene-start, typewriter, wide, choices, help, narrow at listed sizes.

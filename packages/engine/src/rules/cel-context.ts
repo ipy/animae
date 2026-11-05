@@ -5,6 +5,7 @@ import type { Authored, FieldEffects } from "../schema/authored.ts";
 import type { ResolvedPolicy } from "../schema/policy.ts";
 import type { EngineState, CharacterState } from "../state.ts";
 import type { CelContext, CharacterId, SceneId, WorldTime } from "../types.ts";
+import { aggregatedEventProb } from "../fields/caps.ts";
 import { tierFor } from "./primitives.ts";
 
 export interface BuildCelContextDeps {
@@ -160,9 +161,13 @@ export function buildCelContext(deps: BuildCelContextDeps, params: BuildCelConte
     tracks,
     tiers,
     memory: { count: selfId ? (state.memoryIndex[selfId]?.count ?? 0) : 0 },
-    fields: { active: activeFields, ...Object.fromEntries(activeFields.map((id) => [id, true])) },
+    fields: {
+      active: activeFields,
+      ...Object.fromEntries(activeFields.map((id) => [id, true])),
+      event_prob: aggregatedEventProb(fieldEffects),
+    },
     check: params.check ?? null,
-    model: { slot: "", tags: [] as string[] },
+    model: { kind: "", tags: [] as string[] },
     image: { tags: [] as string[] },
   };
 
@@ -176,9 +181,10 @@ export function buildCelContext(deps: BuildCelContextDeps, params: BuildCelConte
     (ctx as Record<string, unknown>)[k] = v;
   }
   if (extraModel && typeof extraModel === "object" && !Array.isArray(extraModel)) {
-    const m = extraModel as { slot?: string; tags?: string[] };
+    const m = extraModel as { kind?: string; tier?: string; tags?: string[] };
     ctx.model = {
-      slot: typeof m.slot === "string" ? m.slot : "",
+      kind: typeof m.kind === "string" ? m.kind : "",
+      ...(typeof m.tier === "string" ? { tier: m.tier } : {}),
       tags: Array.isArray(m.tags) ? [...m.tags] : [],
     };
   }

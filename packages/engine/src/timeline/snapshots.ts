@@ -56,11 +56,12 @@ export async function rebuildState(
 ): Promise<EngineState> {
   let state = fromSnapshot ? structuredClone(fromSnapshot.state) : initialState(authored, policy);
   const reduce = createReducer(() => policy);
-  const startIdx =
-    fromSnapshot === undefined
-      ? 0
-      : events.findIndex((e) => parseEventSeq(e.id) > fromSnapshot.seq);
-  for (let i = Math.max(0, startIdx); i < events.length; i++) {
+  let startIdx = 0;
+  if (fromSnapshot !== undefined) {
+    const tailAt = events.findIndex((e) => parseEventSeq(e.id) > fromSnapshot.seq);
+    startIdx = tailAt < 0 ? events.length : tailAt;
+  }
+  for (let i = startIdx; i < events.length; i++) {
     state = reduce(state, events[i]!);
   }
   return state;

@@ -24,6 +24,7 @@
     "@animae/i18n": "workspace:*"
   },
   "devDependencies": {
-    "@animae/tui": "workspace:*"
+    "@animae/tui": "workspace:*",
+    "zod": "^4.6.7"
   }
 }

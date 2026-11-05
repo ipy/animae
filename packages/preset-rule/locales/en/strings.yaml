@@ -1,0 +1,9 @@
+# Player-facing text this preset adds to the base preset's rule backend text (see ../../../preset-base/locales).
+# A game in another language ships the same keys in its own locales/<locale>/strings.yaml.
+rule:
+  offscreen:
+    quiet: "Nothing of note happens in {{location.name}}."
+  autonomous:
+    idle_1: "Did you hear that?"
+    idle_2: "Let's keep our voices down."
+    idle_3: "It has been a long day."

@@ -65,6 +65,12 @@ export interface SaveSlot {
   worldTime?: WorldTime;
 }
 
+/** Presentation style of a speaker-less narration paragraph. */
+export type NarrationStyle = "normal" | "scene_break";
+
+/** Why the consumer must discard the output of the turn that is in flight. */
+export type TurnResetReason = "fallback" | "retry";
+
 export type TurnChunk =
   | {
       type: "text";
@@ -74,8 +80,21 @@ export type TurnChunk =
       /** When true, begins a new utterance even if the speaker matches the previous `text` chunk (same sub-turn). */
       newUtterance?: boolean;
     }
+  /**
+   * Speaker-less narration. Consecutive chunks belong to the same paragraph (the text is appended); `newParagraph: true`
+   * starts a new one. A paragraph ends when another paragraph, a `text`, a `cue`, `choices` or `done` follows.
+   */
+  | { type: "narration"; text: string; style?: NarrationStyle; newParagraph?: boolean }
   | { type: "cue"; cue: { type: string; args: Record<string, unknown> }; at: number; speaker?: CharacterId }
   | { type: "choices"; choices: Choice[] }
+  /**
+   * Discard the output of the characters and the narrator for the (sub-)turn in flight: every `text`, `narration`,
+   * `cue` and `choices` chunk since the player's own echoed line (the `text` chunk spoken by the acting character; an
+   * autonomous exchange has none, so since its start) and since the last `done`. The echo stays. The engine replaces
+   * the output, for example by the rule backend after the LLM backend failed mid-stream; the replacement follows. Never
+   * follows `done`.
+   */
+  | { type: "reset"; reason: TurnResetReason }
   /** one `done` per processed (sub-)turn: the player's turn plus each NPC-autonomous exchange ends with its own `done`; the AsyncIterable completes after the last */
   | { type: "done"; turnId: TurnId; events: EventId[]; speaker?: CharacterId };
 
@@ -84,6 +103,13 @@ export interface Choice {
   text: string;
   expected_event_type: string;
   tags: string[];
+  /**
+   * What the choice appraises to when it is taken, if the author fixed it (rule-backend `choices.rules`). Model-written
+   * choices leave these out and the appraisal infers them from the text.
+   */
+  intensity?: number;
+  sincerity?: number;
+  approach?: string;
 }
 
 export interface EntityRef {

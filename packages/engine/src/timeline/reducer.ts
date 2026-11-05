@@ -1,6 +1,7 @@
 import type {
   AppraisalEvent,
   CharacterPromoted,
+  CharacterSecretUnlocked,
   CharacterVarSet,
   EntityAliasSet,
   EntityCreated,
@@ -29,6 +30,7 @@ import type {
   RuleWindowOpened,
   RuleThresholdFired,
   BudgetDegraded,
+  RuntimeModeChanged,
 } from "../events.ts";
 import type { Goal } from "../schema/authored.ts";
 import type { ResolvedPolicy } from "../schema/policy.ts";
@@ -71,6 +73,12 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
       const p = pl<CharacterVarSet & EngineEvent>(e);
       const c = s.characters[p.id];
       if (c) c.vars[p.key] = p.value;
+      break;
+    }
+    case "character.secret_unlocked": {
+      const p = pl<CharacterSecretUnlocked & EngineEvent>(e);
+      const c = s.characters[p.character];
+      if (c && !c.unlockedSecrets.includes(p.secret)) c.unlockedSecrets = [...c.unlockedSecrets, p.secret];
       break;
     }
     case "rule.window_opened": {
@@ -224,17 +232,18 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
     }
     case "schedule.fired": {
       const sf = pl<{ id: string; at: WorldTime } & EngineEvent>(e);
-      const id = sf.id;
+      const id = scheduleItemIdFromSource(sf);
       s.schedule[id] = { ...(s.schedule[id] ?? {}), lastFired: { ...sf.at }, done: true };
       break;
     }
     case "longevent.phase": {
       const p = pl<{ id: string; phase: string; index: number; startedAt: WorldTime } & EngineEvent>(e);
-      s.schedule[p.id] = { ...(s.schedule[p.id] ?? {}), phaseIndex: p.index, startedAt: { ...p.startedAt } };
+      const id = scheduleItemIdFromSource(p);
+      s.schedule[id] = { ...(s.schedule[id] ?? {}), phaseIndex: p.index, startedAt: { ...p.startedAt } };
       break;
     }
     case "longevent.interrupted": {
-      const id = pl<{ id: string } & EngineEvent>(e).id;
+      const id = scheduleItemIdFromSource(pl<{ id: string } & EngineEvent>(e));
       s.schedule[id] = { ...(s.schedule[id] ?? {}), interrupted: true };
       break;
     }
@@ -262,6 +271,9 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
       if (it) it.holder = p.to ? { kind: p.to.kind, ref: p.to.ref } : null;
       break;
     }
+    case "entity.generate":
+      // Request-only: generation runs on live append, not on replay.
+      break;
     case "entity.created":
       applyEntityCreated(s, pl<EntityCreated & EngineEvent>(e), policy);
       break;
@@ -329,7 +341,24 @@ export function reduce(state: EngineState, e: EngineEvent, policy: ResolvedPolic
     case "route.decided": {
       const p = pl<RouteDecided & EngineEvent>(e);
       s.budget.turns += 1;
-      if (p.tier === "s2") s.budget.s2Turns += 1;
+      const render = p.render;
+      if (render && render.backend === "llm") {
+        s.budget.s2Turns += 1;
+        const byTier = (s.budget.s2ByTier ??= {});
+        byTier[render.tier] = (byTier[render.tier] ?? 0) + 1;
+        if (p.escalated) s.budget.escalated = (s.budget.escalated ?? 0) + 1;
+      }
+      break;
+    }
+    case "runtime.mode_changed": {
+      const p = pl<RuntimeModeChanged & EngineEvent>(e);
+      const rt = (s.runtime ??= { fallbacks: 0 });
+      rt.mode = { ...p.after };
+      break;
+    }
+    case "runtime.fallback_used": {
+      const rt = (s.runtime ??= { fallbacks: 0 });
+      rt.fallbacks += 1;
       break;
     }
     case "config.reloaded": {
@@ -538,6 +567,14 @@ function applyEntitySpawned(s: EngineState, e: EngineEvent<EntitySpawned>, polic
       };
     }
   }
+}
+
+/** Schedule drafts use `id` for the item id; persisted events use `evt_*` ids — prefer `source: schedule:<id>`. */
+function scheduleItemIdFromSource(e: EngineEvent & { id?: string }): string {
+  const fromSource = /^schedule:(.+)$/.exec(e.source ?? "")?.[1];
+  if (fromSource) return fromSource;
+  const id = e.id ?? "";
+  return /^evt_/.test(id) ? "" : id;
 }
 
 function applyEntityAliasSet(s: EngineState, e: EngineEvent<EntityAliasSet>): void {

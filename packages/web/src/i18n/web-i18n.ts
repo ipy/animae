@@ -1,16 +1,36 @@
-import { createI18n, matchAvailableLocale, negotiateLocale, type I18nInstance } from "@animae/i18n";
+import {
+  createI18n,
+  localeCatalogs,
+  matchAvailableLocale,
+  negotiateLocale,
+  type I18nInstance,
+} from "@animae/i18n";
 import type { CreateI18nOptions } from "@animae/i18n";
 import { hostPackageCatalogs } from "@animae/host";
 import enWeb from "../../locales/en/web.json" with { type: "json" };
-import zhWeb from "../../locales/zh-CN/web.json" with { type: "json" };
 
-export const WEB_SUPPORTED_LOCALES = ["en", "zh-CN"] as const;
-
+/** Web server catalogs: the English ones plus every registered locale pack that provides `web` (read at access time). */
 const webCatalogs = {
-  web: { en: enWeb, "zh-CN": zhWeb },
+  get web() {
+    return localeCatalogs("web", { en: enWeb });
+  },
 };
 
-export const webPackageCatalogs = { ...webCatalogs, ...hostPackageCatalogs };
+/** The web catalogs together with the host's and the engine's. */
+export const webPackageCatalogs = {
+  get web() {
+    return webCatalogs.web;
+  },
+  get host() {
+    return hostPackageCatalogs.host;
+  },
+  get errors() {
+    return hostPackageCatalogs.errors;
+  },
+  get diagnostics() {
+    return hostPackageCatalogs.diagnostics;
+  },
+};
 
 type CatalogBlock = CreateI18nOptions["catalogs"];
 
@@ -37,7 +57,7 @@ export function registerWebI18nCatalogs(extra: CatalogBlock): void {
 }
 
 function mergedWebCatalogs(): CatalogBlock {
-  return mergeCatalogBlocks(webPackageCatalogs as CatalogBlock, supplementalCatalogs);
+  return mergeCatalogBlocks({ ...webPackageCatalogs } as CatalogBlock, supplementalCatalogs);
 }
 
 export function createWebI18n(
@@ -45,17 +65,23 @@ export function createWebI18n(
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
 ): I18nInstance {
   const resolved = locale ?? negotiateLocale({ env, defaultLocale: "en" });
-  const matched = matchAvailableLocale(resolved, WEB_SUPPORTED_LOCALES) ?? "en";
+  const catalogs = mergedWebCatalogs();
+  const matched = matchAvailableLocale(resolved, Object.keys(catalogs.web ?? {})) ?? "en";
   return createI18n({
     locale: matched,
     defaultNamespace: "web",
-    catalogs: mergedWebCatalogs(),
+    catalogs,
   });
+}
+
+/** UI locales the web server can serve: `en` and every locale with a `web` catalog (registered packs, supplemental catalogs). */
+export function webSupportedLocales(): string[] {
+  return Object.keys(mergedWebCatalogs().web ?? {});
 }
 
 export function localeDisplayNames(
   locale: string,
-  supported: readonly string[] = WEB_SUPPORTED_LOCALES,
+  supported: readonly string[] = webSupportedLocales(),
 ): Array<{ tag: string; name: string }> {
   const dn = new Intl.DisplayNames([locale], { type: "language" });
   return supported.map((tag) => ({ tag, name: dn.of(tag) ?? tag }));

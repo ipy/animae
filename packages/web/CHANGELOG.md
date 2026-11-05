@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- WebSocket **`stream`**: `segment: narration` with `style` on `start`; **`phase: reset`** when the engine replaces in-flight turn output (rule fallback). Schema in `protocol/schemas.ts`; `SessionRoom` maps `@animae/host` stream callbacks.
+
 ## 1.0.0 — 2026-10-30
 
 - Initial `@animae/web`: protocol v1 (Zod + docs), Bun server, asset providers, WS session room, integration tests.
@@ -21,5 +25,5 @@
 - Optional `WebSessionHooks.environment` and authenticated `GET /api/environment` for host path metadata on the diagnostics Overview tab.
 - Rebuilt `ref-client/` as a styled diagnostics console: tabs for smoke tests, model call log (`llm_log` / `llm_log_clear`), snapshot/state, live protocol feed, and controller-only console.
 - Read-only smoke test runner (injectable transport, unit-tested) covering socket, hello, snapshot shape, ping RTT, locale, config secret masking, llm_log, get_state, and resume quiet check.
-- i18n catalogs (`en`, `zh-CN`) for all UI strings; light/dark theme toggle with `prefers-color-scheme` support.
+- i18n locale catalogs for diagnostics UI strings; light/dark theme toggle with `prefers-color-scheme` support.
 - Diagnostics client escapes every dynamic value it writes into HTML (smoke ids, protocol types, model slot/label/id, state cards); `docs/protocol.md` documents the `GET /api/environment` payload as `{ entries: [{ id, label, value, kind? }] }` (it previously said `rows`).

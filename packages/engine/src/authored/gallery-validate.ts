@@ -34,21 +34,10 @@ async function validateGalleryAuthoredSync(
 
   for (const [rid, rdef] of Object.entries(cfg.ratings)) {
     const err = cel.check(rdef.when);
-    if (err) {
-      issues.push({
-        file: "animae.yaml",
-        path: `gallery.ratings.${rid}.when`,
-        message: err,
-      });
-    }
+    if (err) issues.push({ file: "animae.yaml", path: `gallery.ratings.${rid}.when`, message: err });
   }
 
-  const seen = new Set<string>();
   for (const [id, entry] of Object.entries(cfg.entries)) {
-    if (seen.has(id)) {
-      issues.push({ file: "animae.yaml", path: `gallery.entries.${id}`, message: "duplicate entry id" });
-    }
-    seen.add(id);
     if (!ratingIds.has(entry.rating) && !cfg.ratings[entry.rating]) {
       issues.push({
         file: "animae.yaml",
@@ -74,13 +63,7 @@ async function validateGalleryAuthoredSync(
     }
     if (entry.unlock?.when) {
       const err = cel.check(entry.unlock.when);
-      if (err) {
-        issues.push({
-          file: "animae.yaml",
-          path: `gallery.entries.${id}.unlock.when`,
-          message: err,
-        });
-      }
+      if (err) issues.push({ file: "animae.yaml", path: `gallery.entries.${id}.unlock.when`, message: err });
     }
     if (entry.unlock?.when && !entry.hint) {
       issues.push({

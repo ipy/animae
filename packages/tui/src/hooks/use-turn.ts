@@ -1,14 +1,9 @@
 import { useCallback, useRef } from "react";
-import {
-  applyTextTurnChunk,
-  createUtteranceStreamState,
-  type TurnChunk,
-} from "@animae/engine";
+import type { TurnChunk } from "@animae/engine";
 import { useEngineContext } from "../context/engine-context.tsx";
 import { useAppState } from "../context/app-state-context.tsx";
 import { useTuiI18n } from "../i18n/context.tsx";
-
-let entrySeq = 0;
+import { consumeTurnStream } from "./consume-turn.ts";
 
 export function useTurn() {
   const { engine, actor } = useEngineContext();
@@ -60,7 +55,7 @@ export function useTurn() {
           choiceId,
         });
         streamRef.current = stream;
-        await consumeTurnStream(stream, dispatch);
+        await consumeTurnStream(stream, dispatch, { actor });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         dispatch({ type: "setTurnError", error: msg });
@@ -81,114 +76,4 @@ export function useTurn() {
     sceneId: state.sceneId,
     error: state.turnError,
   };
-}
-
-async function consumeTurnStream(
-  stream: AsyncIterable<TurnChunk>,
-  dispatch: ReturnType<typeof useAppState>["dispatch"],
-) {
-  let utterance = createUtteranceStreamState();
-  let cues: Array<{ type: string; args: Record<string, unknown>; at: number; speaker?: string }> = [];
-
-  const completeOpen = () => {
-    if (utterance.entryId) {
-      dispatch({ type: "patchTranscript", id: utterance.entryId, patch: { complete: true } });
-    }
-    utterance = createUtteranceStreamState();
-    cues = [];
-  };
-
-  try {
-    for await (const chunk of stream) {
-    switch (chunk.type) {
-      case "text": {
-        const applied = applyTextTurnChunk(utterance, chunk);
-        if (applied.completePrior) completeOpen();
-        utterance = applied.state;
-
-        if (applied.newUtterance) {
-          const entryId = `dlg_${++entrySeq}`;
-          utterance = { ...utterance, entryId };
-          dispatch({ type: "setSpeaking", speaking: true });
-          dispatch({
-            type: "appendTranscript",
-            entry: {
-              id: entryId,
-              kind: "dialogue",
-              speaker: utterance.speaker,
-              text: applied.delta,
-              cues: [],
-              complete: false,
-            },
-          });
-        } else if (utterance.entryId) {
-          dispatch({
-            type: "patchTranscript",
-            id: utterance.entryId,
-            patch: { text: utterance.text },
-          });
-        }
-        break;
-      }
-      case "cue": {
-        cues.push({
-          type: chunk.cue.type,
-          args: chunk.cue.args,
-          at: chunk.at,
-          speaker: chunk.speaker,
-        });
-        if (utterance.entryId) {
-          dispatch({
-            type: "patchTranscript",
-            id: utterance.entryId,
-            patch: { cues: [...cues] },
-          });
-        } else if (chunk.cue.type === "action") {
-          const id = `act_${++entrySeq}`;
-          dispatch({
-            type: "appendTranscript",
-            entry: {
-              id,
-              kind: "action",
-              text: String(chunk.cue.args["text"] ?? ""),
-              cues: [{ type: chunk.cue.type, args: chunk.cue.args, at: chunk.at }],
-              complete: false,
-            },
-          });
-          utterance = { ...utterance, entryId: id, open: true, text: String(chunk.cue.args["text"] ?? "") };
-        }
-        break;
-      }
-      case "choices": {
-        dispatch({
-          type: "setChoices",
-          choices: {
-            choices: chunk.choices.map((c) => ({ id: c.id, text: c.text })),
-            selected: 0,
-          },
-        });
-        dispatch({ type: "setFocus", focus: "choices" });
-        break;
-      }
-      case "done": {
-        if (utterance.entryId) {
-          dispatch({
-            type: "patchTranscript",
-            id: utterance.entryId,
-            patch: { complete: true, turnId: chunk.turnId },
-          });
-        }
-        dispatch({ type: "setLastTurnId", turnId: chunk.turnId });
-        dispatch({ type: "setSpeaking", speaking: false });
-        utterance = createUtteranceStreamState();
-        cues = [];
-        break;
-      }
-      default:
-        break;
-    }
-    }
-  } finally {
-    completeOpen();
-  }
 }

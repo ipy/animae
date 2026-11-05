@@ -2,7 +2,7 @@
 
 ## Purpose
 
-AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `generateText` / `streamText`), tools with step limits, prompt cache breakpoints ([17.4](../spec.md#174-prompt-segments)), record/replay ([Section 13](../spec.md#13-timeline)), and test doubles.
+LLM adapter and rule backend behind `ModelPort`: structured output (`Output.object` via `generateText` / `streamText`), tools with step limits, S2 tier resolution, prompt cache breakpoints ([17.5](../spec.md#175-prompt-segments)), record/replay ([Section 13](../spec.md#13-timeline)), and test doubles. S1/S2 are **roles**; see [Section 2.1](../spec.md#21-s1-and-s2-are-roles).
 
 ## Public API
 
@@ -11,8 +11,10 @@ AI SDK v7 adapter behind `ModelPort`: structured output (`Output.object` via `ge
 | `createModelPort(spec, opts?)` | Live port for `anthropic` / `openai` / `google` / `deepseek` / `ollama` / `openai-compatible` |
 | `withRecording(port, RecordingStore)` | `live` passthrough, `record` append, `replay` serve (no network) |
 | `createModelCallLog`, `withModelCallLog` | In-memory debug log ([model-call-log.md](../model-call-log.md)) |
-| `createModelsFromConfig(config, opts?)` | `{ s1, s2 }` from `animae.yaml` `models` (throws `MODEL_CONFIG` if either missing) |
+| `createModelsFromConfig(config, opts?)` | `{ s1?, tiers? }` from `animae.yaml` — omitted roles use rule backend only |
 | `resolveEngineModels(opts, config, portOpts?)` | Used by `createEngine`: explicit `opts.models` or config fallback ([19.3](../spec.md#193-model-configuration)) |
+| `createRuleModelPort(k)` | Deterministic `ModelPort` with id `rule`; dispatches on `ModelRequest.purpose` |
+| `createTierResolver(tiers, routing?)` / `singleTierResolver(port)` | S2 tier ladder + `forJob(render\|offscreen\|autonomous\|escalate)` |
 | `createScriptedModel(id, handler)` | Deterministic port for tests |
 | `streamFromObject(obj, chunkSize?)` | Growing `{ text }` partials for render streaming tests |
 | `createEmbeddingPort(spec, opts?)` | Optional `embedMany` → `Float32Array[]` (engine wiring off by default) |
@@ -49,7 +51,14 @@ Transient retries: timeouts are retryable at most **once** per call, in both `ob
 
 Use `syncModelPortSpec(port, spec)` after changing config without recreating ports.
 
-## Prompt segments ([Section 17.4](../spec.md#174-prompt-segments))
+### `ModelRequest` extensions
+
+- `purpose`: `appraise` \| `classify` \| `safety` \| `reflection` \| `entity` \| `memory-write` \| `gallery-brief` (`object()`); `render` \| `offscreen` \| `autonomous` (`stream()`). The engine sets these; LLM ports may ignore them; the rule backend routes on them.
+- `context`: structured turn inputs (`ModelCallContext`) for backends that avoid parsing prompts; **never** part of `recordingKey`.
+
+Legacy ports without `purpose`/`context` remain valid.
+
+## Prompt segments ([Section 17.5](../spec.md#175-prompt-segments))
 
 Order: **static** (system, Anthropic cache bp 1) → **semiStatic** (system, bp 2) → **dynamic** (system, uncached) → **history** → **user**. OpenAI/Google rely on stable prefix ordering for automatic prefix caching; Anthropic uses `providerOptions.anthropic.cacheControl: { type: 'ephemeral' }` on the first two system blocks.
 
@@ -80,7 +89,7 @@ Miss in replay: `AnimaeError("RECORDING_MISSING", key + label)`.
 
 | Code | When | `params` (wire-safe) |
 |------|------|----------------------|
-| `MODEL_CONFIG` | Invalid openai-compatible config (missing `baseURL`), missing `models` in config, unsupported embedding provider | — |
+| `MODEL_CONFIG` | Invalid openai-compatible config (missing `baseURL`), invalid `models.s2.tiers`, unsupported embedding provider | — |
 | `MODEL_TIMEOUT` | Abort / AI SDK timeout | `timeoutMs`, `seconds`, `phase`: `connect` \| `first_chunk` \| `idle` \| `total` |
 | `MODEL_UNREACHABLE` | Connection refused, DNS, fetch failed | `host` (hostname only) |
 | `MODEL_HTTP` | HTTP error from provider | `status`, optional `detail` (~200 chars, no secrets) |

@@ -18,6 +18,7 @@ import {
   type StoredJobRecord,
 } from "./collection.ts";
 import { entityDisplayName } from "../entities/names.ts";
+import { currentMode, llmRoles, tiersOf } from "../model/select.ts";
 import { galleryCelContext } from "./cel-extra.ts";
 import { sniffImageDimensions } from "./sniff.ts";
 import type {
@@ -643,7 +644,23 @@ export function createGalleryService(
   ): Promise<Record<string, unknown>> {
     const cfg = config()!;
     const tier = captured?.briefTier ?? cfg.brief.tier;
-    const model = tier === "s2" ? k.models.s2 : k.models.s1;
+    // A brief is written by a model: the S1 or S2 role the game configured for it, and only while that role is on one.
+    const mode = currentMode(k);
+    const roles = llmRoles(k);
+    const model =
+      tier === "s2"
+        ? roles.s2 && mode.render === "llm"
+          ? tiersOf(k).forJob("render").port
+          : undefined
+        : roles.s1 && mode.appraise === "llm"
+          ? k.models.s1
+          : undefined;
+    if (!model) {
+      throw new AnimaeError(
+        "GALLERY_NO_MODEL",
+        `A CG brief needs a model, but the ${tier.toUpperCase()} role is served by the rule backend`,
+      );
+    }
     const ctx = captured?.context;
     const loc = ctx?.locationText ?? (ctx?.location ? k.catalog.location(ctx.location)?.name ?? ctx.location : "");
     const sceneFacts = [`Location: ${loc}`, ctx?.sceneId ? `Scene: ${ctx.sceneId}` : "No active scene"].join("\n");
@@ -672,6 +689,7 @@ export function createGalleryService(
     const attempt = async (): Promise<Record<string, unknown>> => {
       const out = await model.object({
         label: "cg_brief",
+        purpose: "gallery-brief",
         segments: { static: user, semiStatic: "", dynamic: "", user: "Produce the JSON brief." },
         maxOutputTokens: 800,
         schema: CgBriefOutputSchema,

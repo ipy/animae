@@ -1,10 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
+import { FR_TEST_LOCALE, registerFrenchTestPack } from "../helpers/locale-packs.ts";
 import { ReflectionOutputSchema } from "../../src/memory/reflection.ts";
 import { buildReflectionPromptSegments } from "../../src/memory/reflect-prompt.ts";
 import { lintAssembledPrompt } from "../../src/pipeline/prompt-lint.ts";
 import { createPipelineKernel, charDef } from "./test-kernel.ts";
 
 describe("reflection prompt", () => {
+  let offFrench: (() => void) | undefined;
+  afterEach(() => {
+    offFrench?.();
+    offFrench = undefined;
+    clearLocalePacks();
+  });
+
   test("builds static role text and prose narrative without raw JSON events", async () => {
     const { k, setState } = createPipelineKernel({ chars: [charDef("mira"), charDef("player")] });
     const sceneId = "scn_test";
@@ -34,8 +43,9 @@ describe("reflection prompt", () => {
 
   // The model only sees this text: naming a field without its item shape made a real model answer `new_claims` with
   // plain strings and `goal_changes` with made-up actions, so every reflection was rejected by the schema.
-  for (const promptLocale of ["en", "zh-CN"]) {
+  for (const promptLocale of ["en", FR_TEST_LOCALE]) {
     test(`${promptLocale}: spells out every output field with the shape of its items`, () => {
+      if (promptLocale === FR_TEST_LOCALE) offFrench = registerFrenchTestPack();
       const { k } = createPipelineKernel({ chars: [charDef("mira"), charDef("player")], i18n: { promptLocale } });
       const { static: text } = buildReflectionPromptSegments(k, "scn_test", "mira");
       for (const field of Object.keys(ReflectionOutputSchema.shape)) expect(text).toContain(`\`${field}\``);

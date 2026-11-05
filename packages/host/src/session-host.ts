@@ -612,6 +612,7 @@ export class SessionHost {
         requestId,
         stream: this.streamCallbacks,
         abortSignal: this.activeTurnAbort?.signal,
+        actor: this.actor,
       });
     } catch (err) {
       const i18n = this.activeI18n;

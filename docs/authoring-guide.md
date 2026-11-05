@@ -3,7 +3,8 @@
 All paths are relative to the **data root** (the directory containing `animae.yaml`). Schemas live in `packages/engine/src/schema/{authored,policy,common}.ts`. A **validated copy** of the examples below is in [`docs/examples/tutorial/`](./examples/tutorial/) — run:
 
 ```bash
-./dist/animae validate --root animae/docs/examples/tutorial
+./dist/animae validate --root docs/examples/tutorial
+./dist/animae validate --root docs/examples/tutorial --mode rule
 ```
 
 ## Data root layout
@@ -44,10 +45,20 @@ policies:
   - policies/tutorial.yaml
 # Optional enabled mod ids (overlays under mods/<id>/)
 mods: []
-# Optional LLM endpoints (required for live play)
+# Optional LLM endpoints (omit for rule-only play)
+# mode: rule | llm | hybrid
+# appraise.backend: llm | rule
+# render.backend: llm | rule
+# runtime:
+#   switchAt: turn_boundary | immediate
+#   fallbackOnError: { appraise: true, render: true, ... }
 models:
   s1: { provider: anthropic, model: claude-haiku-4-5 }
-  s2: { provider: anthropic, model: claude-sonnet-4-5 }
+  s2:
+    default: std
+    tiers:
+      - { id: std, provider: anthropic, model: claude-sonnet-4-5 }
+    routing: { render: std, offscreen: std, autonomous: std }
 ```
 
 | Field | Type | Default | Notes |
@@ -56,7 +67,11 @@ models:
 | `seed` | int | `0` | Combined with branch for `timeline.rng` |
 | `policies` | string[] | `[]` | Paths under data root |
 | `mods` | string[] | `[]` | Enabled mod ids; host may override via `createEngine({ mods })`. See [mods.md](./mods.md). |
-| `models.s1` / `s2` | `ModelSpec` | — | `provider`: anthropic, openai, google, deepseek, ollama, openai-compatible; optional `baseURL`, `apiKeyEnv`, `apiKey`, `headers`, `options`, `name` |
+| `mode` | `llm` \| `hybrid` \| `rule` | derived | Starting runtime mode; see [spec Section 19.3](./spec.md#193-model-configuration) |
+| `models.s1` | `ModelSpec` | — | S1 role (structured judgment). `{ provider: rule }` or omit → rule backend |
+| `models.s2` | `ModelSpec` or tier list | — | S2 role: single model = one tier `only`, or `default` + `tiers[]` + `routing` |
+| `appraise.backend` / `render.backend` | `llm` \| `rule` | — | Per-role override when `mode: hybrid` |
+| `runtime.*` | object | — | Mode switching timing and per-phase fallback to rules |
 | `gallery` | object | — | CG preset entries, ratings, capture/render defaults. See [gallery.md](./gallery.md). |
 
 Optional **`gallery`** block: preset CG slots, content ratings (CEL), and generator defaults. Character cards may add **`identity.visual`** (generator appearance tags) used when composing image prompts for entries that list that character.
@@ -325,6 +340,8 @@ overrides: {}               # per-track def overrides
   unlock: "tracks.affinity >= 60"
 ```
 
+A secret stays locked until its `unlock` expression holds (default `false`, so a secret without `unlock` never opens by itself). The engine evaluates it after adjudication in every turn for the character who answers: `tracks.<name>` is that character's track toward the character they are dealing with. When it becomes true the secret unlocks permanently (`character.secret_unlocked`); from then on its text is part of the character's prompt and readable through `characters/<id>/secrets`. While a secret is locked, its `tags` make a matching appraisal count as a `secret_topic` escalation trigger.
+
 ### `relations.yaml`
 
 ```yaml
@@ -376,6 +393,28 @@ intent_rules:
 ```
 
 `init` creates this automatically.
+
+---
+
+## Rule-backend content (no LLM)
+
+When a role runs on the **rule backend**, prose and structured outputs come from policy, not from a model. Author these keys (see [spec Appendix C](./spec.md#appendix-c-rule-backend-design) and `@animae/preset-base`):
+
+| Area | Policy keys | Authoring notes |
+|------|-------------|-----------------|
+| Appraisal / input class | `appraise.patterns`, `appraise.commands`, `appraise.fallback`, `appraise.inputClass` | Regex or keyword → `{type, intensity, …}`; `/thanks`-style commands |
+| Render | `render.layers[]`, `render.fallback` | Pool lines with `when` (CEL), `text` (`$t:…` or template), optional `style: narration` / `narration_break` for speaker-less paragraphs |
+| Choices | `choices.enabled`, `choices.count`, `choices.rules[]` | Quick replies when `when` holds; tag `expected_event_type` for appraisal |
+| Memory write | `memory.writing.*` | Template text, importance/valence tables; `memory.writing.narration` controls whether narration enters NPC memory |
+| Reflection | `reflection.backend`, `reflection.summaryTemplate` | Rule path uses template tables |
+| Offscreen | `offscreen.narrateTemplate` | One-line location narration |
+| Autonomous dialogue | `scene.autonomous.rules[]` | Idle lines between NPCs |
+
+String-table keys (`$t:base.…`, `$t:rule.…`) must exist for every locale you ship; `animae validate --mode rule` checks playability and warns on missing keys.
+
+### Narration (LLM and rule)
+
+Speaker-less paragraphs are **not** character dialogue. In LLM render output they appear in `narrations[]` as `{ style, text }` (`normal` or `scene_break`). In the rule backend, pool lines use `style: narration` or `narration_break`. Each paragraph becomes a `narration` event and streams as `TurnChunk` `{ type: "narration", … }` before the character's `text`. Scene breaks are structural (dividers); they are not written to memory unless policy says otherwise.
 
 ---
 

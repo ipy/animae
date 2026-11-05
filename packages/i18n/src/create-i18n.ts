@@ -46,7 +46,22 @@ function splitKey(
 
 export function createI18n(opts: CreateI18nOptions): I18nInstance {
   const locale = normalizeLocaleTag(opts.locale);
-  const fallbackChain = opts.fallbackChain?.length ? opts.fallbackChain.map(normalizeLocaleTag) : buildFallbackChain(locale);
+  // Locales that have a catalog in some namespace: a chain entry without one is followed by the closest variant of the
+  // same language that has (`pt-PT` → `pt-BR`), so a request for a regional variant still reaches a translation.
+  const available = new Set<string>();
+  for (const byLocale of Object.values(opts.catalogs)) for (const loc of Object.keys(byLocale)) available.add(normalizeLocaleTag(loc));
+  const withVariants = (chain: readonly string[]): string[] => {
+    const out: string[] = [];
+    for (const tag of chain) {
+      if (!out.includes(tag)) out.push(tag);
+      if (available.has(tag)) continue;
+      const lang = tag.split("-")[0]!;
+      const sibling = [...available].find((a) => a.split("-")[0] === lang && !chain.includes(a));
+      if (sibling && !out.includes(sibling)) out.push(sibling);
+    }
+    return out;
+  };
+  const fallbackChain = withVariants(opts.fallbackChain?.length ? opts.fallbackChain.map(normalizeLocaleTag) : buildFallbackChain(locale));
   const defaultNamespace = opts.defaultNamespace ?? "common";
   const dev = opts.dev ?? (typeof process !== "undefined" && process.env?.NODE_ENV !== "production");
   const missingKey = opts.missingKey ?? "key";
@@ -91,7 +106,7 @@ export function createI18n(opts: CreateI18nOptions): I18nInstance {
       dir: () => textDirection(activeLocale),
       withLocale(l, fb) {
         const tag = normalizeLocaleTag(l);
-        const c = fb?.length ? fb.map(normalizeLocaleTag) : buildFallbackChain(tag);
+        const c = withVariants(fb?.length ? fb.map(normalizeLocaleTag) : buildFallbackChain(tag));
         return makeInstance(tag, c);
       },
       tPseudo(key, params, o) {

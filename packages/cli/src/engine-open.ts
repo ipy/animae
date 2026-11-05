@@ -14,12 +14,16 @@ import {
   type ModelMode,
   type PresetBundle,
   type PresetRegistry,
+  type RuntimeModePreset,
+  type RuntimeModeRequest,
 } from "@animae/engine";
 import { builtinPresets } from "./presets.ts";
 
 export interface OpenEngineOptions {
   root: string;
   modelMode?: ModelMode;
+  /** Runtime mode to start in (CLI `--mode`); overrides `animae.yaml`. Recorded as `reason: "cli"`. */
+  mode?: RuntimeModePreset | RuntimeModeRequest;
   seed?: number;
   lang?: string;
   models?: CreateEngineOptions["models"];
@@ -87,6 +91,7 @@ export async function openEngine(opts: OpenEngineOptions): Promise<Engine> {
     root: opts.root,
     presets: bundles,
     modelMode: opts.modelMode,
+    ...(opts.mode !== undefined ? { mode: opts.mode, modeSource: { reason: "cli" as const, trigger: "cli:--mode" } } : {}),
     seed: opts.seed,
     models: opts.models,
     i18n: opts.lang ? { locale: opts.lang } : undefined,

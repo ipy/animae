@@ -27,7 +27,7 @@ function scriptedModel(handler: (schema: z.ZodType<unknown>) => unknown): ModelP
 
 async function seedWorld(s: ReturnType<typeof testStorage>): Promise<void> {
   await s.writeAtomic("animae.yaml", "seed: 0\npolicies: []\n");
-  await s.writeAtomic("world/world.yaml", "language: zh-CN\n");
+  await s.writeAtomic("world/world.yaml", "language: fr\n");
   await s.writeAtomic(
     "templates/character/extra.yaml",
     `fields:
@@ -129,7 +129,7 @@ function makeKernel(
     get policy() {
       return policy;
     },
-    i18n: { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
+    i18n: { locale: "en", promptLocale: "fr", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
     rules: { cel, register: () => {}, fn: () => undefined, has: () => false, run: () => [] },
     timeline: {
       branch: () => ({ name: "main" }),

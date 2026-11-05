@@ -58,8 +58,8 @@ test("preparsed stdin reassembles CSI F1 split across chunks", async () => {
   expect(parseKeypress(out.join("")).name).toBe("f1");
 });
 
-test("preparsed stdin preserves UTF-8 CJK split across byte boundaries", async () => {
-  const text = "你好";
+test("preparsed stdin preserves UTF-8 split across byte boundaries", async () => {
+  const text = "ré";
   const bytes = Buffer.from(text, "utf8");
   const out = await collectOutput((tty) => {
     tty.push(bytes.subarray(0, 1));

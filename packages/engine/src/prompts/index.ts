@@ -1,19 +1,34 @@
 import enSections from "./en/sections.json" with { type: "json" };
-import zhSections from "./zh-CN/sections.json" with { type: "json" };
-import { matchAvailableLocale, normalizeLocaleTag } from "@animae/i18n";
+import { localeCatalogs, localePacksVersion, matchAvailableLocale, normalizeLocaleTag } from "@animae/i18n";
 
 export type PromptSectionKey = keyof typeof enSections;
 
-const bundles: Record<string, Record<PromptSectionKey, string>> = {
-  en: enSections as Record<PromptSectionKey, string>,
-  "zh-CN": zhSections as Record<PromptSectionKey, string>,
-};
+type Bundles = Record<string, Record<string, string>>;
 
-export const PROMPT_LOCALES = Object.keys(bundles).sort();
+let cached: { version: number; bundles: Bundles } | undefined;
 
+/** The prompt text of every locale: the English bundle plus the `prompts` catalog of each registered locale pack. */
+function bundles(): Bundles {
+  const version = localePacksVersion();
+  if (cached?.version === version) return cached.bundles;
+  const merged = localeCatalogs("prompts", { en: enSections }) as unknown as Bundles;
+  cached = { version, bundles: merged };
+  return merged;
+}
+
+/** Locales that have prompt text: `en` and every registered locale pack that provides `prompts`. */
+export function promptLocales(): string[] {
+  return Object.keys(bundles()).sort();
+}
+
+/**
+ * One prompt section in `locale`, with `{name}` placeholders replaced from `vars`. A locale without a bundle, or a bundle
+ * without this section, reads the English text.
+ */
 export function getPromptSection(locale: string, key: PromptSectionKey, vars?: Record<string, string | number>): string {
-  const tag = matchAvailableLocale(locale, PROMPT_LOCALES) ?? "en";
-  let text = bundles[tag]![key] ?? bundles.en![key] ?? key;
+  const all = bundles();
+  const tag = matchAvailableLocale(locale, Object.keys(all)) ?? "en";
+  let text = all[tag]?.[key] ?? all.en![key] ?? key;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       text = text.replaceAll(`{${k}}`, String(v));
@@ -22,11 +37,14 @@ export function getPromptSection(locale: string, key: PromptSectionKey, vars?: R
   return text;
 }
 
-export function promptLocaleParityKeys(): { en: PromptSectionKey[]; zh: PromptSectionKey[]; missing: PromptSectionKey[] } {
+/** Sections the English bundle has and `locale`'s bundle lacks (`missing`), and sections only `locale` has (`extra`). */
+export function promptLocaleParityKeys(locale: string): { missing: PromptSectionKey[]; extra: string[] } {
+  const all = bundles();
+  const tag = matchAvailableLocale(locale, Object.keys(all).filter((l) => l !== "en"));
   const enKeys = Object.keys(enSections) as PromptSectionKey[];
-  const zhKeys = Object.keys(zhSections) as PromptSectionKey[];
-  const missing = enKeys.filter((k) => !zhKeys.includes(k));
-  return { en: enKeys, zh: zhKeys, missing };
+  if (!tag) return { missing: enKeys, extra: [] };
+  const keys = Object.keys(all[tag]!);
+  return { missing: enKeys.filter((k) => !keys.includes(k)), extra: keys.filter((k) => !(k in enSections)) };
 }
 
 export { getGalleryPromptSection, galleryPromptLocaleParityKeys } from "./gallery-sections.ts";

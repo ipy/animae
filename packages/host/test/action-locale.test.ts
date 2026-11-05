@@ -26,14 +26,14 @@ describe("SessionHost.listActions locale", () => {
     const actions: HostAction[] = [
       {
         id: "greet",
-        label: () => (host.uiLocale() === "zh-CN" ? "问候" : "Greet"),
-        hint: () => (host.uiLocale() === "zh-CN" ? "提示" : "Hint"),
+        label: () => (host.uiLocale() === "fr" ? "Saluer" : "Greet"),
+        hint: () => (host.uiLocale() === "fr" ? "Indice" : "Hint"),
         args: [
           {
             id: "mode",
-            label: () => (host.uiLocale() === "zh-CN" ? "模式" : "Mode"),
+            label: () => (host.uiLocale() === "fr" ? "Mode" : "Mode"),
             type: "enum",
-            options: [{ value: "a", label: () => (host.uiLocale() === "zh-CN" ? "甲" : "Alpha") }],
+            options: [{ value: "a", label: () => (host.uiLocale() === "fr" ? "Alpha-fr" : "Alpha") }],
           },
         ],
         run: async () => {},
@@ -46,11 +46,11 @@ describe("SessionHost.listActions locale", () => {
     expect(en.args?.[0]?.label).toBe("Mode");
     expect(en.args?.[0]?.options?.[0]?.label).toBe("Alpha");
 
-    host.setUiLocale("zh-CN");
-    const zh = host.listActions()[0]!;
-    expect(zh.label).toBe("问候");
-    expect(zh.hint).toBe("提示");
-    expect(zh.args?.[0]?.options?.[0]?.label).toBe("甲");
+    host.setUiLocale("fr");
+    const fr = host.listActions()[0]!;
+    expect(fr.label).toBe("Saluer");
+    expect(fr.hint).toBe("Indice");
+    expect(fr.args?.[0]?.options?.[0]?.label).toBe("Alpha-fr");
 
     const snap = (await host.buildSnapshot({ locale: "en" })).actions as Array<{ label: string }>;
     expect(snap[0]?.label).toBe("Greet");

@@ -1,4 +1,5 @@
-import type { CharacterId, EntityRef, EventId, JsonValue, Lod, SceneId, WorldTime } from "./types.ts";
+import type { CharacterId, EntityRef, EventId, JsonValue, Lod, NarrationStyle, SceneId, WorldTime } from "./types.ts";
+import type { AppraiseBinding, ModeChangeReason, FallbackPhase, RenderBinding, RuntimeMode } from "./runtime/types.ts";
 
 /**
  * Event catalog and documented extensions. CONTRACT file.
@@ -20,11 +21,12 @@ export const EVENT_KINDS = [
   "field.granted", "field.revoked", "field.age", // extension: runtime grant / revoke / ttl ticks (state-affecting)
   "info_arrival", // extension: knowledge/tag arrival (director anchor targets)
   // intent & generation
-  "intent.decided", "intent.mismatch", "route.decided", "utterance", "choice.offered", "choice.taken", "choice.filtered",
+  "intent.decided", "intent.mismatch", "route.decided", "utterance", "narration", "choice.offered", "choice.taken", "choice.filtered",
   // memory
   "memory.written", "memory.distorted", "memory.propagated", "reflection.proposed", "reflection.accepted", "reflection.rejected",
   // entities
-  "entity.created", "entity.spawned", "entity.retired", "entity.alias_set", "character.promoted",
+  "entity.generate", "entity.created", "entity.spawned", "entity.retired", "entity.alias_set", "character.promoted",
+  "character.secret_unlocked", // extension: {character, secret} — a secret's `unlock` expression became true (permanent)
   // world
   "world.var_set", "time.advanced", "schedule.fired", "deck.drawn", "longevent.phase", "longevent.interrupted", "offscreen.simulated",
   "world.moved", // extension: player/character location change
@@ -39,6 +41,8 @@ export const EVENT_KINDS = [
   "branch.header", "branch.forked", "carry.applied", "purge.applied",
   // config & budget
   "config.reloaded", "config.warning", "config.error", "budget.degraded",
+  // runtime backends (extension): mode switches and per-call fallbacks
+  "runtime.mode_changed", "runtime.fallback_used",
   // scene lifecycle (extension)
   "scene.started", "scene.ended", "turn.started", "turn.ended",
   // gallery (extension — reducer no-op; collection file is authoritative)
@@ -60,7 +64,13 @@ export interface Appraisal {
 
 // ── payloads ──
 export interface InputReceived { actor: CharacterId; addressee?: CharacterId; text: string; choiceId?: string }
-export interface AppraisalEvent { actor: CharacterId; addressee: CharacterId; appraisal: Appraisal }
+export interface AppraisalEvent {
+  actor: CharacterId;
+  addressee: CharacterId;
+  appraisal: Appraisal;
+  /** Recording key of the S1 call that produced the appraisal; absent when the rule backend served it. */
+  recording?: string;
+}
 export interface CheckRolled { id: string; expr: string; rolls: number[]; kept?: number[]; modifier: number; total: number; dc: number; success: boolean; margin: number; advantage?: boolean; disadvantage?: boolean; skill?: string; actor?: CharacterId; target?: CharacterId }
 
 export interface RuleWindowOpened { id: string; owner: CharacterId; target?: CharacterId; untilScene: number; durationScenes: number }
@@ -82,12 +92,84 @@ export interface FieldAge { field: string; scenes?: number; turns?: number }
 export interface InfoArrival { tags?: string[]; claim?: { s: string; p: string; o: string }; knowledge?: string; text?: string }
 
 export interface IntentDecided { owner: CharacterId; intent: string; scores: Record<string, number>; forced?: boolean }
-export interface RouteDecided { tier: "s1" | "s2"; reasons: string[]; degraded?: string[] }
-export interface BudgetDegraded { degraded?: string[]; action?: string; kind_detail?: string }
-export interface Utterance { speaker: CharacterId; text: string; cues: { type: string; args: Record<string, unknown>; at: number }[]; addressee?: CharacterId; intent?: string; autonomous?: boolean }
+/**
+ * Which backend serves each role for one turn. Authoritative for replay: an `llm` role needs a recording, a `rule` role
+ * is recomputed deterministically. A later `runtime.fallback_used` of the same turn overrides the `render` binding.
+ */
+export interface RouteDecided {
+  appraise: AppraiseBinding;
+  render: RenderBinding;
+  /** Router triggers that asked for the escalation tier (empty when none fired). */
+  triggers: string[];
+  /** `true` when the render runs on the escalation tier because a trigger fired and the budget allowed it. */
+  escalated?: boolean;
+  /** Sync calls the turn is entitled to: one S1 call and one S2 call on the named tier; zero for `rule` roles. */
+  budget: { s1Calls: number; s2CallsByTier: Record<string, number> };
+  degraded?: string[];
+}
+export interface BudgetDegraded {
+  degraded?: string[];
+  action?: string;
+  kind_detail?: string;
+  /** What the role was served by before and after the degrade action, for example `pro` → `standard` or `llm` → `rule`. */
+  from?: string;
+  to?: string;
+  reason?: string;
+}
+/** Retrieval hits logged on `utterance` for introspection (no body text — replay-safe). */
+export interface RetrievalLogHit {
+  kind: "memory" | "knowledge";
+  id: string;
+  score: number;
+  owner: CharacterId;
+}
+
+export interface Utterance {
+  speaker: CharacterId;
+  text: string;
+  cues: { type: string; args: Record<string, unknown>; at: number }[];
+  addressee?: CharacterId;
+  intent?: string;
+  autonomous?: boolean;
+  /** Recording key of the S2 stream that produced the utterance; absent when the rule backend served it. */
+  recording?: string;
+  /** Render-time recall hits (ids/scores only). */
+  retrieval?: RetrievalLogHit[];
+}
+/** Speaker-less narration paragraph (`style: "scene_break"` renders as a divider). */
+export interface Narration {
+  text: string;
+  style?: NarrationStyle;
+}
+export interface RuntimeModeChanged {
+  /** `null` for the first mode recorded on a timeline. */
+  before: RuntimeMode | null;
+  after: RuntimeMode;
+  reason: ModeChangeReason;
+  /** Who asked, for example `engine.runtime.setMode`, `cli:--mode`, `animae.yaml`. */
+  trigger?: string;
+}
+export interface RuntimeFallbackUsed {
+  phase: FallbackPhase;
+  from: "llm";
+  to: "rule";
+  error: { code: string; message: string };
+}
 
 export interface MemoryWritten { owner: CharacterId; memoryId: string; kind: "episodic" | "semantic" | "summary" | "reflection"; importance: number; src?: EventId; path: string }
+export interface MemoryDistorted { owner: CharacterId; memoryId: string; distortionKind: string }
 
+/** Request event: fulfilled live inside the mutation gate (reducer no-op). */
+export interface EntityGenerate {
+  request: {
+    kind: "character" | "location" | "item";
+    template: string;
+    id?: string;
+    hints?: Record<string, JsonValue>;
+    brief?: Record<string, JsonValue>;
+  };
+  reason?: string;
+}
 export interface EntityCreated { entity: EntityRef; template?: string; data: Record<string, JsonValue> }
 export interface EntitySpawned {
   entity: EntityRef;
@@ -144,3 +226,5 @@ export interface ModConfigRecord { id: string; version: string; contentHash: str
 export interface ConfigReloaded { hash: string; previous?: string; mods?: ModConfigRecord[] }
 
 export interface CharacterVarSet { id: CharacterId; key: string; value: JsonValue }
+/** A secret of `id` (authored in `secrets.yaml`) whose `unlock` expression became true; unlocking is permanent. */
+export interface CharacterSecretUnlocked { character: CharacterId; secret: string }

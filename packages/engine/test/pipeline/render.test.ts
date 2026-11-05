@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import { renderStage } from "../../src/pipeline/render.ts";
-import { createPipelineKernel } from "./test-kernel.ts";
+import { createPipelineKernel, S2_BINDING } from "./test-kernel.ts";
 
 async function collectRender(
   gen: AsyncGenerator<import("../../src/pipeline/types.ts").RenderPart, import("../../src/pipeline/types.ts").RenderResult>,
@@ -27,7 +27,7 @@ describe("renderStage", () => {
         choices: { enabled: false, count: 3, filter: "true" },
         render: { retryOnMismatch: 0, recentTurns: 4 },
       },
-      s1Handler: async function* () {
+      s2Handler: async function* () {
         yield { text: "Hel" };
         yield { text: "Hello", cues: [{ type: "emote", args: { who: "npc1" }, at: 5 }], intent_realized: "respond" };
       },
@@ -36,7 +36,7 @@ describe("renderStage", () => {
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const { parts, result } = await collectRender(
       renderStage(k, turn, {
-        tier: "s1",
+        binding: S2_BINDING,
         speaker: "npc1",
         addressee: "player",
         intent: { intent: "respond", scores: { respond: 1 } },
@@ -62,7 +62,7 @@ describe("renderStage", () => {
         choices: { enabled: true, count: 2, filter: "choice.text != 'bad'" },
         render: { retryOnMismatch: 1, recentTurns: 4 },
       },
-      s1Handler: (req) => {
+      s2Handler: (req) => {
         if (req.segments.dynamic?.includes("must realize")) {
           return {
             text: "ok",
@@ -81,7 +81,7 @@ describe("renderStage", () => {
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const { result, parts } = await collectRender(
       renderStage(k, turn, {
-        tier: "s1",
+        binding: S2_BINDING,
         speaker: "npc1",
         addressee: "player",
         intent: { intent: "respond", scores: { respond: 1 } },
@@ -109,7 +109,7 @@ describe("renderStage", () => {
         choices: { enabled: false, count: 3, filter: "true" },
         render: { retryOnMismatch: 0, recentTurns: 4 },
       },
-      s1Handler: async function* () {
+      s2Handler: async function* () {
         yield {
           text: "Hi",
           cues: [
@@ -125,7 +125,7 @@ describe("renderStage", () => {
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const { result } = await collectRender(
       renderStage(k, turn, {
-        tier: "s1",
+        binding: S2_BINDING,
         speaker: "npc1",
         addressee: "player",
         intent: { intent: "respond", scores: { respond: 1 } },
@@ -151,8 +151,8 @@ describe("renderStage", () => {
       },
     });
     // The render schema rejects a blank reply, so only a port that skips validation can deliver one.
-    k.models.s1 = {
-      ...k.models.s1,
+    k.models.s2 = {
+      ...k.models.s2,
       async *stream() {
         yield { type: "partial" as const, value: { text: "Partial" } };
         yield { type: "final" as const, value: { text: "", cues: [], intent_realized: "respond" } };
@@ -162,7 +162,7 @@ describe("renderStage", () => {
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const { result } = await collectRender(
       renderStage(k, turn, {
-        tier: "s1",
+        binding: S2_BINDING,
         speaker: "npc1",
         addressee: "player",
         intent: { intent: "respond", scores: { respond: 1 } },

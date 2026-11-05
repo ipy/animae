@@ -46,7 +46,8 @@ export function initialState(authored: Authored, policy: ResolvedPolicy): Engine
     windows: {},
     firedThresholds: {},
     grants: [],
-    budget: { turns: 0, s2Turns: 0, s2Scene: 0, degraded: [] },
+    budget: { turns: 0, s2Turns: 0, s2Scene: 0, degraded: [], s2ByTier: {}, escalated: 0 },
+    runtime: { fallbacks: 0 },
     memoryIndex: {},
     config: {
       hash: authored.hash,

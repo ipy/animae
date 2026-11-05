@@ -19,7 +19,7 @@ import {
   streamFromObject,
   withRecording,
 } from "../../src/model/index.ts";
-import { AnimaeError } from "../../src/types.ts";
+import { AnimaeConfigSchema } from "../../src/schema/authored.ts";
 import type { RecordingStore } from "../../src/contracts.ts";
 import type { StreamPart } from "../../src/ports.ts";
 import { isTransientError, withTransientRetries } from "../../src/model/retry.ts";
@@ -181,11 +181,45 @@ describe("withRecording", () => {
 });
 
 describe("createModelsFromConfig", () => {
-  test("requires models", () => {
-    expect(() => createModelsFromConfig({ seed: 0, policies: [] })).toThrow(AnimaeError);
-    expect(() => createModelsFromConfig({ seed: 0, policies: [], models: { s1: { provider: "anthropic", model: "x" } } as never })).toThrow(
-      AnimaeError,
+  test("no models configured: nothing to build, the rule backend serves both roles", () => {
+    expect(createModelsFromConfig({ seed: 0, policies: [] })).toEqual({});
+  });
+
+  test("S1 with provider rule leaves the role to the rule backend", () => {
+    const out = createModelsFromConfig({ seed: 0, policies: [], models: { s1: { provider: "rule" } } } as never);
+    expect(out.s1).toBeUndefined();
+    expect(out.tiers).toBeUndefined();
+  });
+
+  test("S1 alone builds the S1 port and no S2 tiers", () => {
+    const out = createModelsFromConfig(
+      { seed: 0, policies: [], models: { s1: { provider: "ollama", model: "m", baseURL: "http://127.0.0.1:11434" } } } as never,
+      { env: {} },
     );
+    expect(out.s1).toBeDefined();
+    expect(out.tiers).toBeUndefined();
+  });
+
+  test("S2 tiers keep their configured order; the default tier is named", () => {
+    const spec = { provider: "ollama", model: "m", baseURL: "http://127.0.0.1:11434" };
+    const out = createModelsFromConfig(
+      {
+        seed: 0,
+        policies: [],
+        models: { s2: { default: "standard", tiers: [{ id: "standard", ...spec }, { id: "pro", ...spec, model: "m2" }], routing: { escalate_to: "pro" } } },
+      } as never,
+      { env: {} },
+    );
+    expect(out.tiers?.list.map((t) => t.id)).toEqual(["standard", "pro"]);
+    expect(out.tiers?.defaultId).toBe("standard");
+  });
+
+  test("animae.yaml rejects an incomplete model entry and a rule provider in a tier", () => {
+    const base = { seed: 0, policies: [] };
+    expect(AnimaeConfigSchema.safeParse({ ...base, models: { s1: { provider: "anthropic" } } }).success).toBe(false);
+    expect(AnimaeConfigSchema.safeParse({ ...base, models: { s2: { tiers: [{ id: "a", provider: "rule" }] } } }).success).toBe(false);
+    expect(AnimaeConfigSchema.safeParse({ ...base, models: { s2: { default: "ghost", tiers: [{ id: "a", provider: "ollama", model: "m" }] } } }).success).toBe(false);
+    expect(AnimaeConfigSchema.safeParse({ ...base, models: { s1: { provider: "rule" } } }).success).toBe(true);
   });
 });
 

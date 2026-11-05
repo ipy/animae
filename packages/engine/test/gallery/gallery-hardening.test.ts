@@ -7,7 +7,7 @@ import { FsStorage } from "../../src/store/fs.ts";
 import { MemoryStorage } from "../../src/store/memory.ts";
 import { createScriptedModel } from "../../src/model/scripted.ts";
 import { e2ePreset } from "../e2e/fixture.ts";
-import { seedGalleryEngineRoot } from "./fixture.ts";
+import { seedGalleryEngineRoot, waitForJob } from "./fixture.ts";
 import { createFakeImagePort } from "./fake-image-port.ts";
 import type { GalleryLifecycleHooks, GalleryService } from "../../src/gallery/types.ts";
 import { createRpcServer } from "../../src/rpc/server.ts";
@@ -70,9 +70,7 @@ describe("gallery hardening", () => {
         });
         await engine.gallery.unlock("dawn-greenhouse");
         const { job } = await engine.gallery.render("dawn-greenhouse");
-        await new Promise((r) => setTimeout(r, 200));
-        const j = engine.gallery.jobs().find((x) => x.id === job);
-        expect(j?.state).toBe("failed");
+        expect((await waitForJob(engine.gallery, job)).state).toBe("failed");
         await engine.close();
         await rm(sub, { recursive: true, force: true });
       }
@@ -98,7 +96,7 @@ describe("gallery hardening", () => {
       const jobs: string[] = [];
       for (let i = 0; i < 3; i++) jobs.push((await engine.gallery.render("dawn-greenhouse")).job);
       expect(await engine.gallery.cancel(jobs[2]!)).toBe(true);
-      await new Promise((r) => setTimeout(r, 50));
+      await waitForJob(engine.gallery, jobs[2]!);
       const snap = await storage.readText(COLLECTION_PATH);
       expect(snap).toContain('"state": "cancelled"');
       for (const id of jobs) await engine.gallery.cancel(id);
@@ -203,10 +201,8 @@ describe("gallery hardening", () => {
         models: { s1: model, s2: model },
       });
       await engine.scene.start({ location: "tavern", participants: ["player"] });
-      await engine.gallery.capture();
-      await new Promise((r) => setTimeout(r, 150));
-      await engine.gallery.capture();
-      await new Promise((r) => setTimeout(r, 150));
+      await waitForJob(engine.gallery, (await engine.gallery.capture()).job);
+      await waitForJob(engine.gallery, (await engine.gallery.capture()).job);
       const removed = await engine.timeline.events({ kinds: ["gallery.removed"] });
       expect(removed.length).toBeGreaterThan(0);
       await engine.close();
@@ -229,8 +225,7 @@ describe("gallery hardening", () => {
         models: { s1: model, s2: model },
       });
       await engine.gallery.unlock("dawn-greenhouse");
-      await engine.gallery.render("dawn-greenhouse");
-      await new Promise((r) => setTimeout(r, 200));
+      await waitForJob(engine.gallery, (await engine.gallery.render("dawn-greenhouse")).job);
       const io = memoryDuplex();
       const server = createRpcServer(engine, io);
       const run = server.run();
@@ -360,8 +355,8 @@ describe("gallery hardening", () => {
         models: { s1: model, s2: model },
       });
       await engine.scene.start({ location: "tavern", participants: ["player"] });
-      const { item } = await engine.gallery.capture({ focus: "hello\u0000world" });
-      await new Promise((r) => setTimeout(r, 150));
+      const { item, job } = await engine.gallery.capture({ focus: "hello\u0000world" });
+      await waitForJob(engine.gallery, job);
       const raw = await storage.readText(COLLECTION_PATH);
       expect(raw).toContain("hello world");
       expect(raw).not.toContain("\\u0000");
@@ -391,10 +386,9 @@ describe("gallery hardening", () => {
       });
       await engine.scene.start({ location: "tavern", participants: ["player"] });
       const { job } = await engine.gallery.capture();
-      await new Promise((r) => setTimeout(r, 250));
-      const j = engine.gallery.jobs().find((x) => x.id === job);
-      expect(j?.state).toBe("failed");
-      expect(j?.error?.code).toBe("GALLERY_BRIEF_INVALID");
+      const j = await waitForJob(engine.gallery, job);
+      expect(j.state).toBe("failed");
+      expect(j.error?.code).toBe("GALLERY_BRIEF_INVALID");
       await engine.close();
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -9,9 +9,7 @@ import { characterDisplayName } from "../utils/character-name.ts";
 type TierMap = { self?: Record<string, string>; toward?: Record<string, Record<string, string>> };
 
 export function ParticipantTracks() {
-  const { locale } = useTuiI18n();
-  const theme = useTheme();
-  const { engine, viewer, displayName } = useEngineContext();
+  const { displayName } = useEngineContext();
   const scene = useQuery("scene") as { participants?: string[] } | null;
 
   const participants = scene?.participants?.filter((p) => p !== "player") ?? [];
@@ -19,45 +17,54 @@ export function ParticipantTracks() {
 
   return (
     <Box flexDirection="column">
-      {participants.map((id) => {
-        const tiers = engine.query(viewer, `characters/${id}/tiers`) as TierMap | undefined;
-        const towardPlayer = tiers?.toward?.player ?? tiers?.toward?.["player"];
-        const selfTiers = tiers?.self;
-        const lines: string[] = [];
-        if (towardPlayer) {
-          for (const [track, tierName] of Object.entries(towardPlayer)) {
-            if (tierName == null || tierName === "") continue;
-            lines.push(
-              `${formatTrackLabel(track, locale)} ${formatTierLabel(String(tierName), locale)}`,
-            );
-          }
-        }
-        if (selfTiers) {
-          for (const [track, tierName] of Object.entries(selfTiers)) {
-            if (tierName == null || tierName === "") continue;
-            lines.push(
-              `${formatTrackLabel(track, locale)} ${formatTierLabel(String(tierName), locale)}`,
-            );
-          }
-        }
-        const label = characterDisplayName({ engine, viewer, displayName }, id) ?? id;
-        return (
-          <Box key={id} flexDirection="column" marginBottom={0}>
-            <Text bold color={theme.colors.primary}>
-              {label}
-            </Text>
-            {lines.length ? (
-              lines.map((line) => (
-                <Text key={line} dimColor>
-                  · {line}
-                </Text>
-              ))
-            ) : (
-              <Text dimColor>· —</Text>
-            )}
-          </Box>
-        );
-      })}
+      {participants.map((id) => (
+        <ParticipantTierBlock key={id} id={id} displayName={displayName} />
+      ))}
+    </Box>
+  );
+}
+
+function ParticipantTierBlock({
+  id,
+  displayName,
+}: {
+  id: string;
+  displayName?: (id: string) => string | undefined;
+}) {
+  const { engine, viewer } = useEngineContext();
+  const { locale } = useTuiI18n();
+  const theme = useTheme();
+  const tiers = useQuery(`characters/${id}/tiers`) as TierMap | undefined;
+  const towardPlayer = tiers?.toward?.player ?? tiers?.toward?.["player"];
+  const selfTiers = tiers?.self;
+  const lines: string[] = [];
+  if (towardPlayer) {
+    for (const [track, tierName] of Object.entries(towardPlayer)) {
+      if (tierName == null || tierName === "") continue;
+      lines.push(`${formatTrackLabel(track, locale)} ${formatTierLabel(String(tierName), locale)}`);
+    }
+  }
+  if (selfTiers) {
+    for (const [track, tierName] of Object.entries(selfTiers)) {
+      if (tierName == null || tierName === "") continue;
+      lines.push(`${formatTrackLabel(track, locale)} ${formatTierLabel(String(tierName), locale)}`);
+    }
+  }
+  const label = characterDisplayName({ engine, viewer, displayName }, id) ?? id;
+  return (
+    <Box flexDirection="column" marginBottom={0}>
+      <Text bold color={theme.colors.primary}>
+        {label}
+      </Text>
+      {lines.length ? (
+        lines.map((line) => (
+          <Text key={line} dimColor>
+            · {line}
+          </Text>
+        ))
+      ) : (
+        <Text dimColor>· —</Text>
+      )}
     </Box>
   );
 }

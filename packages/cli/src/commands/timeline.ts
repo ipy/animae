@@ -1,5 +1,6 @@
 import { printError } from "../errors.ts";
 import { openEngine, type OpenEngineOptions } from "../engine-open.ts";
+import { ChunkPrinter } from "../plain/chunk-printer.ts";
 
 export async function runTimeline(sub: string, rest: string[], opts: OpenEngineOptions): Promise<number> {
   let engine;
@@ -107,11 +108,9 @@ export async function runTimeline(sub: string, rest: string[], opts: OpenEngineO
           if (rest[i] === "--from" && rest[i + 1]) from = rest[++i];
           else if (rest[i] === "--to" && rest[i + 1]) to = rest[++i];
         }
-        for await (const chunk of engine.timeline.replay(b, { from, to })) {
-          if (chunk.type === "text") process.stdout.write(chunk.text);
-          else if (chunk.type === "cue") process.stdout.write(` [${chunk.cue.type}: ${JSON.stringify(chunk.cue.args)}]`);
-          else if (chunk.type === "done") process.stdout.write("\n");
-        }
+        const printer = new ChunkPrinter(process.stdout);
+        for await (const chunk of engine.timeline.replay(b, { from, to })) printer.write(chunk);
+        printer.finish();
         return 0;
       }
       default:

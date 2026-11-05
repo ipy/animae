@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { collectKnownGalleryErrorCodes, galleryErrorTextShowsBareCode } from "@animae/host";
 import { resolveGalleryJobFailureReason } from "../src/gallery-job-error.ts";
 
-const LOCALES = ["en", "zh-CN"] as const;
+const LOCALES = ["en", "fr"] as const;
 
 describe("resolveGalleryJobFailureReason (web client path)", () => {
   for (const locale of LOCALES) {

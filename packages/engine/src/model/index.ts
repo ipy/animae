@@ -74,3 +74,26 @@ export {
   extractJsonObjectFromText,
 } from "./reasoning-fetch.ts";
 export type { ModelPortOptions, RecordedObjectResponse, RecordedStreamResponse } from "./types.ts";
+export {
+  FULL_MODE,
+  appraiseBindingFor,
+  currentMode,
+  llmRoles,
+  renderBindingFor,
+  ruleModelOf,
+  s1PortFor,
+  s1SpecOf,
+  s2PortFor,
+  s2SpecOf,
+  tiersOf,
+} from "./select.ts";
+export {
+  SINGLE_TIER_ID,
+  createTierResolver,
+  singleTierResolver,
+  type S2Job,
+  type S2Tier,
+  type TierResolver,
+  type TierRouting,
+} from "./tier-resolver.ts";
+export { availabilityOf, modelsInfoOf, resolveInitialMode } from "./mode.ts";

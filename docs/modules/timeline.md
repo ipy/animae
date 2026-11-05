@@ -27,7 +27,9 @@ Then `carry.applied` summarizes copied items.
 - `rule.window_opened` → `state.windows`; `rule.threshold_fired` → `state.firedThresholds`.
 - `character.promoted.data` merges into `state.generated.characters` and updates live character fields when present.
 - `reflection.accepted.goal_changes`: `add` / `remove` / `update` on `CharacterState.goals`.
-- `budget.degraded`: appends `degraded[]` (and optional `action`) to `state.budget.degraded`; `route.decided` with `tier: "s2"` bumps S2 counters.
+- `budget.degraded`: appends action names to `state.budget.degraded`; payload includes `from`/`to`/`reason`/`kind_detail`.
+- `route.decided`: increments `budget.turns`; when `render.backend === "llm"`, bumps `budget.s2Turns` and `budget.s2ByTier[tier]`; `escalated` increments `budget.escalated`.
+- `runtime.mode_changed`: stores `state.runtime.mode`; `runtime.fallback_used`: increments `state.runtime.fallbacks`.
 - `character.var_set`, `field.age`, `world.moved`, `item.moved` update live state; `info_arrival` is a no-op in projection (consumed by director/anchors).
 - `scene.ended` clears `state.scene` after marking ended.
 
@@ -42,7 +44,11 @@ See also [spec Section 13](../spec.md#13-timeline) for normative timeline behavi
 
 ## Recordings (`recordings.jsonl`)
 
-Per-branch append-only LLM cache (see [model.md](./model.md#recording)). `RecordingStore.record` skips identical last-wins responses. On `open()` in record/live mode, each branch file on the chain may be compacted in place (dedupe keys, strip legacy stream partials). Tools: `compactRecordingsFile(path)` and `compactRecordingsStorage`.
+Per-branch append-only **LLM** cache (see [model.md](./model.md#recording)). Rule-backend answers are never recorded. `RecordingStore.record` skips identical last-wins responses. On `open()` in record/live mode, each branch file on the chain may be compacted in place (dedupe keys, strip legacy stream partials). Tools: `compactRecordingsFile(path)` and `compactRecordingsStorage`.
+
+## Replay (`timeline.replay`)
+
+Uses `replayPlan` per turn: mode from `runtime.mode_changed`, backends from `route.decided`, recordings for LLM bindings only; `runtime.fallback_used` forces rule recompute for that phase ([Appendix D](../spec.md#appendix-d-replay-semantics)). Rule-mode timelines replay byte-identically without recordings. Missing LLM recordings → `RECORDING_MISSING` with turn/key details before playback starts.
 
 ## Storage test helper
 

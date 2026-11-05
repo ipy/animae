@@ -23,7 +23,7 @@ SCENARIOS = [
     "scene-start",
     "typewriter-mid",
     "typewriter-done",
-    "cjk",
+    "wide",
     "choices",
     "sidepanel",
     "help",

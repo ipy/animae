@@ -8,7 +8,7 @@ import { minimalPolicy } from "../timeline/fixture.ts";
 describe("salvageStructuredFromValidationError", () => {
   test("wraps prose-only render body", () => {
     const schema = buildRenderSchema(minimalPolicy());
-    const prose = "（她停了一下）今天天气很稳。";
+    const prose = "\uff08\u5979\u505c\u4e86\u4e00\u4e0b\uff09\u4eca\u5929\u5929\u6c14\u5f88\u7a33\u3002";
     const err = new NoObjectGeneratedError({
       message: "no object",
       text: prose,
@@ -105,9 +105,10 @@ describe("salvageStructuredFromValidationError (cut-off JSON)", () => {
   const schema = buildRenderSchema(minimalPolicy());
 
   test("keeps the text of a reply that was cut off inside a later field", () => {
-    const err = noObject('{"text":"（她停了一下）今天天气很稳。","cues":[{"type":"expression","args":{"na');
+    const sample = "\uff08\u5979\u505c\u4e86\u4e00\u4e0b\uff09\u4eca\u5929\u5929\u6c14\u5f88\u7a33\u3002";
+    const err = noObject(`{"text":"${sample}","cues":[{"type":"expression","args":{"na`);
     const out = salvageStructuredFromValidationError(err, schema);
-    expect(out?.text).toBe("（她停了一下）今天天气很稳。");
+    expect(out?.text).toBe(sample);
     expect(out?.cues).toEqual([]);
   });
 
@@ -134,5 +135,26 @@ describe("salvageStructuredFromValidationError (cut-off JSON)", () => {
     const out = salvageStructuredFromValidationError(noObject('{"text":"Still here.","cues":"none","intent_realized":7}'), schema);
     expect(out?.text).toBe("Still here.");
     expect(out?.cues).toEqual([]);
+  });
+});
+
+describe("salvage edge cases", () => {
+  test("finds the model's text through a chain of wrapped errors, and gives up when no error carries any", () => {
+    const schema = z.object({ ok: z.literal(true) });
+    const wrapped = new Error("outer", { cause: new Error("middle", { cause: noObject('{"ok":true}') }) });
+    expect(salvageStructuredFromValidationError(wrapped, schema)?.ok).toBe(true);
+    expect(salvageStructuredFromValidationError(new Error("plain"), schema)).toBeUndefined();
+    expect(salvageStructuredFromValidationError(noObject("   "), schema)).toBeUndefined();
+    expect(salvageStructuredFromValidationError("not an error", schema)).toBeUndefined();
+  });
+
+  test("escape sequences inside strings survive repair; a reply cut off right after a backslash loses only the backslash", () => {
+    const parse = (raw: string) => JSON.parse(repairJsonText(raw)?.json ?? "null") as unknown;
+    expect(parse('{"text":"say \\"hi\\" and \\\\ stop","tail":"cut')).toEqual({ text: 'say "hi" and \\ stop', tail: "cut" });
+    expect(parse('{"text":"abc\\')).toEqual({ text: "abc" });
+  });
+
+  test("text that repair cannot turn into JSON is not salvaged", () => {
+    expect(salvageStructuredFromValidationError(noObject('{"a": nope'), z.object({ a: z.string() }))).toBeUndefined();
   });
 });

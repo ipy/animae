@@ -176,7 +176,7 @@ class PtySession:
                 cont = raw.strip()
                 if not cont or "╭" in cont or cont.startswith(">"):
                     break
-                if "F1/" in cont or "输入" in cont or "Side panel" in cont:
+                if "F1/" in cont or "Side panel" in cont:
                     break
                 # Transcript wraps use wide space padding; input continuations do not.
                 if re.search(r"  {4,}", raw):
@@ -297,7 +297,7 @@ class PtySession:
                     cont = lines[j].strip()
                     if not cont or "╭" in cont or cont.startswith(">"):
                         break
-                    if "F1/" in cont or "输入" in cont:
+                    if "F1/" in cont or "Side panel" in cont:
                         break
                     parts.append(cont)
                     j += 1
@@ -419,7 +419,7 @@ def spawn_host_dist(
 ) -> tuple[PtySession, subprocess.Popen[bytes], str, str]:
     """Compiled host application binary (`new`) with temp home/config and stub LLM.
 
-    Requires ``HOST_PTY_BIN`` and ``HOST_PTY_STUB`` (absolute paths); set by the host monorepo build/CI.
+    Requires ``HOST_PTY_BIN`` and ``HOST_PTY_STUB`` (absolute paths); the embedding project's build or CI sets them.
     """
     import tempfile
     import textwrap
@@ -497,8 +497,6 @@ def _protagonist_name_wizard_active(plain: str) -> bool:
             m in s
             for m in (
                 "Protagonist display name",
-                "主角显示名",
-                "主角姓名",
                 "Warden]:",
             )
         ):
@@ -514,7 +512,6 @@ def _shell_ui_markers(plain: str) -> bool:
             "F1/",
             "Side panel",
             ">",
-            "输入 :help",
             "Demo session",
         )
     )

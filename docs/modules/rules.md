@@ -12,12 +12,14 @@ CEL evaluation, dice, rule-function registry, track math primitives, and synchro
 | `celCheck(expr)` | Compile-only check; wired into zod `Cel` via `setCelValidator` |
 | `adaptCelContext` / `adaptCelResult` | cel-js 8.x numeric bridge (see below) |
 | `createRuleEngine(cel)` | Register/sync `RuleFn`; `run` validates drafts and seeds RNG from `rngKey` |
-| `buildCelContext(deps, params)` | [CEL context table](../architecture.md#44-cel-context-buildcelcontext) (+ L1 `track_offset` / `tier_shift`) |
+| `buildCelContext(deps, params)` | [CEL context table](../architecture.md#44-cel-context-buildcelcontext) (+ L1 `track_offset` / `tier_shift`; `model.kind` / `model.tier` / `model.tags` via `extra.model`) |
 | `tierFor`, `marginal`, `decayedCounter`, `computeDelta`, `applyTurnCap`, `decayStep` | [Tracks, tiers, deltas](../architecture.md#42-tracks-tiers-deltas) |
 | `parseDice`, `rollDice`, `rollCheck` | [Dice and checks](../spec.md#18-dice-and-checks) |
 | `runChecks`, `adjudicate`, `decideIntent`, `runStageRules`, `runCustomStageRules`, `decayTicks` | Pipeline stages |
 
 `RulesDeps`: `{ state, authored, policy, cel, rules, catalog, celContext }`.
+
+**`decideIntent`** scores `policy.intent_rules` only. It does **not** read `policy.input.response` (no `emitEventType` return). Non-normal input classes are handled earlier in the turn pipeline: `applyInputResponse` in `pipeline/run-turn.ts` (right after appraise) applies static `emit` / `intent` or a `hook` rule at stage `classify`, then `decideIntent` runs on the updated appraisal; forced intents from classify are applied when emitting `intent.decided`.
 
 ## CEL numeric semantics (cel-js 8.x)
 
@@ -41,6 +43,10 @@ Reducer owner should fold these into `state.windows` / `state.firedThresholds` i
 - `adjudicate` calls the same helper with merged L3 from field resolve on the turn.
 - `rule_override` swaps `fn` in the original rule's slot (original `when` / stage); one hop only.
 - Policy or field rules with `stage: tick` fail validation (schedule items invoke registered rules with tick ctx separately).
+
+## Pipeline boundaries
+
+- **`input.response` hooks** run in the pipeline at the classify boundary (`run-turn.ts` `applyInputResponse`), not in `decideIntent`. `decideIntent` applies L2 force/forbid/bias and `intent_rules` scoring only.
 
 ## Edge cases
 

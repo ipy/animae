@@ -1,4 +1,5 @@
-import { Box, Text, useWindowSize } from "ink";
+import { Box, Text } from "ink";
+import { useTerminalSize } from "../context/terminal-size-context.tsx";
 import type { LayoutProps } from "../types.ts";
 import { Header } from "../components/Header.tsx";
 import { Footer } from "../components/Footer.tsx";
@@ -34,7 +35,7 @@ function InputChrome({
 }
 
 export function DefaultLayout(props: LayoutProps) {
-  const { columns, rows } = useWindowSize();
+  const { columns, rows } = useTerminalSize();
   const theme = useTheme();
   const { state, config } = useAppState();
   const HeaderComp = config.header ?? Header;

@@ -1,9 +1,11 @@
 import { parseArgs } from "node:util";
-import type { ModelMode } from "@animae/engine";
+import { RUNTIME_MODE_PRESETS, isRuntimeModePreset, type ModelMode, type RuntimeModePreset } from "@animae/engine";
 
 export interface GlobalCliOptions {
   root: string;
   modelMode?: ModelMode;
+  /** Runtime mode to start in: `full`, `judge-only`, `narrate-only` or `rule` (overrides `animae.yaml`). */
+  mode?: RuntimeModePreset;
   seed?: number;
   /** BCP-47 UI locale (overrides env negotiation for engine-owned CLI/TUI output). */
   lang?: string;
@@ -18,10 +20,10 @@ export type ParsedCli =
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "init"; dir: string; preset?: string; global: GlobalCliOptions }
-  | { kind: "validate"; global: GlobalCliOptions; mods?: string[]; locale?: string }
+  | { kind: "validate"; global: GlobalCliOptions; mods?: string[]; locale?: string; mode?: RuntimeModePreset }
   | { kind: "mods"; global: GlobalCliOptions; sub: "list" | "validate" | "explain"; path?: string; mods?: string[] }
   | { kind: "run"; global: GlobalCliOptions; scene?: string; withIds?: string[]; viewer?: string; theme?: string; plain?: boolean }
-  | { kind: "inspect"; global: GlobalCliOptions; path: string; viewer?: string }
+  | { kind: "inspect"; global: GlobalCliOptions; path: string; viewer?: string; eventKind?: string }
   | { kind: "timeline"; global: GlobalCliOptions; sub: string; rest: string[] }
   | { kind: "import-card"; global: GlobalCliOptions; file: string }
   | { kind: "export-card"; global: GlobalCliOptions; id: string }
@@ -51,24 +53,31 @@ Usage:
 
 Commands:
   init <dir> [--preset <id>]     Create a new data root skeleton
-  validate [--mods a,b] [--locale <tag>]  Load and validate authored data + policy (+ mods, UI string tables)
+  validate [--mods a,b] [--locale <tag>] [--mode <mode>]
+                                 Load and validate authored data + policy (+ mods, UI string tables);
+                                 with --mode, also check the data root can play under that runtime mode
   mods list                      List mods under mods/
   mods validate [--mods a,b]     Validate mod manifests and dependency order
   mods explain <path>            Show which layer provided an authored path
   run [options]                  Interactive session (TUI or --plain)
-  inspect <path> [--viewer <v>]  Query engine state
+  inspect <path> [--viewer <v>] [--kind <event kind>]
+                                 Query engine state (--kind filters the \`events\` path)
   timeline <subcommand> ...      Timeline operations
   import-card <file>             Import a character card
   export-card <id>               Export a character card
   serve --stdio                  JSON-RPC sidecar on stdin/stdout
   gallery <sub> ...              Gallery list/show/capture/render (headless)
-  i18n check|pseudo|extract      Locale catalog / prompt hygiene
+  i18n check [--pack <module>]|pseudo|extract
+                                 Locale pack / prompt hygiene (--pack loads a locale pack module)
 
 Global flags:
   --root <dir>                   Data root (default: cwd)
   --model-mode live|record|replay
+  --mode full|judge-only|narrate-only|rule
+                                 Runtime mode: which backend serves S1 (judgment) and S2 (text);
+                                 \`rule\` plays with zero tokens (overrides animae.yaml)
   --seed <n>
-  --lang <locale>                UI locale (BCP-47, e.g. en, zh-CN)
+  --lang <locale>                UI locale (BCP-47, e.g. en, fr, pt-BR)
   --image-command <path>         External ImagePort (JSON stdin, image stdout)
   --image-command-arg <arg>      Extra argv for --image-command (repeatable)
   --version
@@ -92,6 +101,7 @@ function splitCommand(argv: string[]): { globalArgv: string[]; command: string; 
 const GLOBAL_FLAG_TOKENS = new Set([
   "--root",
   "--model-mode",
+  "--mode",
   "--seed",
   "--lang",
   "--image-command",
@@ -109,6 +119,7 @@ export function peelGlobalFlags(argv: string[]): { globalArgv: string[]; rest: s
     if (
       t === "--root" ||
       t === "--model-mode" ||
+      t === "--mode" ||
       t === "--seed" ||
       t === "--lang" ||
       t === "--image-command" ||
@@ -133,6 +144,7 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
     options: {
       root: { type: "string" },
       "model-mode": { type: "string" },
+      mode: { type: "string" },
       seed: { type: "string" },
       lang: { type: "string" },
       "image-command": { type: "string" },
@@ -148,6 +160,12 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
     throw new Error(`Invalid --model-mode: ${modelMode}`);
   }
 
+  const modeRaw = values.mode as string | undefined;
+  if (modeRaw !== undefined && !isRuntimeModePreset(modeRaw)) {
+    throw new Error(`Invalid --mode: ${modeRaw} (expected ${RUNTIME_MODE_PRESETS.join(", ")})`);
+  }
+  const mode = modeRaw as RuntimeModePreset | undefined;
+
   const seedRaw = values.seed;
   const seed = seedRaw !== undefined ? Number(seedRaw) : undefined;
   if (seedRaw !== undefined && !Number.isFinite(seed)) {
@@ -159,6 +177,7 @@ function parseGlobalPartial(argv: string[]): Omit<GlobalCliOptions, "root"> & { 
   return {
     root: values.root as string | undefined,
     modelMode,
+    mode,
     seed,
     lang: values.lang as string | undefined,
     imageCommand: values["image-command"] as string | undefined,
@@ -211,6 +230,7 @@ export function parseCli(argv: string[]): ParsedCli {
         global,
         mods: mods?.length ? mods : undefined,
         locale,
+        mode: global.mode,
       };
     }
     case "mods": {
@@ -258,12 +278,16 @@ export function parseCli(argv: string[]): ParsedCli {
     case "inspect": {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { viewer: { type: "string" } },
+        options: { viewer: { type: "string" }, kind: { type: "string" } },
         allowPositionals: true,
       });
       const path = positionals[0];
       if (!path) throw new Error("inspect requires <path>");
-      return { kind: "inspect", global, path, viewer: values.viewer as string | undefined };
+      const eventKind = values.kind as string | undefined;
+      if (eventKind !== undefined && path !== "events") {
+        throw new Error("--kind filters the `events` path: use `animae inspect events --kind <event kind>`");
+      }
+      return { kind: "inspect", global, path, viewer: values.viewer as string | undefined, eventKind };
     }
     case "timeline": {
       const sub = rest[0];

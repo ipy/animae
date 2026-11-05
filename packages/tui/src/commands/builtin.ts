@@ -2,6 +2,8 @@ import { localizeError, type FormatParams } from "@animae/i18n";
 import { writeModelCallLogJsonl, type ModelCallLogEntry } from "@animae/engine";
 import type { CommandApi, CustomCommand } from "../types.ts";
 import { runGalleryCommand } from "./gallery.ts";
+import { runModeCommand } from "./mode.ts";
+import { notifyTimelineNavigated } from "../utils/engine-events.ts";
 
 type TFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -32,6 +34,7 @@ export const builtinCommands: Record<string, CustomCommand> = {
     run: async (args, api) => {
       if (args[0]) {
         await api.engine.timeline.load(args[0]!);
+        notifyTimelineNavigated(api.engine);
         api.notify(msg(api, "command.loaded", { label: args[0]! }));
         return;
       }
@@ -48,6 +51,7 @@ export const builtinCommands: Record<string, CustomCommand> = {
         return;
       }
       await api.engine.timeline.rewind(id);
+      notifyTimelineNavigated(api.engine);
       api.notify(msg(api, "command.rewound", { eventId: id }));
     },
   },
@@ -81,7 +85,10 @@ export const builtinCommands: Record<string, CustomCommand> = {
         api.notify(msg(api, "command.query_usage"), "warn");
         return;
       }
-      const value = api.engine.query(viewer, path);
+      const value =
+        viewer === "player" && typeof api.engine.queryAsync === "function"
+          ? await api.engine.queryAsync(viewer as import("../types.ts").Viewer, path)
+          : api.engine.query(viewer, path);
       return JSON.stringify(value, null, 2);
     },
   },
@@ -159,6 +166,11 @@ export const builtinCommands: Record<string, CustomCommand> = {
     description: "command.desc.gallery",
     usage: "command.usage.gallery",
     run: runGalleryCommand,
+  },
+  mode: {
+    description: "command.desc.mode",
+    usage: "command.usage.mode",
+    run: runModeCommand,
   },
   mouse: {
     description: "command.desc.mouse",

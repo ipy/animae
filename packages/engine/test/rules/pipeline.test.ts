@@ -45,6 +45,7 @@ const policy: ResolvedPolicy = {
     distortion: { enabled: false, p: 0.1, maxImportance: 0.7, kinds: ["intensify"] },
     propagation: { enabled: false, onTick: "day", distortionPerHop: 1 },
   },
+  appraise: {},
   router: { triggers: {}, budget: { syncCallsPerTurn: 2, s2PerTurn: 1, s2Ratio: 0.15, s2ReservedForAnchors: 0.03, maxOutputTokens: { s1: 400, s2: 800 } }, degrade: [] },
   render: { retryOnMismatch: 0, recentTurns: 12 },
   cues: { types: {} },
@@ -141,11 +142,19 @@ test("decideIntent tie breaks by declaration order", () => {
   expect(r.intent).toBe("respond");
 });
 
-test("decideIntent input.response override", () => {
+test("decideIntent ignores input.response (handled in pipeline classify boundary)", () => {
   const cel = createCelEngine();
   const rules = createRuleEngine(cel);
   const st = emptyState();
-  const deps = { state: st, authored, policy, cel, rules, catalog, celContext: {} };
+  const deps = {
+    state: st,
+    authored,
+    policy,
+    cel,
+    rules,
+    catalog,
+    celContext: buildCelContext({ state: st, authored, policy, catalog }, { self: "npc", other: "player", actor: "player" }),
+  };
   const r = decideIntent(deps, {
     owner: "npc",
     actor: "player",
@@ -159,8 +168,8 @@ test("decideIntent input.response override", () => {
       input_class: "meta_probe",
     },
   });
-  expect(r.forced).toBe(true);
-  expect(r.emitEventType).toBe("meta_probe");
+  expect(r.forced).toBeUndefined();
+  expect(r.intent).toBe("respond");
 });
 
 test("adjudicate emits track.delta for care", () => {

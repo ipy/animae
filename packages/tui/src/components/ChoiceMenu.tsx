@@ -20,7 +20,10 @@ export function ChoiceMenu() {
             key={c.id}
             hint={c.text}
             focused={selected}
-            onPress={() => void submit("", c.id)}
+            onPress={() => {
+              if (state.pending) return;
+              void submit("", c.id);
+            }}
           >
             <Text color={selected ? theme.colors.player : theme.colors.dim}>
               {selected ? "▸ " : "  "}

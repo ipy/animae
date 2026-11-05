@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
 import { localizeDeep } from "@animae/i18n";
 import type { Kernel } from "../../src/contracts.ts";
 import { liftStringRefs } from "../../src/i18n/string-resolve.ts";
 import { appraiseStage } from "../../src/pipeline/appraise.ts";
 import { buildPromptSegments } from "../../src/pipeline/prompt.ts";
 import type { PromptInput } from "../../src/pipeline/types.ts";
+import { FR_TEST_LOCALE, registerFrenchTestPack } from "../helpers/locale-packs.ts";
 import { charDef, createPipelineKernel } from "./test-kernel.ts";
 
 type Tables = Record<string, Record<string, string>>;
@@ -19,12 +21,12 @@ function fakeDisplayText(tables: Tables): NonNullable<Kernel["displayText"]> {
 }
 
 const TABLES: Tables = {
-  "zh-CN": {
-    "cue.action.description": "动作提示",
-    "event.flirt.description": "调情或示好",
-    "character.npc1.name": "白芷",
-    "character.npc1.nickname": "芷芷",
-    "character.player.name": "顾远",
+  fr: {
+    "cue.action.description": "Indice d'action",
+    "event.flirt.description": "Flirt ou marques d'affection",
+    "character.npc1.name": "Blanche",
+    "character.npc1.nickname": "Blanchette",
+    "character.player.name": "Guillaume",
   },
   en: {
     "cue.action.description": "action hint",
@@ -44,7 +46,7 @@ function renderInput(extra: Partial<PromptInput> = {}): PromptInput {
     scene,
     history: [],
     fieldEffects: {},
-    tier: "s1",
+    tier: "standard",
     intent: { intent: "respond", scores: { respond: 1 } },
     ...extra,
   };
@@ -53,26 +55,36 @@ function renderInput(extra: Partial<PromptInput> = {}): PromptInput {
 const CUES = { types: { action: { args: { name: { type: "string" as const } }, description: "$t:cue.action.description" } } };
 
 describe("late-bound strings in prompts", () => {
+  let offFrench: (() => void) | undefined;
+
+  afterEach(() => {
+    offFrench?.();
+    offFrench = undefined;
+    clearLocalePacks();
+  });
+
   test("cue descriptions written as $t: keys resolve in the working prompt language", () => {
+    offFrench = registerFrenchTestPack();
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
       policy: { cues: CUES },
-      i18n: { promptLocale: "zh-CN", outputLocale: "zh-CN", contentLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: FR_TEST_LOCALE, contentLocale: FR_TEST_LOCALE },
       displayText: fakeDisplayText(TABLES),
     });
     const seg = buildPromptSegments(k, renderInput());
-    expect(seg.static).toContain("- action: 动作提示 (args: name)");
+    expect(seg.static).toContain("- action: Indice d'action (args: name)");
     expect(seg.static).not.toContain("$t:");
   });
 
   test("the prompt locale, not the output locale, picks the language of policy strings", () => {
+    offFrench = registerFrenchTestPack();
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
       policy: { cues: CUES },
-      i18n: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: "en", contentLocale: FR_TEST_LOCALE },
       displayText: fakeDisplayText(TABLES),
     });
-    expect(buildPromptSegments(k, renderInput()).static).toContain("动作提示");
+    expect(buildPromptSegments(k, renderInput()).static).toContain("Indice d'action");
   });
 
   test("plain descriptions and kernels without string tables keep the text as written", () => {
@@ -95,10 +107,11 @@ describe("late-bound strings in prompts", () => {
       },
     };
     const tables: Tables = { ...TABLES, en: { ...TABLES.en!, "cue.fallback_only.description": "english only" } };
+    offFrench = registerFrenchTestPack();
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
       policy: { cues },
-      i18n: { promptLocale: "zh-CN", outputLocale: "zh-CN", contentLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: FR_TEST_LOCALE, contentLocale: FR_TEST_LOCALE },
       displayText: fakeDisplayText(tables),
     });
     const text = buildPromptSegments(k, renderInput()).static;
@@ -109,11 +122,12 @@ describe("late-bound strings in prompts", () => {
   });
 
   test("event type descriptions in the appraisal prompt resolve too", async () => {
+    offFrench = registerFrenchTestPack();
     let staticText = "";
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
       policy: { events: { types: { flirt: { positive: true, description: "$t:event.flirt.description" } } } },
-      i18n: { promptLocale: "zh-CN", outputLocale: "zh-CN", contentLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: FR_TEST_LOCALE, contentLocale: FR_TEST_LOCALE },
       displayText: fakeDisplayText(TABLES),
       s1Handler: (req) => {
         staticText = req.segments.static;
@@ -130,18 +144,28 @@ describe("late-bound strings in prompts", () => {
       history: [],
       fieldEffects: {},
     });
-    expect(staticText).toContain("- flirt：调情或示好［正向］");
+    expect(staticText).toContain("- flirt : Flirt ou marques d'affection [positif]");
     expect(staticText).not.toContain("$t:");
   });
 });
 
 describe("name glossary for a different output language", () => {
-  const cross = (extra: Partial<Kernel["i18n"]> = {}) =>
-    createPipelineKernel({
+  let offFrench: (() => void) | undefined;
+
+  afterEach(() => {
+    offFrench?.();
+    offFrench = undefined;
+    clearLocalePacks();
+  });
+
+  const cross = (extra: Partial<Kernel["i18n"]> = {}) => {
+    offFrench = registerFrenchTestPack();
+    return createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
-      i18n: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN", ...extra },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: "en", contentLocale: FR_TEST_LOCALE, ...extra },
       displayText: fakeDisplayText(TABLES),
     }).k;
+  };
 
   test("lists each character's working-language names with the output-language spelling", () => {
     const seg = buildPromptSegments(cross(), renderInput());
@@ -152,24 +176,25 @@ describe("name glossary for a different output language", () => {
 
   test("a character shown by its card nickname is translated with the nickname, not the full name", () => {
     const withNick = charDef("player");
-    withNick.card.identity.nickname = "园长";
+    withNick.card.identity.nickname = "Directrice";
     const tables: Tables = {
-      "zh-CN": { ...TABLES["zh-CN"]! },
+      fr: { ...TABLES.fr! },
       en: { ...TABLES.en!, "character.player.nickname": "Director" },
     };
+    offFrench = registerFrenchTestPack();
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), withNick],
-      i18n: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: "en", contentLocale: FR_TEST_LOCALE },
       displayText: fakeDisplayText(tables),
     });
     const text = buildPromptSegments(k, renderInput()).static;
     expect(text).toContain("npc1 → Bai Zhi");
-    expect(text).toContain("园长 → Director");
+    expect(text).toContain("Directrice → Director");
     expect(text).not.toContain("Gu Yuan");
   });
 
   test("follows the per-turn output language", () => {
-    const k = cross({ outputLocale: "zh-CN" });
+    const k = cross({ outputLocale: FR_TEST_LOCALE });
     expect(buildPromptSegments(k, renderInput()).static).not.toContain("→");
     expect(buildPromptSegments(k, renderInput({ outputLocale: "en" })).static).toContain("npc1 → Bai Zhi");
   });
@@ -179,13 +204,13 @@ describe("name glossary for a different output language", () => {
   });
 
   test("same language for content and output, or no string tables: no glossary", () => {
-    const same = cross({ outputLocale: "zh-CN" });
-    expect(buildPromptSegments(same, renderInput()).static).not.toContain("译名对照");
+    const same = cross({ outputLocale: FR_TEST_LOCALE });
+    expect(buildPromptSegments(same, renderInput()).static).not.toMatch(/Name glossary|Glossaire des noms/);
     const bare = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
-      i18n: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: "en", contentLocale: FR_TEST_LOCALE },
     }).k;
-    expect(buildPromptSegments(bare, renderInput()).static).not.toContain("译名对照");
+    expect(buildPromptSegments(bare, renderInput()).static).not.toMatch(/Name glossary|Glossaire des noms/);
   });
 
   test("the glossary is part of the render prompt only", () => {

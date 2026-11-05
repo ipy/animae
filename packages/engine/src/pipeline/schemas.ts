@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ResolvedPolicy } from "../schema/policy.ts";
 import { coerceAppraiseRaw, coerceRenderRaw } from "./coerce.ts";
+import { NarrationItemSchema } from "../narration.ts";
 
 const claimSchema = z.strictObject({ s: z.string(), p: z.string(), o: z.string() });
 
@@ -45,13 +46,20 @@ export function buildRenderSchema(policy: ResolvedPolicy) {
   });
   void policy.cues.types;
 
+  const unit = z.number().min(0).max(1);
   const choiceSchema = z.strictObject({
     text: z.string(),
     expected_event_type: z.string(),
     tags: z.array(z.string()).default([]),
+    // What a choice appraises to when taken. Models leave these out; the rule backend's `choices.rules` carry them.
+    intensity: unit.optional(),
+    sincerity: unit.optional(),
+    approach: z.string().optional(),
   });
 
   const base = {
+    /** Speaker-less narration paragraphs, shown before the utterance. Written first so a streaming model emits them first. */
+    narrations: z.array(NarrationItemSchema).optional(),
     // A reply without any text is not a reply: rejecting it lets the model adapter retry once with the repair hint
     // instead of committing an empty utterance (a JSON object with other keys used to coerce into exactly that).
     text: z.string().refine((s) => s.trim().length > 0, { message: "text must not be empty" }),

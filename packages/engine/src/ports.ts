@@ -55,6 +55,63 @@ export interface ToolDef {
   execute(input: unknown): Promise<unknown> | unknown;
 }
 
+/** What an S1 (structured-judgment) call is for. Served by `ModelPort.object`. */
+export type ObjectPurpose =
+  | "appraise"
+  | "classify"
+  | "safety"
+  | "reflection"
+  | "entity"
+  | "memory-write"
+  /** CG brief for the gallery; has no rule counterpart (an image prompt needs a model) */
+  | "gallery-brief";
+/** What an S2 (free-text) call is for. Served by `ModelPort.stream`. */
+export type StreamPurpose = "render" | "offscreen" | "autonomous";
+export type ModelPurpose = ObjectPurpose | StreamPurpose;
+
+/**
+ * Structured inputs of one model call, for backends that decide from data instead of reading a prompt (the rule
+ * backend). LLM ports ignore it: everything they need is already in `segments`. Every field is plain data, so the
+ * whole object (minus `rng`) is also the CEL variable bag the rule backend evaluates `when:` / `{{ }}` against.
+ */
+export interface ModelCallContext {
+  self?: unknown;
+  other?: unknown;
+  actor?: unknown;
+  /** The appraised event (render, memory-write) or the event being appraised (appraise). */
+  event?: unknown;
+  scene?: unknown;
+  world?: unknown;
+  time?: unknown;
+  tracks?: unknown;
+  tiers?: unknown;
+  fields?: unknown;
+  check?: unknown;
+  /** The player input of the turn; `choice` is the offered choice that was taken, if any. */
+  input?: {
+    text: string;
+    choiceId?: string;
+    addressee?: string;
+    choice?: { expected_event_type: string; tags: string[]; intensity?: number; sincerity?: number; approach?: string };
+  };
+  /** Render only: the intent the rules decided. */
+  intent?: { intent: string; scores: Record<string, number>; forced?: boolean };
+  /** Identity of the call, used for deterministic seeding and locale selection. */
+  call?: {
+    turnId?: string;
+    /** `input.received` event the call belongs to (seeds the rule backend). */
+    inputEventId?: string;
+    autonomous?: boolean;
+    outputLocale?: string;
+    /** Stable key of non-turn work (`reflection:scn_0001:mira`). */
+    key?: string;
+  };
+  /** Anything else a purpose needs (`goal`, `template`, `location`, ...); plain data. */
+  extra?: Record<string, unknown>;
+  /** Deterministic RNG seeded for this call from the timeline seed. The only allowed source of randomness. */
+  rng(): number;
+}
+
 export interface ModelRequestBase {
   /** purpose label: "appraise" | "render" | "reflect" | "generate" | "narrate" | "offscreen" | ... (used in recording/log) */
   label: string;
@@ -68,6 +125,13 @@ export interface ModelRequestBase {
   seed?: number;
   /** locale tags affecting prompt text; included in recording keys for determinism audits */
   recordingLocales?: { promptLocale: string; outputLocale: string; contentLocale: string };
+  /**
+   * What the call is for. Optional and ignored by LLM ports; the rule backend dispatches on it. The engine always
+   * sets it; hooks and tests may omit it.
+   */
+  purpose?: ModelPurpose;
+  /** Structured inputs for backends that do not read the prompt. Never part of the recording key. */
+  context?: Readonly<ModelCallContext>;
 }
 
 export type StreamPart =
@@ -85,6 +149,27 @@ export interface ModelPort {
   stream(req: ModelRequestBase & { schema: ZodType<unknown> }): AsyncIterable<StreamPart>;
   /** cumulative usage since creation (best effort) */
   usage?(): Usage;
+}
+
+/** An ordered set of S2 ports. The order is the tier ladder, cheapest first by convention. */
+export interface S2TierPorts {
+  /** tier used when routing names none; defaults to the first tier */
+  default?: string;
+  tiers: { id: string; port: ModelPort }[];
+  routing?: { render?: string; escalate_to?: string; offscreen?: string; autonomous?: string };
+}
+
+/**
+ * The models an embedder hands to `createEngine`. Every entry is optional: a role without a port (and without a model in
+ * `animae.yaml`) is served by the rule backend. A single `ModelPort` for `s2` is one tier named `only`.
+ */
+export interface EngineModels {
+  s1?: ModelPort;
+  s2?: ModelPort | S2TierPorts;
+}
+
+export function isModelPort(v: unknown): v is ModelPort {
+  return v != null && typeof (v as ModelPort).object === "function" && typeof (v as ModelPort).stream === "function";
 }
 
 export type ModelMode = "live" | "record" | "replay";

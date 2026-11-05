@@ -27,7 +27,7 @@ Profile-scoped CG collection: authored preset entries (CEL unlock, optional ship
            v
   GalleryService <-----> GalleryCollectionStore ---- StoragePort
            |                      ^
-           +-- ModelPort (cg_brief)
+           +-- ModelPort S1 (`purpose: gallery-brief`; fails with `GALLERY_NO_MODEL` on rule-only S1)
            +-- ImagePort (generate)
            +-- timeline.emit (events)
 ```

@@ -40,7 +40,7 @@ export function galleryCelContext(
     extra: mergeCelExtras(
       imageCelExtra(image),
       galleryUnlockCelExtra(unlockedIds, turnKinds),
-      modelCelExtra(k, "s1"),
+      modelCelExtra(k, { kind: "s1" }),
       params.extra ?? {},
     ),
   });

@@ -28,6 +28,14 @@ import { AnimaeError } from "@animae/engine";
 import { localizeError } from "@animae/i18n";
 import type { Engine, SceneId, TurnId, Viewer } from "../types.ts";
 
+/** How the last turn was actually served (from `route.decided`), for the footer. */
+export interface LastRoute {
+  appraise: "llm" | "rule";
+  render: "llm" | "rule";
+  /** S2 tier that rendered the turn (`render` is `llm`). */
+  tier?: string;
+}
+
 export interface AppState {
   sceneId: SceneId | undefined;
   focus: LayoutFocus;
@@ -38,7 +46,9 @@ export interface AppState {
   historyIndex: number | undefined;
   speaking: boolean;
   pending: boolean;
-  lastRoute: "s1" | "s2" | undefined;
+  lastRoute: LastRoute | undefined;
+  /** Bumped when the runtime mode (or a queued change) changed, so views re-read `engine.runtime`. */
+  modeTick: number;
   lastTurnId: TurnId | undefined;
   lastExplainTurnId: TurnId | undefined;
   transcriptScroll: number;
@@ -68,11 +78,15 @@ export type AppStateAction =
   | { type: "setOverlay"; overlay: OverlayId | undefined }
   | { type: "appendTranscript"; entry: TranscriptEntry }
   | { type: "patchTranscript"; id: string; patch: Partial<TranscriptEntry> }
+  | { type: "removeTranscript"; ids: readonly string[] }
   | { type: "systemLine"; text: string }
   | { type: "setChoices"; choices: ChoiceState | undefined }
+  /** Moves the highlighted choice relative to the state the reducer holds (key repeats must all count). */
+  | { type: "moveChoice"; delta: number }
   | { type: "setSpeaking"; speaking: boolean }
   | { type: "setPending"; pending: boolean }
-  | { type: "setLastRoute"; route: "s1" | "s2" | undefined }
+  | { type: "setLastRoute"; route: LastRoute | undefined }
+  | { type: "bumpMode" }
   | { type: "setLastTurnId"; turnId: TurnId | undefined }
   | { type: "pushHistory"; line: string }
   | { type: "setHistoryIndex"; index: number | undefined }
@@ -87,6 +101,13 @@ export type AppStateAction =
   | { type: "setInputDraft"; value: string; cursor: number }
   | { type: "setFocusTarget"; target: string | undefined }
   | { type: "setPalette"; open: boolean; query?: string; index?: number }
+  /**
+   * Edits of the open palette are relative to the state the reducer holds, not to the one the last render saw: keys
+   * that arrive in the same tick (a key repeat, a paste) must all count.
+   */
+  | { type: "paletteInsert"; text: string }
+  | { type: "paletteBackspace" }
+  | { type: "paletteMove"; delta: number; max?: number }
   | { type: "setAutocomplete"; open: boolean; index?: number }
   | { type: "setPrompt"; prompt: PromptState | undefined }
   | { type: "patchPrompt"; patch: Partial<PromptState> }
@@ -132,6 +153,17 @@ export function appStateReducer(state: AppState, action: AppStateAction): AppSta
           e.id === action.id ? { ...e, ...action.patch } : e,
         ),
       };
+    case "removeTranscript": {
+      if (action.ids.length === 0) return state;
+      const drop = new Set(action.ids);
+      const transcript = state.transcript.filter((e) => !drop.has(e.id));
+      return {
+        ...state,
+        transcript,
+        // The window may now end earlier than the scroll offset assumed.
+        transcriptScroll: Math.min(state.transcriptScroll, Math.max(0, transcript.length - 1)),
+      };
+    }
     case "systemLine":
       return {
         ...state,
@@ -139,6 +171,11 @@ export function appStateReducer(state: AppState, action: AppStateAction): AppSta
       };
     case "setChoices":
       return { ...state, choices: action.choices };
+    case "moveChoice": {
+      if (!state.choices) return state;
+      const selected = Math.min(state.choices.choices.length - 1, Math.max(0, state.choices.selected + action.delta));
+      return { ...state, choices: { ...state.choices, selected } };
+    }
     case "setSpeaking":
       return { ...state, speaking: action.speaking };
     case "setPending":
@@ -146,6 +183,8 @@ export function appStateReducer(state: AppState, action: AppStateAction): AppSta
       return { ...state, pending: action.pending };
     case "setLastRoute":
       return { ...state, lastRoute: action.route };
+    case "bumpMode":
+      return { ...state, modeTick: state.modeTick + 1 };
     case "setLastTurnId":
       return { ...state, lastTurnId: action.turnId, lastExplainTurnId: action.turnId };
     case "pushHistory":
@@ -190,6 +229,15 @@ export function appStateReducer(state: AppState, action: AppStateAction): AppSta
         paletteQuery: action.query ?? (action.open ? state.paletteQuery : ""),
         paletteIndex: action.index ?? (action.open ? 0 : 0),
       };
+    case "paletteInsert":
+      return { ...state, paletteQuery: state.paletteQuery + action.text, paletteIndex: 0 };
+    case "paletteBackspace":
+      return { ...state, paletteQuery: state.paletteQuery.slice(0, -1), paletteIndex: 0 };
+    case "paletteMove":
+      return {
+        ...state,
+        paletteIndex: Math.min(action.max ?? Number.MAX_SAFE_INTEGER, Math.max(0, state.paletteIndex + action.delta)),
+      };
     case "setAutocomplete":
       return {
         ...state,
@@ -229,6 +277,7 @@ export function initialAppState(): AppState {
     speaking: false,
     pending: false,
     lastRoute: undefined,
+    modeTick: 0,
     lastTurnId: undefined,
     lastExplainTurnId: undefined,
     transcriptScroll: 0,

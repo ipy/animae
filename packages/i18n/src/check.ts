@@ -73,9 +73,11 @@ export async function runI18nCheck(
   }
 
   const usedKeys = new Set<string>();
+  let scanned = 0;
   for (const root of opts.scanRoots ?? []) {
     for (const file of await walkFiles(root)) {
       if (file.includes("/locales/") || file.includes("/prompts/")) continue;
+      scanned += 1;
       const text = await readFile(file, "utf8");
       if (opts.scanCjk !== false) {
         for (const hit of findCjkStringLiterals(text, file)) {
@@ -99,7 +101,8 @@ export async function runI18nCheck(
     const plain = d.includes(":") ? d.split(":").slice(1).join(":") : d;
     if (!usedKeys.has(plain) && !usedKeys.has(d)) unusedKeys.push(d);
   }
-  if (unusedKeys.length > 20) {
+  // Without sources to scan (a compiled binary has none) "not referenced" would only be noise.
+  if (scanned > 0 && unusedKeys.length > 20) {
     warnings.push(`${unusedKeys.length} catalog keys not referenced by static t() scan (first: ${unusedKeys.slice(0, 3).join(", ")})`);
   }
 

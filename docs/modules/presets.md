@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Built-in policy bundles ([19.4](../spec.md#194-animaepreset-base)–[19.5](../spec.md#195-animaepreset-dnd)) shipped as npm packages. **Source of truth is YAML** under each package; `scripts/gen-bundle.ts` emits committed `src/generated.ts` for single-file executables (no runtime filesystem reads).
+Built-in policy bundles ([19.4](../spec.md#194-animaepreset-base)–[19.6](../spec.md#196-animaepreset-rule)) shipped as npm packages. **Source of truth is YAML** under each package; `scripts/gen-bundle.ts` emits committed `src/generated.ts` for single-file executables (no runtime filesystem reads).
 
 ## Layout
 
@@ -13,6 +13,11 @@ packages/preset-base/
   scripts/gen-bundle.ts
   src/generated.ts         # generated PresetBundle object
   src/index.ts             # export const preset + default
+
+packages/preset-rule/
+  preset.yaml              # extends @animae/preset-base; rule-first play ([19.6](../spec.md#196-animaepreset-rule))
+  policies/rule.yaml
+  locales/                 # string-table keys ($t:rule.*)
 
 packages/preset-dnd/
   preset.yaml              # extends @animae/preset-base
@@ -33,6 +38,16 @@ Regenerate: `bun scripts/gen-bundle.ts` from the package directory. Tests assert
 |--------|------|
 | `preset` / `default` | `PresetBundle` for `createEngine({ presets: [preset] })` |
 
+Includes rule-backend defaults: `appraise.patterns` / `commands` / `fallback`, `render.layers` (utterance + narration), `choices.rules`, `memory.writing: { backend: rule, narration: none }`, full router degrade list ([Section 19.4](../spec.md#194-animaepreset-base)).
+
+### `@animae/preset-rule`
+
+| Export | Role |
+|--------|------|
+| `preset` / `default` | Extends base; enables choices, extra commands, memory valence tables, offscreen `narrateTemplate`, `scene.autonomous.rules` |
+
+Use with `animae.yaml` `mode: rule` (or runtime preset `rule`) for zero-token play. String tables: `$t:rule.*` ([Section 19.6](../spec.md#196-animaepreset-rule), [i18n.md](../i18n.md)).
+
 ### `@animae/preset-dnd`
 
 | Export | Role |
@@ -49,7 +64,7 @@ Policy data: `policy.x.approaches`, `policy.x.skills`, `policy.x.abilities` (18 
 ## Visibility ([Section 19.4](../spec.md#194-animaepreset-base))
 
 - **author / gm**: broad path globs (`characters/*/*`, `world/*`, `events`, …).
-- **player**: `events` with kinds `utterance`, `choice.offered`, `choice.taken`, `input.received`; `world/vars` (+ per-key rules; `world.public_vars` in authored data filters keys for `player`).
+- **player**: `events` with kinds `utterance`, `narration`, `choice.offered`, `choice.taken`, `input.received`; optional deny rules on `events/narration` or `events/narration/style:scene_break`; `world/vars` (+ per-key rules; `world.public_vars` in authored data filters keys for `player`).
 - **npc:\<id\>**: rules use the alias path prefix `characters/self` and `characters/self/*`. Introspect rewrites `characters/self/...` → `characters/<id>/...` before visibility and query (`resolveNpcSelfQueryPath` in `introspect/service.ts`). Globs cannot encode “only my id”; the alias plus rewrite is the supported pattern.
 
 ## CEL helpers (engine)

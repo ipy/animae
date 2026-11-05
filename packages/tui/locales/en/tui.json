@@ -61,7 +61,7 @@
     "day_time": "Day {day} {time}"
   },
   "footer": {
-    "key_hints": "F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load · ",
+    "key_hints": "F1/Alt+1 help · F2/Alt+2 log · F6/Alt+6 mode · Ctrl+P palette · Ctrl+S/L save/load · ",
     "mouse_hint": "Mouse · Shift+drag selects text"
   },
   "help": {
@@ -69,10 +69,10 @@
     "line_submit": "Enter — submit input · ↑/↓ — choice / history",
     "line_choices": "1–9 — pick choice · any key — skip typewriter",
     "line_focus": "Tab — focus transcript / side panel · PgUp/PgDn — scroll",
-    "line_overlays": "F1–F5 overlays · Alt+1–5 same (macOS F-keys as media keys) · Ctrl+P palette",
+    "line_overlays": "F1–F6 overlays · Alt+1–6 same (macOS F-keys as media keys) · Ctrl+P palette",
     "line_save": "Ctrl+S save · Ctrl+L load · Ctrl+Z rewind turn · Ctrl+C quit",
     "line_esc": "Esc — close overlay",
-    "commands_line": "Commands: :save :load :rewind :branches :explain :query :advance :help :quit"
+    "commands_line": "Commands: :save :load :rewind :branches :explain :query :advance :mode :help :quit"
   },
   "too_small": {
     "title": "Please enlarge your terminal",
@@ -126,7 +126,7 @@
   "command": {
     "no_scene": "No active scene — use :help or :commands to explore.",
     "lang_set": "UI language set to {locale}",
-    "lang_usage": "Usage: :lang <locale> (e.g. en, zh-CN, en-XA)",
+    "lang_usage": "Usage: :lang <locale> (e.g. en, fr, en-XA)",
     "saved": "Saved {label} @ {eventId}",
     "loaded": "Loaded {label}",
     "rewound": "Rewound to {eventId}",
@@ -134,7 +134,7 @@
     "mouse_on": "Mouse capture enabled (Shift+drag still selects text in most terminals).",
     "mouse_off": "Mouse capture disabled — native selection restored.",
     "mouse_usage": "Usage: :mouse on|off|status · shortcut Ctrl+M",
-    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :gallery :help :quit",
+    "help_line": ":save :load :rewind <eventId> :branches :explain [turnId] :query <viewer> <path> :advance <duration> :mode [preset] :gallery :help :quit",
     "rewind_usage": "Usage: :rewind <eventId>",
     "query_usage": "Usage: :query <viewer> <path>",
     "advance_usage": "Usage: :advance <duration>",
@@ -153,7 +153,8 @@
       "lang": "Set UI language",
       "mouse": "Toggle terminal mouse capture (on|off|status)",
       "llmlog": "Inspect recent model calls (debug)",
-      "gallery": "CG gallery panel and commands"
+      "gallery": "CG gallery panel and commands",
+      "mode": "Show or switch the runtime mode (which backend serves S1 and S2)"
     },
     "llmlog_disabled": "Model call log is not enabled for this session.",
     "llmlog_empty": "No model calls recorded yet.",
@@ -169,7 +170,8 @@
       "lang": ":lang <locale>",
       "mouse": ":mouse [on|off|status]",
       "llmlog": ":llmlog [seq|dump]",
-      "gallery": ":gallery [list|show|capture|render|...]"
+      "gallery": ":gallery [list|show|capture|render|...]",
+      "mode": ":mode [preset | s1 llm|rule | s2 llm|rule|<tier> | status]"
     },
     "gallery": {
       "list_empty": "Gallery is empty.",
@@ -202,5 +204,38 @@
     "gallery_busy": "Gallery queue is full; try again later (GALLERY_BUSY).",
     "gallery_brief_invalid": "Could not build a valid image brief (GALLERY_BRIEF_INVALID).",
     "gallery_generation_failed": "Image generation failed (GALLERY_GENERATION_FAILED)."
+  },
+  "mode": {
+    "title": "Runtime mode (F6)",
+    "now": "Now: {mode}",
+    "takes_effect_after_turn": "The change takes effect after this turn.",
+    "switch_at_boundary": "A change requested during a turn takes effect after it.",
+    "presets": "Backends",
+    "tiers": "S2 tier (live renders)",
+    "current": "current",
+    "unavailable": "no model configured",
+    "tier_needs_model": "S2 runs on rules",
+    "hint": "↑/↓ select · Enter apply",
+    "unsupported": "This engine has no runtime mode to switch.",
+    "unchanged": "Already running {mode}.",
+    "queued_note": "Mode change to {mode} takes effect after this turn.",
+    "switched": "Mode: {before} → {after}",
+    "switched_reason": "Mode: {before} → {after} ({reason})",
+    "fallback": "{phase} fell back to the rule backend: {error}",
+    "status": "Mode {mode} ({preset}) · presets: {presets} · S2 tiers: {tiers}",
+    "usage": "Usage: :mode [full|judge-only|narrate-only|rule] | :mode s1 llm|rule | :mode s2 llm|rule|<tier> | :mode status",
+    "preset": {
+      "full": "full — models serve S1 and S2",
+      "judge-only": "judge-only — S1 on a model, narration by rules",
+      "narrate-only": "narrate-only — S1 by rules, S2 on a model",
+      "rule": "rule — no model calls, zero tokens"
+    },
+    "reason": {
+      "api": "requested",
+      "cli": "command line",
+      "config": "configuration",
+      "budget": "token budget",
+      "fallback": "model failure"
+    }
   }
 }

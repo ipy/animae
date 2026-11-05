@@ -128,10 +128,10 @@ export function docMatchesTerms(doc: KnowledgeDoc, terms: string[]): boolean {
   return termHitRate(terms, blob) > 0;
 }
 
-export function toMemoryHit(entry: MemoryEntry, score: number): RetrievalHit {
-  return { kind: "memory", id: entry.id, text: entry.text, score, entry };
+export function toMemoryHit(entry: MemoryEntry, score: number, owner?: string): RetrievalHit {
+  return { kind: "memory", id: entry.id, text: entry.text, score, entry, ...(owner ? { owner: owner as import("../types.ts").CharacterId } : {}) };
 }
 
-export function toKnowledgeHit(doc: KnowledgeDoc, score: number): RetrievalHit {
-  return { kind: "knowledge", id: doc.id, text: doc.body, score, doc };
+export function toKnowledgeHit(doc: KnowledgeDoc, score: number, owner?: string): RetrievalHit {
+  return { kind: "knowledge", id: doc.id, text: doc.body, score, doc, ...(owner ? { owner: owner as import("../types.ts").CharacterId } : {}) };
 }

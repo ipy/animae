@@ -1,7 +1,41 @@
 import type { Engine } from "@animae/engine";
-import type { ActiveScene, EngineEvent, TurnChunk, TurnId } from "@animae/engine";
+import { RUNTIME_MODE_PRESET_VALUES } from "@animae/engine";
+import type {
+  ActiveScene,
+  EngineEvent,
+  ModelsInfo,
+  RuntimeMode,
+  RuntimeModeRequest,
+  SwitchAt,
+  TurnChunk,
+  TurnId,
+} from "@animae/engine";
 
-export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
+/** What the fake engine's runtime reports and how it behaves when asked to switch. */
+export interface FakeRuntimeOptions {
+  mode?: RuntimeMode;
+  models?: Partial<ModelsInfo>;
+  switchAt?: SwitchAt;
+  /** Queue switch requests like a running turn would (they apply when `applyQueued` runs). */
+  queueSwitches?: boolean;
+}
+
+export interface TuiFakeEngineControls {
+  engine: Engine;
+  /** Deliver an engine event to the listeners registered with `engine.on`. */
+  emit: (kind: string, partial?: Partial<EngineEvent>) => EngineEvent;
+  /** Apply the queued mode change, as the engine does at the turn boundary. */
+  applyQueued: () => void;
+}
+
+export function createTuiFakeEngine(overrides: Partial<Engine> = {}, runtime: FakeRuntimeOptions = {}): Engine {
+  return createTuiFakeEngineControls(overrides, runtime).engine;
+}
+
+export function createTuiFakeEngineControls(
+  overrides: Partial<Engine> = {},
+  runtimeOptions: FakeRuntimeOptions = {},
+): TuiFakeEngineControls {
   const listeners = new Map<string, Set<(e: EngineEvent) => void>>();
 
   const emit = (kind: string, partial: Partial<EngineEvent> = {}) => {
@@ -27,6 +61,31 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     budget: { turns: 3, s2Turns: 1 },
   };
 
+  let runtimeMode: RuntimeMode = { ...(runtimeOptions.mode ?? { appraise: "llm", render: "llm" }) };
+  let queuedMode: RuntimeMode | null = null;
+  const modelsInfo: ModelsInfo = {
+    s1: "s1",
+    s2: "s2",
+    s1Llm: true,
+    s2Tiers: [{ id: "only", model: "s2", tags: [] }],
+    s2Default: "only",
+    ...runtimeOptions.models,
+  };
+  const nextMode = (req: Parameters<Engine["runtime"]["setMode"]>[0], from: RuntimeMode): RuntimeMode => {
+    if (typeof req === "string") return { ...RUNTIME_MODE_PRESET_VALUES[req] };
+    const partial: RuntimeModeRequest = req;
+    return {
+      appraise: partial.appraise ?? from.appraise,
+      render: partial.render ?? from.render,
+      ...(partial.s2Tier ? { s2Tier: partial.s2Tier } : from.s2Tier ? { s2Tier: from.s2Tier } : {}),
+    };
+  };
+  const applyMode = (next: RuntimeMode) => {
+    const before = { ...runtimeMode };
+    runtimeMode = { ...next };
+    emit("runtime.mode_changed", { before, after: { ...runtimeMode }, reason: "api" } as Partial<EngineEvent>);
+  };
+
   let openScene: ActiveScene | null = { id: "scn_0001", location: "café", participants: ["player", "mira"], turn: 0 };
 
   const base: Engine = {
@@ -46,7 +105,7 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
       },
       active: () => openScene,
       turn: async function* (): AsyncGenerator<TurnChunk> {
-        yield { type: "text", text: "你好，世界。", speaker: "mira" };
+        yield { type: "text", text: "Bonjour, le monde!", speaker: "mira" };
         yield {
           type: "cue",
           cue: { type: "expression", args: { name: "smile" } },
@@ -86,7 +145,12 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     director: { sidenote: async () => {}, invokeException: async () => ({ eventId: "evt_0001", kind: "exception.used", field: "ex", detail: { holder: "npc", level: "L0" } }) },
     timeline: {
       current: () => ({ name: "main" }),
-      save: async () => ({ label: "quicksave", branch: "main", eventId: "evt_0", createdAt: new Date().toISOString() }),
+      save: async (label?: string) => ({
+        label: label?.trim() || "quicksave",
+        branch: "main",
+        eventId: "evt_0",
+        createdAt: new Date().toISOString(),
+      }),
       load: async () => {},
       rewind: async () => ({ name: "main" }),
       branches: async () => [{ name: "main" }, { name: "fork-a" }],
@@ -131,16 +195,38 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     display: { resolve: (v) => v, entityDisplayName: (id) => id },
     info: () => ({
       root: "/tmp",
-      language: "zh",
+      language: "en",
       locale: "en",
-      promptLocale: "zh-CN",
-      outputLocale: "zh",
-      contentLocale: "zh",
+      promptLocale: "en",
+      outputLocale: "en",
+      contentLocale: "en",
       branch: "main",
       sessionId: "sess",
-      models: { s1: "s1", s2: "s2" },
+      models: modelsInfo,
+      mode: { ...runtimeMode },
       modelMode: "record",
     }),
+    runtime: {
+      mode: () => ({ ...runtimeMode }),
+      pending: () => (queuedMode ? { ...queuedMode } : null),
+      switchAt: runtimeOptions.switchAt ?? "turn_boundary",
+      setMode: async (req) => {
+        const before = { ...runtimeMode };
+        const next = nextMode(req, queuedMode ?? runtimeMode);
+        const same = next.appraise === before.appraise && next.render === before.render && next.s2Tier === before.s2Tier;
+        if (same) {
+          queuedMode = null;
+          return { before, after: before, pending: false };
+        }
+        if (runtimeOptions.queueSwitches) {
+          queuedMode = next;
+          return { before, after: { ...next }, pending: true };
+        }
+        applyMode(next);
+        return { before, after: { ...runtimeMode }, pending: false };
+      },
+      models: () => modelsInfo,
+    },
     gallery: {
       generatorAvailable: () => false,
       ratings: () => [],
@@ -165,5 +251,14 @@ export function createTuiFakeEngine(overrides: Partial<Engine> = {}): Engine {
     close: async () => {},
   };
 
-  return { ...base, ...overrides };
+  return {
+    engine: { ...base, ...overrides },
+    emit,
+    applyQueued: () => {
+      if (!queuedMode) return;
+      const next = queuedMode;
+      queuedMode = null;
+      applyMode(next);
+    },
+  };
 }

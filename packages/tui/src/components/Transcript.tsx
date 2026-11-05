@@ -72,6 +72,77 @@ function DialogueBlock({
   );
 }
 
+/** Columns a narration paragraph is indented by: it has no speaker label, so the indent sets it off from dialogue. */
+export const NARRATION_INDENT = 2;
+
+/** The divider drawn before a `scene_break` paragraph. */
+export function sceneBreakRule(width: number): string {
+  return "─".repeat(Math.max(1, width));
+}
+
+function NarrationBlock({
+  entry,
+  isActive,
+  wrapCols,
+  onProgress,
+  onComplete,
+  skipSignal,
+  spaceBefore,
+}: {
+  entry: { id: string; text: string; style?: "normal" | "scene_break" };
+  isActive: boolean;
+  wrapCols: number;
+  onProgress: (v: number) => void;
+  onComplete: () => void;
+  skipSignal: number;
+  /** A blank line first: paragraphs follow one another with a gap, and a scene break is always set off. */
+  spaceBefore: boolean;
+}) {
+  const theme = useTheme();
+  const textCols = Math.max(10, wrapCols - NARRATION_INDENT);
+  const sceneBreak = entry.style === "scene_break";
+  const hasText = entry.text.trim().length > 0;
+
+  return (
+    <Box flexDirection="column">
+      {spaceBefore ? <Text> </Text> : null}
+      {sceneBreak ? <Text color={theme.colors.dim}>{sceneBreakRule(wrapCols)}</Text> : null}
+      {hasText ? (
+        <Box flexDirection="column" paddingLeft={NARRATION_INDENT}>
+          {isActive ? (
+            <Typewriter
+              text={entry.text}
+              active
+              wrapCols={textCols}
+              skipSignal={skipSignal}
+              color={theme.colors.narration}
+              onProgress={(v) => onProgress(v)}
+              onComplete={onComplete}
+            />
+          ) : (
+            cachedWrapToWidth(entry.text, textCols).map((line, li) => (
+              <Text key={li} color={theme.colors.narration}>
+                {line}
+              </Text>
+            ))
+          )}
+        </Box>
+      ) : isActive ? (
+        // Nothing to type: a bare divider is complete as soon as it is shown.
+        <Completer onComplete={onComplete} />
+      ) : null}
+    </Box>
+  );
+}
+
+/** Marks an entry complete after its first render (entries without text have no typewriter to do it). */
+function Completer({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    onComplete();
+  }, [onComplete]);
+  return null;
+}
+
 export const Transcript = memo(function Transcript({ width, rows }: { width: number; rows?: number }) {
   const { t } = useTuiI18n();
   const theme = useTheme();
@@ -84,7 +155,7 @@ export const Transcript = memo(function Transcript({ width, rows }: { width: num
   const lastIncomplete = useMemo(() => {
     for (let i = entries.length - 1; i >= 0; i--) {
       const e = entries[i]!;
-      if (!e.complete && (e.kind === "dialogue" || e.kind === "action")) return e;
+      if (!e.complete && (e.kind === "dialogue" || e.kind === "action" || e.kind === "narration")) return e;
     }
     return undefined;
   }, [entries]);
@@ -124,8 +195,25 @@ export const Transcript = memo(function Transcript({ width, rows }: { width: num
       }}
     >
       <Viewport anchor="end">
-        {visibleEntries.map((entry) => {
+        {visibleEntries.map((entry, index) => {
         const isActive = entry.id === lastIncomplete?.id;
+        if (entry.kind === "narration") {
+          const prev = visibleEntries[index - 1];
+          return (
+            <NarrationBlock
+              key={entry.id}
+              entry={entry}
+              isActive={isActive}
+              wrapCols={wrapCols}
+              skipSignal={state.typewriterSkip}
+              spaceBefore={prev !== undefined && (entry.style === "scene_break" || prev.kind === "narration")}
+              onProgress={(v) => setActiveVisible(v)}
+              onComplete={() =>
+                dispatch({ type: "patchTranscript", id: entry.id, patch: { complete: true } })
+              }
+            />
+          );
+        }
         if (entry.kind === "system") {
           return (
             <Text key={entry.id} dimColor>

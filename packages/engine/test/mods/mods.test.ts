@@ -52,6 +52,26 @@ test("patch merge operators", () => {
   expect(applyPatchMerge({ a: 1, b: 2 }, { b: { $delete: true } })).toEqual({ a: 1 });
 });
 
+test("patching a policy document composes its unresolved $append / $prepend markers", () => {
+  // The base is a game policy that extends a preset's array; the patch (a locale overlay) must keep the operator so the
+  // later policy merge appends to the preset array instead of replacing it.
+  const base = { appraise: { patterns: { $append: [{ id: "a" }] } }, render: { layers: { $prepend: [{ id: "x" }] } } };
+  expect(applyPatchMerge(base, { appraise: { patterns: { $append: [{ id: "b" }] } } })).toEqual({
+    appraise: { patterns: { $append: [{ id: "a" }, { id: "b" }] } },
+    render: { layers: { $prepend: [{ id: "x" }] } },
+  });
+  expect(applyPatchMerge(base, { render: { layers: { $prepend: [{ id: "y" }] } } })).toEqual({
+    appraise: { patterns: { $append: [{ id: "a" }] } },
+    render: { layers: { $prepend: [{ id: "y" }, { id: "x" }] } },
+  });
+  expect(applyPatchMerge({ $append: "a" }, { $append: "b" })).toEqual({ $append: "ab" });
+  expect(applyPatchMerge({ $prepend: "a" }, { $prepend: "b" })).toEqual({ $prepend: "ba" });
+  // an empty placeholder marker is the documented extension point
+  expect(applyPatchMerge({ patterns: { $append: [] } }, { patterns: { $append: [1] } })).toEqual({ patterns: { $append: [1] } });
+  // a plain array base still resolves as before
+  expect(applyPatchMerge({ list: [1] }, { list: { $append: [2] } })).toEqual({ list: [1, 2] });
+});
+
 test("mod layer replaces base location", async () => {
   const s = testStorage();
   await seedMinimal(s);

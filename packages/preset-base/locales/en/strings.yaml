@@ -1,0 +1,41 @@
+# Player-facing text of the rule backend (token-free play and model-failure fallback).
+# Keys are referenced from policies/base.yaml as `$t:base.<area>.<name>`; a game in another language ships a table with
+# the same keys under its own locales/<locale>/strings.yaml, which wins over this one.
+base:
+  render:
+    refuse_1: "I can't do that. Please don't ask me again."
+    refuse_2: "No. That's something I won't do."
+    refuse_3: "I'm sorry, but that's out of the question."
+    deflect_1: "Let's talk about something else."
+    deflect_2: "I'd rather not get into that."
+    deflect_3: "Hm. Why do you ask?"
+    negotiate_1: "Maybe. What would you give me in return?"
+    negotiate_2: "I might, if you can convince me."
+    negotiate_3: "That depends. What exactly do you need?"
+    comply_1: "All right. I'll do it."
+    comply_2: "Fine, leave it to me."
+    comply_3: "Of course. Consider it done."
+    warm_1: "Thank you. That means a lot to me."
+    warm_2: "I appreciate that, truly."
+    warm_3: "That's kind of you to say."
+    cold_1: "I don't like where this is going."
+    cold_2: "Watch what you say to me."
+    cold_3: "That was uncalled for."
+    respond_1: "I see."
+    respond_2: "Go on."
+    respond_3: "Hm. Tell me more."
+    respond_4: "Is that so?"
+    fallback: "…"
+  narration:
+    opening_1: "The air in {{location.name}} settles as the conversation begins."
+    opening_2: "For a moment, {{location.name}} is silent."
+    beat_1: "{{self.name}} takes a moment before answering."
+    beat_2: "{{self.name}} holds your gaze a little longer than usual."
+    break_1: "Some time later."
+    break_2: "Hours pass."
+  choice:
+    comfort: "Are you all right? I'm here if you need anything."
+    ask_help: "Could you help me with something?"
+    small_talk: "How has your day been so far?"
+    praise: "You did well. Thank you."
+    apologize: "I'm sorry. I didn't mean it that way."

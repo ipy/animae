@@ -13,10 +13,10 @@ mods: [demo-mod]
   await s.writeAtomic("mods/demo-mod/mod.yaml", "id: demo-mod\nname: Demo\nversion: 1.0.0\n");
   await s.writeAtomic("mods/demo-mod/world/knowledge/note.md", "---\nname: base\n---\nBase EN body.\n");
   await s.writeAtomic(
-    "mods/demo-mod/locales/zh-CN/world/knowledge/note.md",
-    "---\nname: base\n---\n中文正文。\n",
+    "mods/demo-mod/locales/fr/world/knowledge/note.md",
+    "---\nname: base\n---\nCorps en francais.\n",
   );
-  const { readStorage } = await prepareModOverlay(s, ["demo-mod"], { contentLocaleChain: ["zh-CN", "en"] });
+  const { readStorage } = await prepareModOverlay(s, ["demo-mod"], { contentLocaleChain: ["fr", "en"] });
   const text = await readStorage.readText("world/knowledge/note.md");
-  expect(text).toContain("中文正文");
+  expect(text).toContain("Corps en francais");
 });

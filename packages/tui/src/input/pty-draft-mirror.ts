@@ -1,17 +1,20 @@
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 /** When set, mirror input draft for external PTY harnesses (stdout is not linear). */
-const DRAFT_FILE = process.env.TUI_PTY_DRAFT_FILE?.trim() || "";
+function draftFilePath(): string {
+  return process.env.TUI_PTY_DRAFT_FILE?.trim() || "";
+}
 
 let harnessPending = false;
 
 export function mirrorPtyTurnPending(pending: boolean): void {
   harnessPending = pending;
-  if (!DRAFT_FILE) return;
+  const file = draftFilePath();
+  if (!file) return;
   try {
     const prev = readHarnessMirror();
     writeFileSync(
-      DRAFT_FILE,
+      file,
       `${prev.draft}\n${prev.cursor}\n${pending ? 1 : 0}\n`,
       "utf8",
     );
@@ -21,9 +24,10 @@ export function mirrorPtyTurnPending(pending: boolean): void {
 }
 
 function readHarnessMirror(): { draft: string; cursor: number; pending: boolean } {
-  if (!DRAFT_FILE) return { draft: "", cursor: 0, pending: false };
+  const file = draftFilePath();
+  if (!file) return { draft: "", cursor: 0, pending: false };
   try {
-    const raw = readFileSync(DRAFT_FILE, "utf8");
+    const raw = readFileSync(file, "utf8");
     const lines = raw.split("\n");
     return {
       draft: lines[0] ?? "",
@@ -36,12 +40,13 @@ function readHarnessMirror(): { draft: string; cursor: number; pending: boolean 
 }
 
 export function mirrorPtyInputDraft(draft: string, cursor: number): void {
-  if (!DRAFT_FILE) return;
+  const file = draftFilePath();
+  if (!file) return;
   try {
-    writeFileSync(DRAFT_FILE, `${draft}\n${cursor}\n${harnessPending ? 1 : 0}\n`, "utf8");
+    writeFileSync(file, `${draft}\n${cursor}\n${harnessPending ? 1 : 0}\n`, "utf8");
   } catch {
     try {
-      appendFileSync(DRAFT_FILE, "");
+      appendFileSync(file, "");
     } catch {
       /* ignore */
     }

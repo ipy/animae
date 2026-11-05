@@ -6,6 +6,7 @@ import type { CharacterId, EventDraft, Rng, SceneId, TurnId } from "../types.ts"
 import { worldMinutes } from "../timeline/time.ts";
 import { buildCelContext } from "./cel-context.ts";
 import type { RulesDeps } from "./deps.ts";
+import { clampTrackWithFieldCaps } from "../fields/caps.ts";
 import { applyTurnCap, computeDelta, decayedCounter, marginal, tierFor } from "./primitives.ts";
 
 export interface AdjudicateInput {
@@ -62,14 +63,17 @@ export function adjudicate(
   const row = policy.rules.delta_table?.[eventType];
   if (!row) return { drafts, tierChanged };
 
-  const ctx = buildCelContext(deps, {
-    self: owner,
-    other: target,
-    actor: input.actor,
-    event: input.appraisal,
-    sceneId: input.sceneId,
-    check: input.check ? ({ ...input.check } as Record<string, unknown>) : null,
-  });
+  const ctx = buildCelContext(
+    { state: deps.state, authored: deps.authored, policy: deps.policy, catalog: deps.catalog, fieldEffects: input.fieldEffects },
+    {
+      self: owner,
+      other: target,
+      actor: input.actor,
+      event: input.appraisal,
+      sceneId: input.sceneId,
+      check: input.check ? ({ ...input.check } as Record<string, unknown>) : null,
+    },
+  );
 
   const marginalCfg = policy.rules.marginal ?? { k: 0.5, halfLifeHours: 24 };
   const nowMin = worldMinutes(state.time);
@@ -121,8 +125,7 @@ export function adjudicate(
 
     const before = readTrack(state, owner, target, track, def, input.fieldEffects);
     let after = before + delta;
-    if (after < def.min) after = def.min;
-    if (after > def.max) after = def.max;
+    after = clampTrackWithFieldCaps(after, track, def.min, def.max, input.fieldEffects?.track_caps);
     delta = Math.round((after - before) * 100) / 100;
 
     if (Math.abs(delta) < 0.005) continue;

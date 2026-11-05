@@ -1,12 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
 import { buildPromptSegments } from "../../src/pipeline/prompt.ts";
 import { buildS2Tools } from "../../src/pipeline/render.ts";
 import { lintAssembledPrompt } from "../../src/pipeline/prompt-lint.ts";
+import { FR_TEST_LOCALE, registerFrenchTestPack } from "../helpers/locale-packs.ts";
 import { createPipelineKernel, charDef } from "./test-kernel.ts";
 
 const scene = { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false };
 
 describe("prompt scaffolding quality", () => {
+  let offFrench: (() => void) | undefined;
+  afterEach(() => {
+    offFrench?.();
+    offFrench = undefined;
+    clearLocalePacks();
+  });
+
   test("render intent_realized rules are not duplicated across static and dynamic", () => {
     const { k } = createPipelineKernel({ chars: [charDef("npc1"), charDef("player")] });
     const input = {
@@ -16,7 +25,7 @@ describe("prompt scaffolding quality", () => {
       scene,
       history: [],
       fieldEffects: {},
-      tier: "s1" as const,
+      tier: "standard" as const,
       intent: { intent: "respond", scores: { respond: 1 } },
     };
     const seg = buildPromptSegments(k, input);
@@ -27,13 +36,14 @@ describe("prompt scaffolding quality", () => {
   });
 
   test("S2 tool descriptions follow prompt locale", () => {
+    offFrench = registerFrenchTestPack();
     const { k } = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
-      i18n: { promptLocale: "zh-CN", outputLocale: "zh-CN" },
+      i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: FR_TEST_LOCALE },
     });
     const tools = buildS2Tools(k, "npc1");
-    expect(tools[0]!.description).toMatch(/检索|关键词/);
-    expect(tools[1]!.description).toMatch(/id|全文/);
+    expect(tools[0]!.description).toMatch(/Recherchez|mots-clés/i);
+    expect(tools[1]!.description).toMatch(/identifiant|index/i);
     expect(tools[0]!.description).not.toMatch(/^Search memories/);
   });
 
@@ -46,7 +56,7 @@ describe("prompt scaffolding quality", () => {
       scene,
       history: [],
       fieldEffects: {},
-      tier: "s1",
+      tier: "standard",
       intent: { intent: "respond", scores: { respond: 1 } },
     });
     const blob = [seg.static, seg.semiStatic, seg.dynamic, seg.user].join("\n");

@@ -1,4 +1,4 @@
-import { detectDefaultLocale, loadCatalog, currentLocale, t, applyDocumentI18n } from "./i18n.js";
+import { detectDefaultLocale, loadCatalog, loadLocaleOptions, currentLocale, t, applyDocumentI18n } from "./i18n.js";
 import { SessionTransport } from "./session-transport.js";
 import { pushProtocolFrame, filterProtocolFeed } from "./protocol-feed.js";
 import { redactValue } from "./redact.js";
@@ -506,11 +506,29 @@ function stopLlmPoll() {
   llmPollTimer = null;
 }
 
+/**
+ * Fills the language selector with the locales the server offers and selects `current`.
+ * @param {string} current
+ */
+async function populateLocaleSelect(current) {
+  const options = await loadLocaleOptions(current);
+  if (!options.some((o) => o.tag === current)) options.push({ tag: current, name: current });
+  el.localeSelect.replaceChildren(
+    ...options.map((o) => {
+      const opt = document.createElement("option");
+      opt.value = o.tag;
+      opt.textContent = o.name;
+      return opt;
+    }),
+  );
+  el.localeSelect.value = current;
+}
+
 async function init() {
   initTheme();
-  const loc = queryLocale ? (queryLocale === "zh-CN" ? "zh-CN" : "en") : detectDefaultLocale();
-  el.localeSelect.value = loc;
-  await loadCatalog(loc);
+  const wanted = queryLocale || detectDefaultLocale();
+  const loaded = await loadCatalog(wanted);
+  await populateLocaleSelect(loaded);
   applyDocumentI18n();
 
   el.wsUrl.value = defaultWs;

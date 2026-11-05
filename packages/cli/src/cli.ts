@@ -16,6 +16,7 @@ function engineOpts(global: GlobalCliOptions) {
   return {
     root: global.root,
     modelMode: global.modelMode,
+    mode: global.mode,
     seed: global.seed,
     lang: global.lang,
     imageCommand: global.imageCommand,
@@ -37,7 +38,7 @@ export async function runCli(argv: string[], _env: Record<string, string | undef
       case "init":
         return runInit({ dir: parsed.dir, preset: parsed.preset });
       case "validate":
-        return runValidate(parsed.global.root, parsed.mods, parsed.locale);
+        return runValidate(parsed.global.root, parsed.mods, parsed.locale, parsed.mode);
       case "mods":
         if (parsed.sub === "list") return runModsList(parsed.global.root);
         if (parsed.sub === "validate") return runModsValidate(parsed.global.root, parsed.mods);
@@ -52,7 +53,12 @@ export async function runCli(argv: string[], _env: Record<string, string | undef
           plain: parsed.plain,
         });
       case "inspect":
-        return runInspect({ ...engineOpts(parsed.global), path: parsed.path, viewer: parsed.viewer });
+        return runInspect({
+          ...engineOpts(parsed.global),
+          path: parsed.path,
+          viewer: parsed.viewer,
+          eventKind: parsed.eventKind,
+        });
       case "timeline":
         return runTimeline(parsed.sub, parsed.rest, engineOpts(parsed.global));
       case "import-card":

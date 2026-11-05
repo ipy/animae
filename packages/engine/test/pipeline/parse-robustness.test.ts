@@ -4,7 +4,7 @@ import { buildAppraiseSchema, buildRenderSchema } from "../../src/pipeline/schem
 import { coerceAppraiseRaw, coerceRenderRaw, parseJsonLoose } from "../../src/pipeline/coerce.ts";
 import { appraiseStage } from "../../src/pipeline/appraise.ts";
 import { renderStage } from "../../src/pipeline/render.ts";
-import { createPipelineKernel } from "./test-kernel.ts";
+import { createPipelineKernel, S2_BINDING } from "./test-kernel.ts";
 import { applyPolicyDefaults } from "../../src/policy/defaults.ts";
 
 async function collectRender(
@@ -101,9 +101,11 @@ describe("schema preprocess", () => {
       choices: { enabled: false, count: 3, filter: "true" },
     });
     const schema = buildRenderSchema(policy);
-    const raw = parseJsonLoose('```json\n{"text":"第一行\\n第二行","cues":[],"intent_realized":"respond"}\n```');
+    const line1 = "\u7b2c\u4e00\u884c";
+    const line2 = "\u7b2c\u4e8c\u884c";
+    const raw = parseJsonLoose(`\`\`\`json\n{"text":"${line1}\\n${line2}","cues":[],"intent_realized":"respond"}\n\`\`\``);
     const parsed = schema.parse(raw);
-    expect(parsed.text).toBe("第一行\n第二行");
+    expect(parsed.text).toBe(`${line1}\n${line2}`);
   });
 
   test("buildRenderSchema keeps newlines in text and drops bad cue at post-validate", () => {
@@ -113,7 +115,7 @@ describe("schema preprocess", () => {
     });
     const schema = buildRenderSchema(policy);
     const parsed = schema.parse({
-      text: "第一行\n第二行",
+      text: "\u7b2c\u4e00\u884c\n\u7b2c\u4e8c\u884c",
       intent_realized: "respond",
       cues: [{ type: "emote", args: { who: "a" }, at: 999 }],
     });
@@ -158,9 +160,9 @@ describe("pipeline stages with sloppy scripted output", () => {
         choices: { enabled: false, count: 3, filter: "true" },
         render: { retryOnMismatch: 0, recentTurns: 4 },
       },
-      s1Handler: async function* () {
+      s2Handler: async function* () {
         yield {
-          text: "短",
+          text: "\u77ed",
           cues: [{ type: "emote", args: { who: "npc1" }, at: 50 }],
           intent_realized: "respond",
         };
@@ -169,7 +171,7 @@ describe("pipeline stages with sloppy scripted output", () => {
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const { result } = await collectRender(
       renderStage(k, turn, {
-        tier: "s1",
+        binding: S2_BINDING,
         speaker: "npc1",
         addressee: "player",
         intent: { intent: "respond", scores: { respond: 1 } },
@@ -181,7 +183,7 @@ describe("pipeline stages with sloppy scripted output", () => {
         hits: [],
       }),
     );
-    expect(result.text).toBe("短");
+    expect(result.text).toBe("\u77ed");
     expect(result.cues).toEqual([]);
   });
 
@@ -193,10 +195,10 @@ describe("pipeline stages with sloppy scripted output", () => {
         render: { retryOnMismatch: 0, recentTurns: 4 },
       },
       // Not what a validating adapter would return; a host model that skips validation must not slip through either.
-      s1Handler: () => ({ text: "", cues: [], intent_realized: "respond" }),
+      s2Handler: () => ({ text: "", cues: [], intent_realized: "respond" }),
     });
-    k.models.s1 = {
-      ...k.models.s1,
+    k.models.s2 = {
+      ...k.models.s2,
       async *stream() {
         yield { type: "final" as const, value: { text: "  ", cues: [], intent_realized: "respond" } };
       },
@@ -204,7 +206,7 @@ describe("pipeline stages with sloppy scripted output", () => {
     const turn = { turnId: "turn_0001", sceneId: "scn_0001", actor: "player", addressee: "npc1", speaker: "npc1", text: "x", autonomous: false };
     const run = collectRender(
       renderStage(k, turn, {
-        tier: "s1",
+        binding: S2_BINDING,
         speaker: "npc1",
         addressee: "player",
         intent: { intent: "respond", scores: { respond: 1 } },

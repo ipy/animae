@@ -30,11 +30,90 @@ export const ModelSpecSchema = z.strictObject({
 });
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 
+/** `provider: rule` serves a role with the deterministic rule backend instead of a model. */
+export const RuleModelSpecSchema = z.strictObject({
+  provider: z.literal("rule"),
+  model: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+/** S1 (structured judgment): any model provider that can return schema-conformant data, or the rule backend. */
+export const S1ModelSpecSchema = z.union([ModelSpecSchema, RuleModelSpecSchema]);
+export type S1ModelSpec = z.infer<typeof S1ModelSpecSchema>;
+
+/** One S2 (free-text generation) tier: a model spec plus the id the router and policy refer to it by. */
+export const S2TierSpecSchema = z.strictObject({ id: Id, ...ModelSpecSchema.shape });
+export type S2TierSpec = z.infer<typeof S2TierSpecSchema>;
+
+export const S2RoutingSchema = z.strictObject({
+  /** tier of sync renders; defaults to `default` */
+  render: Id.optional(),
+  /** tier the router upgrades to when an escalation trigger fires */
+  escalate_to: Id.optional(),
+  /** tier of offscreen narration */
+  offscreen: Id.optional(),
+  /** tier of autonomous NPC dialogue */
+  autonomous: Id.optional(),
+});
+
+export type S2Routing = z.infer<typeof S2RoutingSchema>;
+
+export const S2ConfigSchema = z
+  .strictObject({
+    /** tier used when routing names none; defaults to the first tier */
+    default: Id.optional(),
+    tiers: z.array(S2TierSpecSchema).min(1),
+    routing: S2RoutingSchema.optional(),
+  })
+  .superRefine((cfg, ctx) => {
+    const ids = new Set<string>();
+    for (const [i, t] of cfg.tiers.entries()) {
+      if (ids.has(t.id)) ctx.addIssue({ code: "custom", path: ["tiers", i, "id"], message: `duplicate S2 tier id "${t.id}"` });
+      ids.add(t.id);
+    }
+    const refs: [string, string | undefined][] = [
+      ["default", cfg.default],
+      ["routing.render", cfg.routing?.render],
+      ["routing.escalate_to", cfg.routing?.escalate_to],
+      ["routing.offscreen", cfg.routing?.offscreen],
+      ["routing.autonomous", cfg.routing?.autonomous],
+    ];
+    for (const [path, id] of refs) {
+      if (id !== undefined && !ids.has(id)) {
+        ctx.addIssue({ code: "custom", path: path.split("."), message: `unknown S2 tier "${id}" (tiers: ${[...ids].join(", ")})` });
+      }
+    }
+  });
+export type S2Config = z.infer<typeof S2ConfigSchema>;
+
+/** `models.s2`: a tiered config, or a single model spec (one tier named `only`). */
+export const S2ModelsSchema = z.union([S2ConfigSchema, ModelSpecSchema]);
+
+export const BackendSchema = z.enum(["llm", "rule"]);
+export const RuntimeSwitchAtSchema = z.enum(["turn_boundary", "immediate"]);
+export const RuntimeConfigSchema = z.strictObject({
+  /** when a requested mode change takes effect; `immediate` is for tests and CI */
+  switchAt: RuntimeSwitchAtSchema.default("turn_boundary"),
+  /** per phase: serve a failed LLM call with the rule backend (writes `runtime.fallback_used`) instead of failing the turn */
+  fallbackOnError: z
+    .strictObject({
+      appraise: z.boolean().default(false),
+      render: z.boolean().default(false),
+      reflection: z.boolean().default(false),
+      entity: z.boolean().default(false),
+      memoryWrite: z.boolean().default(false),
+      offscreen: z.boolean().default(false),
+      autonomous: z.boolean().default(false),
+    })
+    .default({ appraise: false, render: false, reflection: false, entity: false, memoryWrite: false, offscreen: false, autonomous: false }),
+});
+export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
+
 export const I18nConfigSchema = z.strictObject({
   /** UI / CLI / player-facing locale (BCP-47) */
   locale: z.string().default("en"),
   /** LLM-internal prompt template locale (static prompt resources) */
-  promptLocale: z.string().default("zh-CN"),
+  promptLocale: z.string().default("en"),
   /** player-facing generated text locale; defaults to `locale` */
   outputLocale: z.string().optional(),
   /** LLM-facing authored overlay locale; defaults to `promptLocale` at resolve time */
@@ -47,7 +126,21 @@ export type I18nConfig = z.infer<typeof I18nConfigSchema>;
 export const AnimaeConfigSchema = z.strictObject({
   preset: z.string().optional(),
   seed: z.number().int().default(0),
-  models: z.strictObject({ s1: ModelSpecSchema, s2: ModelSpecSchema }).optional(),
+  /**
+   * Which model serves each role. Both entries are optional: a role without a model is served by the rule backend.
+   * `s1` = structured judgment; `s2` = free-text generation (single spec, or `{ default, tiers, routing }`).
+   */
+  models: z.strictObject({ s1: S1ModelSpecSchema.optional(), s2: S2ModelsSchema.optional() }).optional(),
+  /**
+   * `llm`: both roles on models; `rule`: no model calls at all; `hybrid`: per role through `appraise.backend` /
+   * `render.backend`. Omitted: `llm` when models are configured, otherwise `rule`.
+   */
+  mode: z.enum(["llm", "hybrid", "rule"]).optional(),
+  /** backend of the S1 role (appraise, classify, safety, reflection, entity generation); overrides `mode` */
+  appraise: z.strictObject({ backend: BackendSchema.optional() }).optional(),
+  /** backend of the S2 role (render, offscreen narration, autonomous dialogue); overrides `mode` */
+  render: z.strictObject({ backend: BackendSchema.optional() }).optional(),
+  runtime: RuntimeConfigSchema.optional(),
   policies: z.array(z.string()).default([]),
   /** enabled content mod ids (see docs/mods.md); host may override via createEngine({ mods }) */
   mods: z.array(z.string()).default([]),

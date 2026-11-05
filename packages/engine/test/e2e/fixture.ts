@@ -81,7 +81,12 @@ export const e2ePreset: PresetBundle = {
         fields: { grants: [{ holder: "true", source: "true", maxLevel: "L4" }], caps: {} },
         safety: { enabled: false, response: "in_character", log: false },
         timeline: { allowRewind: true, carry: [] },
-        visibility: { rules: [] },
+        visibility: {
+          rules: [
+            { viewer: "player", path: "world/time", allow: true },
+            { viewer: "player", path: "scene", allow: true },
+          ],
+        },
       },
     },
   ],

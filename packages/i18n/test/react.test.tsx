@@ -6,7 +6,7 @@ import { I18nProvider, useLocale, useT } from "../src/react.tsx";
 const catalogs = {
   common: {
     en: { hello: "Hello {name}" },
-    "zh-CN": { hello: "Hi {name}" },
+    fr: { hello: "Salut {name}" },
   },
 };
 

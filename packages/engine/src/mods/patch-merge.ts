@@ -40,15 +40,30 @@ function applyRemove(base: unknown[], incoming: unknown[]): unknown[] {
   return out;
 }
 
-/** Deep-merge patch document into base (policy-style operators + $replace/$remove/$delete). */
+/**
+ * Deep-merge patch document into base (policy-style operators + $replace/$remove/$delete).
+ *
+ * A base that is itself an unresolved `$append` / `$prepend` marker is a policy document that has not met its earlier
+ * layers yet (a locale patch over a game policy that extends a preset's array). The patch then **composes** with the
+ * marker instead of flattening it into a plain array, so the policy merge still appends to the preset's array rather
+ * than replacing it.
+ */
 export function applyPatchMerge(base: unknown, patch: unknown): unknown {
   if (patch === null || patch === undefined) return base;
   if (isAppendMarker(patch)) {
+    if (isAppendMarker(base)) {
+      if (typeof patch.$append === "string" && typeof base.$append === "string") return { $append: `${base.$append}${patch.$append}` };
+      if (Array.isArray(patch.$append) && Array.isArray(base.$append)) return { $append: [...base.$append, ...patch.$append] };
+    }
     if (typeof patch.$append === "string") return `${typeof base === "string" ? base : ""}${patch.$append}`;
     const arr = Array.isArray(base) ? base : [];
     return [...arr, ...patch.$append];
   }
   if (isPrependMarker(patch)) {
+    if (isPrependMarker(base)) {
+      if (typeof patch.$prepend === "string" && typeof base.$prepend === "string") return { $prepend: `${patch.$prepend}${base.$prepend}` };
+      if (Array.isArray(patch.$prepend) && Array.isArray(base.$prepend)) return { $prepend: [...patch.$prepend, ...base.$prepend] };
+    }
     if (typeof patch.$prepend === "string") return `${patch.$prepend}${typeof base === "string" ? base : ""}`;
     const arr = Array.isArray(base) ? base : [];
     return [...patch.$prepend, ...arr];

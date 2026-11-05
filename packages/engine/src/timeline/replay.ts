@@ -62,6 +62,16 @@ export function replayChunks(events: readonly EngineEvent[]): TurnChunk[] {
           });
         }
       }
+    } else if (e.kind === "narration") {
+      const n = e as { text?: string; style?: string };
+      if (n.text) {
+        chunks.push({
+          type: "narration",
+          text: n.text,
+          style: n.style === "scene_break" ? "scene_break" : "normal",
+          newParagraph: true,
+        });
+      }
     } else if (e.kind === "utterance") {
       const u = e as {
         text?: string;

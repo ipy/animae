@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useAppState } from "../context/app-state-context.tsx";
 import { useActionRunner } from "../context/action-runner-context.tsx";
 import { buildPaletteEntries } from "../utils/action-list.ts";
@@ -41,9 +41,15 @@ export function CommandPalette() {
     ],
   );
 
+  const last = Math.max(0, entries.length - 1);
+  // The selection only moves by steps; once the list is known, a step past its end is taken back.
+  useEffect(() => {
+    if (state.paletteOpen && state.paletteIndex > last) dispatch({ type: "paletteMove", delta: 0, max: last });
+  }, [state.paletteOpen, state.paletteIndex, last, dispatch]);
+
   if (!state.paletteOpen) return null;
 
-  const selected = Math.min(state.paletteIndex, Math.max(0, entries.length - 1));
+  const selected = Math.min(state.paletteIndex, last);
   const window = entries.slice(Math.max(0, selected - 8), selected + 12);
 
   const activate = async (idx: number) => {

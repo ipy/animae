@@ -28,6 +28,7 @@
     "@animae/engine": "workspace:*",
     "@animae/preset-base": "workspace:*",
     "@animae/preset-dnd": "workspace:*",
+    "@animae/preset-rule": "workspace:*",
     "@animae/tui": "workspace:*",
     "@animae/host": "workspace:*",
     "@animae/web": "workspace:*"

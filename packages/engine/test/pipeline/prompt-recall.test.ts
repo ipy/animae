@@ -1,6 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
 import { buildPromptSegments } from "../../src/pipeline/prompt.ts";
 import type { RetrievalHit } from "../../src/contracts.ts";
+import { FR_TEST_LOCALE, registerFrenchTestPack } from "../helpers/locale-packs.ts";
 import { createPipelineKernel, charDef } from "./test-kernel.ts";
 
 const scene = { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false };
@@ -28,7 +30,8 @@ function memoryHit(id: string, text: string, score: number, extra: Partial<Retri
   return { kind: "memory", id, text, score, ...extra };
 }
 
-function dynamic(opts: { hits: RetrievalHit[]; policy?: object; i18n?: object; tier?: "s1" | "s2" }) {
+/** `tier` is the S2 tier id the render runs on; `null` builds the prompt without a tier (nothing can read on demand). */
+function dynamic(opts: { hits: RetrievalHit[]; policy?: object; i18n?: object; tier?: string | null }) {
   const { k } = createPipelineKernel({
     chars: [charDef("npc1"), charDef("player")],
     ...(opts.policy ? { policy: opts.policy as never } : {}),
@@ -41,12 +44,19 @@ function dynamic(opts: { hits: RetrievalHit[]; policy?: object; i18n?: object; t
     scene,
     history: [],
     fieldEffects: {},
-    tier: opts.tier ?? "s1",
+    ...(opts.tier === null ? {} : { tier: opts.tier ?? "only" }),
     hits: opts.hits,
   } as never).dynamic;
 }
 
 describe("recalled material in the prompt", () => {
+  let offFrench: (() => void) | undefined;
+  afterEach(() => {
+    offFrench?.();
+    offFrench = undefined;
+    clearLocalePacks();
+  });
+
   test("lines carry content only: no ids, no scores, no retrieval bookkeeping", () => {
     const out = dynamic({
       hits: [memoryHit("mem_1", "Bai Zhi promised to water the ferns.", 0.9), knowledgeHit(doc("lore", "The greenhouse sits on the river."), 0.7)],
@@ -82,7 +92,7 @@ describe("recalled material in the prompt", () => {
       scene,
       history: [],
       fieldEffects: {},
-      tier: "s1",
+      tier: "only",
       hits: [knowledgeHit(always, 0.9), knowledgeHit(other, 0.5), memoryHit("mem_1", "A personal memory.", 0.1)],
     } as never);
     expect(seg.static).toContain("The greenhouse sits on the river.");
@@ -105,7 +115,7 @@ describe("recalled material in the prompt", () => {
       scene,
       history: [],
       fieldEffects: {},
-      tier: "s1",
+      tier: "only",
       hits: [knowledgeHit(always, 0.9), knowledgeHit(doc("a", "Lore A."), 0.6), knowledgeHit(doc("b", "Lore B."), 0.5)],
     } as never);
     expect(seg.dynamic).toContain("[Doc a]");
@@ -117,20 +127,22 @@ describe("recalled material in the prompt", () => {
       distortion: "Emphasise emotional intensity and certainty when recalling this memory.",
       distortionKind: "intensify",
     });
-    const zh = dynamic({ hits: [hit], i18n: { promptLocale: "zh-CN", outputLocale: "zh-CN" } });
-    expect(zh).toContain("记忆有些模糊");
-    expect(zh).not.toMatch(/Emphasise|memory\.|\.。/);
+    offFrench = registerFrenchTestPack();
+    const fr = dynamic({ hits: [hit], i18n: { promptLocale: FR_TEST_LOCALE, outputLocale: FR_TEST_LOCALE } });
+    expect(fr).toContain("Souvenir flou");
+    expect(fr).not.toMatch(/Emphasise|memory\.|Hazy memory/);
     const en = dynamic({ hits: [hit] });
     expect(en).toContain("Hazy memory");
     expect(en).not.toMatch(/\.\./);
   });
 
-  test("S2 can read what was cut: the truncated lore line names the document id", () => {
+  test("a render on an S2 tier can read what was cut: the truncated lore line names the document id", () => {
     const long = "A fairly long sentence about the river docks. ".repeat(30);
     const hits = [knowledgeHit(doc("river", long), 0.8)];
     const policy = { render: { retryOnMismatch: 0, recentTurns: 12, recall: { knowledgeChars: 100 } } };
-    expect(dynamic({ hits, policy, tier: "s2" })).toContain("[river]");
-    expect(dynamic({ hits, policy, tier: "s1" })).not.toContain("[river]");
+    expect(dynamic({ hits, policy, tier: "standard" })).toContain("[river]");
+    expect(dynamic({ hits, policy, tier: "pro" })).toContain("[river]");
+    expect(dynamic({ hits, policy, tier: null })).not.toContain("[river]");
   });
 
   test("the knowledge index lists ids, because the read tool takes an id", () => {
@@ -145,7 +157,7 @@ describe("recalled material in the prompt", () => {
       scene,
       history: [],
       fieldEffects: {},
-      tier: "s2",
+      tier: "standard",
     } as never);
     expect(seg.semiStatic).toContain("Anvil [world/factions/anvil]: about world/factions/anvil");
   });

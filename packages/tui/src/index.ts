@@ -31,4 +31,5 @@ export { createTuiI18n, tuiCatalogs } from "./i18n/tui-i18n.ts";
 export { localizeError } from "@animae/i18n";
 export { resolveText } from "./utils/resolve-text.ts";
 export { selectLayoutMode } from "./utils/layout-mode.ts";
+export { modeIndicator } from "./utils/mode-display.ts";
 export type { LayoutMode } from "./utils/layout-mode.ts";

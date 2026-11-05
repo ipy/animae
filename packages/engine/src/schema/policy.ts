@@ -76,6 +76,68 @@ const CheckRuleSchema = z.strictObject({
 
 const FidelitySchema = z.enum(["none", "rule", "narrate", "full"]);
 
+// ───────────────────────── rule backend (token-free S1/S2 stand-ins) ─────────────────────────
+const UnitInterval = z.number().min(0).max(1);
+
+/** One cue a template line attaches to its text. Same shape the render stage validates against `cues.types`. */
+export const RuleCueSchema = z.strictObject({
+  type: z.string(),
+  args: z.record(z.string(), z.unknown()).default({}),
+  /** character offset into the rendered text; 0 when omitted */
+  at: z.number().int().min(0).optional(),
+});
+
+/**
+ * One line of a template pool. `text` may contain `{{ CEL }}` placeholders and `$t:key` string-table keys; the pick is
+ * weighted and seeded (see the rule backend). A `narration` / `narration_break` line is emitted as a speaker-less
+ * narration instead of an utterance.
+ */
+export const RulePoolEntrySchema = z.strictObject({
+  text: z.string().min(1),
+  weight: z.number().positive().default(1),
+  cues: z.array(RuleCueSchema).default([]),
+  /** intent this line realizes; backfills `intent_realized` (the rule backend never produces `intent.mismatch`) */
+  intent: z.string().optional(),
+  style: z.enum(["narration", "narration_break"]).optional(),
+});
+export type RulePoolEntry = z.infer<typeof RulePoolEntrySchema>;
+
+/** A template layer: the first layer whose `when` holds supplies the utterance; narration layers add paragraphs. */
+export const RuleLayerSchema = z.strictObject({
+  id: Id,
+  when: Cel.default("true"),
+  pool: z.array(RulePoolEntrySchema).min(1),
+});
+export type RuleLayer = z.infer<typeof RuleLayerSchema>;
+
+/** What the rule renderer says when no layer matches. */
+export const RuleFallbackSchema = z.strictObject({
+  text: z.string().min(1),
+  cues: z.array(RuleCueSchema).default([]),
+  intent: z.string().optional(),
+});
+export type RuleFallback = z.infer<typeof RuleFallbackSchema>;
+
+const AppraiseEventSchema = z.strictObject({
+  type: z.string(),
+  intensity: UnitInterval.default(0.5),
+  sincerity: UnitInterval.default(0.7),
+  approach: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+});
+
+const RouterBudgetTierCaps = z.record(z.string(), z.number().int().min(0));
+const MaxOutputTokens = z.strictObject({
+  s1: z.number().int().positive().default(400),
+  /** one cap for every S2 tier, or a cap per tier id (tiers not listed use `default`, then 800) */
+  s2: z
+    .union([
+      z.number().int().positive(),
+      z.record(z.string(), z.number().int().positive()),
+    ])
+    .default(800),
+});
+
 const TriggerBase = { enabled: z.boolean().default(true) };
 
 export const PolicySchema = z.strictObject({
@@ -127,6 +189,27 @@ export const PolicySchema = z.strictObject({
     })
     .optional(),
 
+  /**
+   * Rule backend appraisal, in priority order: a taken choice's own metadata, `/<event> [intensity|tag]` commands,
+   * `patterns`, then `fallback`. `inputClass` extends the injection / meta-probe keyword tables.
+   */
+  appraise: z
+    .strictObject({
+      patterns: z.array(z.strictObject({ match: z.string(), flags: z.string().regex(/^[imsu]*$/).optional(), event: AppraiseEventSchema })).optional(),
+      fallback: AppraiseEventSchema.optional(),
+      /** command word → event type id (a command word that is itself an event type id needs no entry) */
+      commands: z.record(z.string(), z.string()).optional(),
+      inputClass: z
+        .strictObject({
+          /** regular-expression sources (case-insensitive) that mark an injection attempt */
+          injection: z.array(z.string()).optional(),
+          /** regular-expression sources (case-insensitive) that mark a question about the model or its prompt */
+          metaProbe: z.array(z.string()).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+
   memory: z
     .strictObject({
       weights: z.strictObject({ term: z.number(), recency: z.number(), importance: z.number(), salience: z.number(), vector: z.number() }).partial().optional(),
@@ -134,6 +217,21 @@ export const PolicySchema = z.strictObject({
       recencyHalfLifeDays: z.number().positive().optional(),
       indexMax: z.number().int().positive().optional(),
       write: z.strictObject({ episodic: z.boolean().default(true), minIntensity: z.number().min(0).max(1).default(0.2), maxChars: z.number().int().positive().default(240) }).optional(),
+      /**
+       * How the text and weights of an episodic memory are produced. `rule` (default) fills `template`; `s1` asks the
+       * structured-judgment role and falls back to `template` when that role is served by the rule backend or fails.
+       * `narration` decides whether speaker-less narration reaches the characters' memories.
+       */
+      writing: z
+        .strictObject({
+          backend: z.enum(["rule", "s1"]).default("rule"),
+          /** `{{ CEL }}` template; `text` is the utterance text, `speaker` its speaker id */
+          template: z.string().default("{{text}}"),
+          importanceByEventType: z.record(z.string(), UnitInterval).default({}),
+          valenceByEventType: z.record(z.string(), z.number().min(-1).max(1)).default({}),
+          narration: z.enum(["none", "inject_belief", "shareable"]).default("none"),
+        })
+        .optional(),
       forgetting: z.strictObject({ enabled: z.boolean().default(false), tau: z.number().positive().default(30), threshold: z.number().min(0).max(1).default(0.2) }).optional(),
       distortion: z
         .strictObject({
@@ -143,11 +241,26 @@ export const PolicySchema = z.strictObject({
           kinds: z.array(z.enum(["intensify", "swap_subject", "add_motive"])).default(["intensify"]),
         })
         .optional(),
-      propagation: z.strictObject({ enabled: z.boolean().default(false), onTick: z.enum(["day"]).default("day"), distortionPerHop: z.number().min(0).default(1) }).optional(),
+      propagation: z
+        .strictObject({
+          enabled: z.boolean().default(false),
+          onTick: z.enum(["day", "scene_end"]).default("day"),
+          distortionPerHop: z.number().min(0).default(1),
+        })
+        .optional(),
     })
     .optional(),
 
-  reflection: z.strictObject({ enabled: z.boolean().default(true), accept: Cel.default("!conflict") }).optional(),
+  reflection: z
+    .strictObject({
+      enabled: z.boolean().default(true),
+      accept: Cel.default("!conflict"),
+      /** `s1` follows the S1 role (LLM when it is served by one); `rule` always writes `summaryTemplate` */
+      backend: z.enum(["s1", "rule"]).optional(),
+      /** `{{ CEL }}` template for the one summary line the rule backend writes; empty goal changes and claims */
+      summaryTemplate: z.string().optional(),
+    })
+    .optional(),
 
   characters: z
     .strictObject({
@@ -155,12 +268,25 @@ export const PolicySchema = z.strictObject({
     })
     .optional(),
 
-  offscreen: z.strictObject({ fidelity: z.strictObject({ default: FidelitySchema.default("rule"), locations: Rec(FidelitySchema).default({}), characters: Rec(FidelitySchema).default({}) }) }).optional(),
+  offscreen: z
+    .strictObject({
+      fidelity: z.strictObject({ default: FidelitySchema.default("rule"), locations: Rec(FidelitySchema).default({}), characters: Rec(FidelitySchema).default({}) }),
+      /** `{{ CEL }}` template of the trace the rule backend writes for an offscreen location (`location.name`, `time`) */
+      narrateTemplate: z.string().optional(),
+    })
+    .optional(),
 
   scene: z
     .strictObject({
       turnTaking: z.union([z.enum(["addressed", "round_robin"]), z.strictObject({ priority: Cel })]).optional(),
-      autonomous: z.strictObject({ maxExchangesPerPlayerTurn: z.number().int().min(0).default(0), when: Cel.default("true") }).optional(),
+      autonomous: z
+        .strictObject({
+          maxExchangesPerPlayerTurn: z.number().int().min(0).default(0),
+          when: Cel.default("true"),
+          /** template layers for autonomous exchanges under the rule backend (same shape as `render.layers`) */
+          rules: z.array(RuleLayerSchema).optional(),
+        })
+        .optional(),
     })
     .optional(),
 
@@ -181,16 +307,25 @@ export const PolicySchema = z.strictObject({
         .optional(),
       budget: z
         .strictObject({
+          /** sync model calls a turn may make: one S1 (appraise) plus one S2 (render) */
           syncCallsPerTurn: z.number().int().positive().default(2),
+          /** S1 calls per turn; 0 serves the S1 role with the rule backend */
+          s1PerTurn: z.number().int().min(0).optional(),
+          /** S2 calls per turn for a tier that is not listed in `s2PerTurnByTier`; 0 disables the tier */
           s2PerTurn: z.number().int().min(0).default(1),
+          /** S2 calls per turn, per tier id */
+          s2PerTurnByTier: RouterBudgetTierCaps.optional(),
+          /** share of turns allowed on tiers above the default tier */
           s2Ratio: z.number().min(0).max(1).default(0.15),
           s2ReservedForAnchors: z.number().min(0).max(1).default(0.03),
-          maxOutputTokens: z.strictObject({ s1: z.number().int().positive().default(400), s2: z.number().int().positive().default(800) }).default({ s1: 400, s2: 800 }),
-          /** shared S2 pool per scene (calls); default derived from s2Ratio */
+          maxOutputTokens: MaxOutputTokens.default({ s1: 400, s2: 800 }),
+          /** shared pool of above-default-tier calls per scene; default derived from s2Ratio */
           sceneS2Pool: z.number().int().min(0).optional(),
         })
         .optional(),
-      degrade: z.array(z.enum(["s2_to_s1", "defer_reflection", "skip_offscreen_narrate", "skip_autonomous"])).optional(),
+      degrade: z
+        .array(z.enum(["s2_tier_down", "s2_to_rule", "s1_to_rule", "defer_reflection", "skip_offscreen_narrate", "skip_autonomous"]))
+        .optional(),
     })
     .optional(),
 
@@ -241,10 +376,41 @@ export const PolicySchema = z.strictObject({
           memoryChars: z.number().int().positive().optional(),
         })
         .optional(),
+      /**
+       * Rule backend: template layers. The first layer whose `when` holds supplies the utterance; layers whose pool
+       * holds `narration` / `narration_break` lines add narration paragraphs and do not compete for the utterance.
+       */
+      layers: z.array(RuleLayerSchema).optional(),
+      /** Rule backend: what to say when no utterance layer matches. */
+      fallback: RuleFallbackSchema.optional(),
     })
     .optional(),
   cues: z.strictObject({ types: Rec(z.strictObject({ args: Rec(FieldDescriptorSchema).default({}), description: z.string().optional() })) }).optional(),
-  choices: z.strictObject({ enabled: z.boolean().default(false), count: z.number().int().positive().default(3), filter: Cel.default("true") }).optional(),
+  choices: z
+    .strictObject({
+      enabled: z.boolean().default(false),
+      count: z.number().int().positive().default(3),
+      filter: Cel.default("true"),
+      /**
+       * Rule backend: quick replies. Matching rules (in order, at most `count`) become the offered choices; `event_type`,
+       * `tags`, `intensity`, `sincerity` and `approach` are what the choice appraises to when it is taken.
+       */
+      rules: z
+        .array(
+          z.strictObject({
+            id: Id.optional(),
+            when: Cel.default("true"),
+            text: z.string().min(1),
+            event_type: z.string(),
+            tags: z.array(z.string()).default([]),
+            intensity: UnitInterval.optional(),
+            sincerity: UnitInterval.optional(),
+            approach: z.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
 
   timeline: z
     .strictObject({
@@ -278,4 +444,4 @@ export const PolicySchema = z.strictObject({
 export type Policy = z.infer<typeof PolicySchema>;
 
 /** The merged + validated policy with defaults applied (loader output). Same shape; all sections present. */
-export type ResolvedPolicy = Required<Pick<Policy, "events" | "tracks" | "rules" | "intent" | "intent_rules" | "memory" | "router" | "render" | "cues" | "choices" | "timeline" | "visibility" | "checks" | "input" | "safety" | "fields" | "reflection" | "offscreen" | "scene" | "characters">> & Pick<Policy, "schema" | "x">;
+export type ResolvedPolicy = Required<Pick<Policy, "events" | "tracks" | "rules" | "intent" | "intent_rules" | "memory" | "router" | "render" | "cues" | "choices" | "timeline" | "visibility" | "checks" | "input" | "safety" | "fields" | "reflection" | "offscreen" | "scene" | "characters" | "appraise">> & Pick<Policy, "schema" | "x">;

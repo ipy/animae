@@ -2,7 +2,7 @@ import { test, expect, describe } from "bun:test";
 import { createIntrospect } from "../../src/introspect/service.ts";
 import { createMemoryService } from "../../src/memory/service.ts";
 import { createFakeKernel, charDef } from "../support/kernel-fake.ts";
-import { globMatch, evaluateVisibility } from "../../src/introspect/visibility.ts";
+import { globMatch, evaluateVisibility, eventVisible, narrationVisibilityPaths } from "../../src/introspect/visibility.ts";
 import { applyPolicyDefaults } from "../../src/policy/defaults.ts";
 
 describe("visibility", () => {
@@ -29,6 +29,20 @@ describe("visibility", () => {
   test("debug bypasses policy", () => {
     const policy = applyPolicyDefaults({ visibility: { rules: [] } });
     expect(evaluateVisibility(policy, "debug", "anything", [], { day: 1, minute: 0 })).toBe(true);
+  });
+
+  test("narration path rules can hide scene breaks", () => {
+    const policy = applyPolicyDefaults({
+      visibility: {
+        rules: [
+          { viewer: "player", path: "events", allow: true },
+          { viewer: "player", path: "events/narration/style:scene_break", allow: false },
+        ],
+      },
+    });
+    expect(narrationVisibilityPaths("scene_break")).toEqual(["events/narration", "events/narration/style:scene_break"]);
+    expect(eventVisible(policy, "player", { kind: "narration", style: "scene_break" }, [], { day: 1, minute: 0 })).toBe(false);
+    expect(eventVisible(policy, "player", { kind: "narration", style: "normal" }, [], { day: 1, minute: 0 })).toBe(true);
   });
 });
 
@@ -73,6 +87,43 @@ describe("introspect query", () => {
     await intro.expireGrants();
     expect(intro.canRead("player", "ledger")).toBe(false);
     expect(intro.query("player", "ledger")).toBeUndefined();
+  });
+
+  test("grant and expiry are logged with the viewer, the normalised path and the deadline", async () => {
+    const { k, setState } = createFakeKernel({
+      policy: {
+        visibility: {
+          rules: [
+            { viewer: "player", path: "ledger", allow: false },
+            { viewer: "player", path: "director/anchors", allow: false },
+          ],
+        },
+      },
+    });
+    k.m.memory = createMemoryService(k);
+    const intro = createIntrospect(k);
+    await intro.grant("player", "/ledger", 60);
+    await intro.grant("player", "director/anchors"); // no TTL: lasts until revoked
+
+    const granted = k.timeline.events().filter((e) => e.kind === "visibility.granted") as unknown as Array<{
+      viewer: string;
+      path: string;
+      source?: string;
+      expiresAt?: { day: number; minute: number };
+    }>;
+    expect(granted.map((e) => [e.viewer, e.path, e.source, e.expiresAt])).toEqual([
+      ["player", "ledger", "introspect", { day: 1, minute: 60 }],
+      ["player", "director/anchors", "introspect", undefined],
+    ]);
+
+    // Nothing has lapsed yet; two hours later only the grant with a deadline does.
+    expect(await intro.expireGrants()).toEqual([]);
+    setState({ ...k.timeline.state(), time: { day: 1, minute: 120 } });
+    const expired = await intro.expireGrants();
+    expect(expired.map((e) => e.kind)).toEqual(["visibility.expired"]);
+    expect(expired[0]).toMatchObject({ viewer: "player", path: "ledger", source: "introspect" });
+    expect(intro.canRead("player", "ledger")).toBe(false);
+    expect(intro.canRead("player", "director/anchors")).toBe(true);
   });
 
   test("revoke ends a grant before its TTL and leaves other grants alone", async () => {

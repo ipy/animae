@@ -414,11 +414,16 @@ export const ServerStreamSchema = z.object({
   type: z.literal("stream"),
   seq: z.number().int().nonnegative(),
   requestId: requestId,
-  phase: z.enum(["start", "delta", "end"]),
+  /** `reset`: the engine replaced the output of the turn in flight; every segment streamed since the player's own line is void. */
+  phase: z.enum(["start", "delta", "end", "reset"]),
   segment: z.enum(["narration", "dialogue", "thought", "system", "event"]),
   speaker: z.string().optional(),
   text: z.string().optional(),
   turnId: z.string().optional(),
+  /** `narration` segments, phase `start`: how the paragraph is presented (`scene_break` is a divider). */
+  style: z.enum(["normal", "scene_break"]).optional(),
+  /** phase `reset`: why the output was replaced. */
+  reason: z.enum(["fallback", "retry"]).optional(),
 });
 
 export const ServerEventSchema = z.object({

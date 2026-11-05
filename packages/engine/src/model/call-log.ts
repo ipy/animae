@@ -24,6 +24,8 @@ export interface ModelCallLogEntry {
   id: string;
   startedAt: number;
   slot: ModelCallSlot;
+  /** S2 tier id of the call (absent for S1 calls) */
+  tier?: string;
   label: string;
   modelId: string;
   request: {
@@ -64,6 +66,7 @@ export interface ModelCallLogQuery {
   limit?: number;
   label?: string;
   slot?: ModelCallSlot;
+  tier?: string;
   errorsOnly?: boolean;
 }
 
@@ -152,6 +155,7 @@ export function createModelCallLog(opts: ModelCallLogOptions = {}): ModelCallLog
       if (query.since != null) rows = rows.filter((e) => e.seq > query.since!);
       if (query.label) rows = rows.filter((e) => e.label === query.label);
       if (query.slot) rows = rows.filter((e) => e.slot === query.slot);
+      if (query.tier) rows = rows.filter((e) => e.tier === query.tier);
       if (query.errorsOnly) rows = rows.filter((e) => e.status !== "ok");
       rows.sort((a, b) => b.seq - a.seq);
       const limit = query.limit ?? rows.length;
@@ -202,7 +206,7 @@ function finalizeResponseRaw(value: unknown, maxChars: number): { raw: string; t
 
 export function withModelCallLog(
   port: ModelPort,
-  ctx: { slot: ModelCallSlot; log: ModelCallLog; turnId?: () => string | undefined; requestId?: () => string | undefined },
+  ctx: { slot: ModelCallSlot; tier?: string; log: ModelCallLog; turnId?: () => string | undefined; requestId?: () => string | undefined },
 ): ModelPort {
   const internal = logInternals(ctx.log);
 
@@ -216,6 +220,7 @@ export function withModelCallLog(
       id: `mcl_${startedAt.toString(36)}_${entryCounter}`,
       startedAt,
       slot: ctx.slot,
+      ...(ctx.tier ? { tier: ctx.tier } : {}),
       label: req.label,
       modelId: port.id,
       request: {

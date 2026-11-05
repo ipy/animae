@@ -1,14 +1,24 @@
 // Public surface of @animae/engine. Modules append their exports here (owners: see docs/architecture.md).
 export * from "./types.ts";
 export {
+  applyNarrationTurnChunk,
   applyTextTurnChunk,
+  closeParagraphStream,
   closeUtteranceStream,
+  createParagraphStreamState,
   createUtteranceStreamState,
+  isActorEcho,
+  type NarrationChunkApplyResult,
+  type NarrationTurnChunk,
+  type ParagraphStreamState,
   type TextChunkApplyResult,
   type TextTurnChunk,
   type UtteranceStreamState,
 } from "./turn-chunk-accumulate.ts";
 export * from "./ports.ts";
+export * from "./narration.ts";
+export * from "./runtime/index.ts";
+export * from "./rule-backend/index.ts";
 export * from "./events.ts";
 export * from "./state.ts";
 export * from "./preset.ts";
@@ -39,4 +49,10 @@ export * from "./engine/index.ts";
 export * from "./gallery/index.ts";
 export * from "./rpc/index.ts";
 export * from "./i18n/index.ts";
-export { getPromptSection, PROMPT_LOCALES, promptLocaleParityKeys } from "./prompts/index.ts";
+export {
+  getPromptSection,
+  getGalleryPromptSection,
+  promptLocales,
+  promptLocaleParityKeys,
+  galleryPromptLocaleParityKeys,
+} from "./prompts/index.ts";

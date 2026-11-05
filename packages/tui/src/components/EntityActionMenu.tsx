@@ -15,12 +15,11 @@ export function EntityActionMenu() {
   const { state, dispatch } = useAppState();
   const { entityActions, actionContext, runEntityAction } = useActionRunner();
   const entityId = state.focusTarget;
-  if (!state.entityMenuOpen || !entityId) return null;
-
   const actions = useMemo(
-    () => listEntityActions(entityActions, actionContext, entityId),
+    () => (entityId ? listEntityActions(entityActions, actionContext, entityId) : []),
     [entityActions, actionContext, entityId, locale],
   );
+  if (!state.entityMenuOpen || !entityId) return null;
 
   return (
     <Overlay title={t("entity_menu.title", { entityId })}>

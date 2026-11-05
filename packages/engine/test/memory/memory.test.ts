@@ -168,6 +168,7 @@ describe("memory service", () => {
       id: "m1",
       text: "x",
       score: 1,
+      owner: "npc1",
       entry: {
         id: "m1",
         t: { day: 1, minute: 0 },
@@ -200,7 +201,7 @@ describe("memory service", () => {
       valence: 0,
       shareable: true,
     });
-    await mem.propagateTick();
+    await mem.propagateTick("day");
     expect(emitted.some((e) => e.kind === "memory.propagated")).toBe(true);
     const playerMem = await mem.list("player");
     expect(playerMem.some((m) => m.hops === 1)).toBe(true);
@@ -208,7 +209,7 @@ describe("memory service", () => {
 
   test("reflection accept and reject", async () => {
     const { k, emitted, setState } = createFakeKernel({
-      s2Handler: () => ({
+      s1Handler: () => ({
         summaries: ["done"],
         goal_changes: [
           { action: "add", text: "ok goal", tags: [] },
@@ -237,7 +238,7 @@ describe("memory service", () => {
 
   test("defer reflection flush", async () => {
     const { k, emitted, setState } = createFakeKernel({
-      s2Handler: () => ({ summaries: [], goal_changes: [], new_claims: [] }),
+      s1Handler: () => ({ summaries: [], goal_changes: [], new_claims: [] }),
     });
     setState({
       ...k.timeline.state(),
@@ -259,7 +260,7 @@ describe("memory service", () => {
 
   test("reflect with participants after scene cleared", async () => {
     const { k, emitted, setState } = createFakeKernel({
-      s2Handler: () => ({ summaries: ["after end"], goal_changes: [], new_claims: [] }),
+      s1Handler: () => ({ summaries: ["after end"], goal_changes: [], new_claims: [] }),
     });
     setState({
       ...k.timeline.state(),

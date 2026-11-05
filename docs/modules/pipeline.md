@@ -2,7 +2,7 @@
 
 ## Purpose
 
-LLM-facing stages for the turn pipeline ([Section 8](../spec.md#8-cognitive-pipeline), [Section 17](../spec.md#17-routing-budget-and-caching)). Turn orchestration lives in `pipeline/run-turn.ts` (H2).
+LLM-facing stages for the turn pipeline ([Section 8](../spec.md#8-cognitive-pipeline), [Section 17](../spec.md#17-routing-budget-s2-tiers-and-caching)). Turn orchestration lives in `pipeline/run-turn.ts` (H2).
 
 ## Public API
 
@@ -25,11 +25,17 @@ Types: `src/pipeline/types.ts`.
 
 **Turn extensions:** `TurnCtx.promptExtraStatic` / `promptExtraDynamic` merge into render segments (mods use this for pack-specific static/dynamic blocks). Stage hooks registered on the engine may take an optional third argument `(ctx, next, kernel)`.
 
+**The `render` stage hook:** `next()` resolves to `{ result, parts }`: the finished `RenderResult` and the chunks the stage produced, in order. What the hook returns is what is shown and what is committed. While a `render` hook is registered nothing of the reply is streamed until the hook returns; without one, text and narration reach the consumer as the model writes them.
+
+**CEL `event.text`:** the player line for this turn (from `input.received`, including choice text), not the NPC reply. Rule stages pass it via `rulesDeps` in `run-turn.ts`. Render passes `playerText` into `buildPromptSegments`, which merges it into CEL `event.text` when evaluating knowledge `when` and building dynamic context.
+
+**Input class hooks:** see [policy-reference — `input.response`](../policy-reference.md#inputresponse).
+
 ## Integration (H2)
 
 `pipeline/stages-default.ts` resolves to these exports. `createEngine` uses `createRouter` from `router/`.
 
-## Prompt segments ([Section 17.4](../spec.md#174-prompt-segments))
+## Prompt segments ([Section 17.5](../spec.md#175-prompt-segments))
 
 Deterministic ordering; **locked secrets never appear**; unlocked secrets only in **static**; other characters' secrets never injected unless shared by memory rules.
 
@@ -38,7 +44,7 @@ Deterministic ordering; **locked secrets never appear**; unlocked secrets only i
 - **Static ordering:** identity → persona/style/limits → `x.prompt.world_facts` (or `world.rules_text`) → render-only `x.prompt.render` → merged output contract → priority-budgeted `always` knowledge (render only). Appraise static is `x.prompt.appraise_static` plus the stage's own constant instructions (task, event types with `$t:` descriptions resolved, examples; `PromptInput.extraStatic`) so they stay in the cacheable segment; the appraise dynamic segment carries only per-turn extras (`PromptInput.extraDynamic`, e.g. the quick-reply hint). Appraise gets no `always` or contextual (`when`) knowledge, no template-partial narration guidance, no render contract and no location atmosphere text (its scene section names the place only): it only classifies.
 - **Recall:** retrieved memories and knowledge excerpts are plain lines without ids or scores; knowledge excerpts are capped in count and length (`render.recall.*`), and a document the prompt already carries in full (always-injected in static, contextual in dynamic) is not repeated as an excerpt.
 - **Game instructions** (tone, few-shots) come from `policy.x.prompt.*`, `policy.x.tier_directives`, `policy.x.tag_vocabulary`. Relation lines use localized track/tier labels (`compactRelationLine`).
-- **Render output:** a reply without text is invalid. The render schema rejects it, so the model adapter retries once with the repair hint, and `renderStage` throws `RENDER_FAILED` rather than committing a blank utterance (which would also be written to memory). `coerceRenderRaw` first reads `text`, then the keys models tend to use instead (`dialogue`, `speech`, `reply`, `response`, `content`, `message`, `line`, `narration`).
+- **Render output:** schema `{ narrations?[], text, cues[], intent_realized, choices?[] }` ([Section 8](../spec.md#8-cognitive-pipeline)). A reply without `text` is invalid (LLM path: repair retry, then `RENDER_FAILED`). `coerceRenderRaw` maps common alias keys to `text`. Optional `narrations[]` become `narration` events and stream as `TurnChunk.narration` before character `text`.
 - **Other LLM calls:** `buildEntityGeneratePrompt` (entity templates), `buildReflectionPromptSegments` (scene-end reflection), `buildNarrateLocationPrompt` (offscreen location traces) — all catalog scaffolding, no TypeScript English literals.
 - **Name references:** authored prose may use `{{name:<characterId>}}`; `promptText` / `prepareAuthoredProse` expand via `entityDisplayName` (runtime nickname wins). `Engine.display.resolve` expands after `$t:` for UI. Unknown ids warn at `animae validate` (`NAME_REF_UNKNOWN`).
 - **Prose hygiene:** HTML comments, mod stub bodies (`<!-- LLM body: … -->`), and frontmatter-only append overlays are stripped at load or merge (`prose/for-prompt.ts`, mod `card.append.md` merge).
@@ -68,8 +74,9 @@ No separate stage; `input.classified` draft comes from appraise (`CLASSIFY_IN_AP
 
 - **Retrieval**: `RenderInput.hits` optional; when absent, render retrieves with `appraisal.search_terms` + salience, then `memory.distort`.
 - **S2 tools**: `search`, `read`, max 3 steps; tool descriptions come from `sections.json` in the prompt locale (not hard-coded English).
-- **Streaming text**: prefix-consistent deltas only.
-- **Mismatch retry**: `policy.render.retryOnMismatch === 1` buffers first attempt until `intent_realized` known.
+- **Streaming text / narration**: prefix-consistent deltas only; narration uses the same fragment rules as `text` with `newParagraph`.
+- **Stream reset**: LLM render failure with `runtime.fallbackOnError.render` emits `TurnChunk.reset` then rule-backend stream ([Section 8](../spec.md#8-cognitive-pipeline)).
+- **Mismatch retry**: `policy.render.retryOnMismatch === 1` buffers first LLM attempt until `intent_realized` known (rule backend never mismatches).
 - **Choices**: CEL filter; ids `c1..cn`; drafts `choice.offered` / `choice.filtered`.
 - **L4 field effects** in dynamic only: `hide_entities`, `disguise`, `inject_belief` (NPC view).
 

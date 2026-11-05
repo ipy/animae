@@ -26,5 +26,5 @@ export {
   createWebI18n,
   registerWebI18nCatalogs,
   webPackageCatalogs,
-  WEB_SUPPORTED_LOCALES,
+  webSupportedLocales,
 } from "./i18n/web-i18n.ts";

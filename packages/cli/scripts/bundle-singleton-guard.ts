@@ -40,7 +40,7 @@ export function assertSingletonInkReactBundle(meta: BundleMetafile, label = "bun
     throw new Error(
       `${label}: multiple React/Ink installs in compile graph (hooks/reconciler will break at runtime).\n` +
         `${problems.join("\n")}\n` +
-        "In a host monorepo, run `bun install` at the repo root only (remove animae/node_modules).",
+        "When this repository sits inside another workspace, install from that workspace's root only and remove this repository's own node_modules.",
     );
   }
 }

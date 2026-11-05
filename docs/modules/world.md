@@ -39,7 +39,7 @@ Fidelity from `policy.offscreen.fidelity` (per location/character override):
 |---|---|
 | `none` | No-op |
 | `rule` | `offscreen.simulated` only |
-| `narrate` | + S1 `narrate` sentence artifact under `artifacts/_offscreen/<entity>.jsonl` when `router.allow("offscreen_narrate")` |
+| `narrate` | + S2-role stream (`purpose: offscreen`) or rule `offscreen.narrateTemplate`; artifact under `artifacts/_offscreen/<entity>.jsonl` when `router.allow("offscreen_narrate")` |
 | `full` | + scheduled encounter artifacts / memory for overlapping `characters`+`location` items |
 
 Always ends with `offscreen.simulated` when fidelity ≠ `none`. `catchUpAll()` runs catch-up for every catalog location and character.

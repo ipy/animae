@@ -26,16 +26,30 @@ export function createInkHarness(node: ReactNode) {
     incrementalRendering: true,
     maxFps: 60,
   });
+  let unmounted = false;
   return {
     stdout,
     stdin,
     getFrame: () => stripAnsi(frame),
     getRawFrame: () => frame,
     unmount: () => {
+      if (unmounted) return;
+      unmounted = true;
       instance.unmount();
       instance.cleanup();
     },
   };
+}
+
+/** Ink only writes the final frame to a non-interactive stdout when the tree unmounts. */
+export async function flushInkFrame(
+  harness: ReturnType<typeof createInkHarness>,
+  settleMs = 80,
+): Promise<string> {
+  await waitMs(settleMs);
+  harness.unmount();
+  await waitMs(20);
+  return harness.getFrame();
 }
 
 export function waitMs(ms: number): Promise<void> {

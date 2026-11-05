@@ -28,7 +28,7 @@ describe("buildPromptSegments", () => {
       scene,
       history: [],
       fieldEffects: { topic_access: { close: ["forbidden"], open: [] } },
-      tier: "s1" as const,
+      tier: "standard" as const,
       intent: { intent: "respond", scores: { respond: 1 } },
     };
 
@@ -52,14 +52,14 @@ describe("buildPromptSegments", () => {
       scene,
       history: [],
       fieldEffects: {},
-      tier: "s1" as const,
+      tier: "standard" as const,
       intent: { intent: "respond", scores: { respond: 1 } },
     };
     // Working prompt in one language, player-visible output in another: the last thing the model reads must be the
     // directive in the output language, otherwise persona/examples in the working language win.
     const cross = createPipelineKernel({
       chars: [charDef("npc1"), charDef("player")],
-      i18n: { promptLocale: "zh-CN", outputLocale: "en" },
+      i18n: { promptLocale: "fr", outputLocale: "en" },
     }).k;
     const user = buildPromptSegments(cross, input).user;
     expect(user).not.toContain("Internal structured fields");
@@ -125,7 +125,7 @@ describe("buildPromptSegments", () => {
       scene: { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false },
       history: [],
       fieldEffects: {},
-      tier: "s1",
+      tier: "standard",
       appraisal: { type: "confession", intensity: 0.5, sincerity: 1, approach: "", tags: [], claims: [], input_class: "normal", positive: true, text: "" },
       intent: { intent: "respond", scores: { respond: 1 } },
     } as never);
@@ -186,7 +186,7 @@ describe("buildPromptSegments", () => {
         scene: { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false },
         history: [],
         fieldEffects: {},
-        tier: "s1",
+        tier: "standard",
         intent: { intent: "respond", scores: { respond: 1 } },
       } as never);
       expect(render.dynamic).toContain("CONTEXT_BODY");
@@ -214,7 +214,7 @@ describe("buildPromptSegments", () => {
         scene,
         history: [],
         fieldEffects: {},
-        tier: "s1",
+        tier: "standard",
         intent: { intent: "respond", scores: { respond: 1 } },
       } as never);
       expect(render.static).toContain("PARTIAL_GUIDANCE");
@@ -234,7 +234,7 @@ describe("buildPromptSegments", () => {
         scene: { id: "scn_0001", location: "loc", participants: ["player", "npc1"], turn: 1, firstTurn: false },
         history: [],
         fieldEffects: {},
-        tier: "s1",
+        tier: "standard",
         intent: { intent: "respond", scores: { respond: 1 } },
       } as never);
       expect(render.semiStatic).toContain("ATMOSPHERE_TEXT");

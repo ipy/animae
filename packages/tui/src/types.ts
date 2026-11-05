@@ -1,10 +1,10 @@
-import type { Engine, GalleryCaptureRequest, GalleryItemView, TurnChunk } from "@animae/engine";
+import type { Engine, GalleryCaptureRequest, GalleryItemView, NarrationStyle, TurnChunk } from "@animae/engine";
 import type { SceneId, TurnId, Viewer } from "@animae/engine";
 import type { ReactNode, ComponentType } from "react";
 import type { ThemePatch } from "./theme/schema.ts";
 import type { ResolvableText } from "./utils/resolve-text.ts";
 
-export type { Engine, TurnChunk, SceneId, TurnId, Viewer };
+export type { Engine, NarrationStyle, TurnChunk, SceneId, TurnId, Viewer };
 export type { ResolvableText } from "./utils/resolve-text.ts";
 
 export type LayoutFocus = "transcript" | "sidePanel" | "input" | "choices";
@@ -15,6 +15,7 @@ export type OverlayId =
   | "timeline"
   | "explain"
   | "inspector"
+  | "mode"
   | "sidePanel"
   | "loadSlots"
   | "rewindConfirm"
@@ -71,6 +72,7 @@ export type KeyAction =
   | "timeline"
   | "explain"
   | "inspector"
+  | "mode"
   | "save"
   | "load"
   | "rewindTurn"
@@ -263,8 +265,11 @@ export interface TranscriptCue {
 
 export interface TranscriptEntry {
   id: string;
-  kind: "system" | "dialogue" | "action" | "sfx";
+  /** `narration` is a speaker-less paragraph of the narrator (`style` says how it is set off). */
+  kind: "system" | "dialogue" | "action" | "sfx" | "narration";
   speaker?: string;
+  /** Narration entries only; absent means `normal`. */
+  style?: NarrationStyle;
   text: string;
   cues?: TranscriptCue[];
   expressionLabel?: string;

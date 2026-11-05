@@ -50,7 +50,7 @@ def assert_draft(sess: PtySession, expected: str, label: str, timeout: float = 3
             return
         tail = sess.plain_tail(1400)
         for line in tail.splitlines()[-8:]:
-            if expected in line and "命令面板" not in line and "Help (" not in line:
+            if expected in line and "Command palette" not in line and "Help (" not in line:
                 return
         time.sleep(0.04)
     got = sess.find_input_draft(expected)
@@ -68,12 +68,12 @@ def _screen_view(sess: PtySession, *, tail_chars: int = 2800) -> str:
 
 def help_visible(sess: PtySession) -> bool:
     view = _screen_view(sess)
-    return "Help (F1)" in view or "帮助 (F1)" in view
+    return "Help (F1)" in view or "Aide (F1)" in view
 
 
 def event_log_visible(sess: PtySession) -> bool:
     view = _screen_view(sess)
-    return "Event log (F2)" in view or "事件日志 (F2)" in view
+    return "Event log (F2)" in view
 
 
 def overlay_visible(sess: PtySession, title: str) -> bool:
@@ -142,10 +142,10 @@ def _exercise(sess: PtySession, quick: bool) -> dict:
         metrics["esc_close_ms"] = round(esc_ms * 1000, 2)
 
         overlay_cases = (
-            ("f2_ss3", KEY["f2_ss3"], ("Event log (F2)", "事件日志 (F2)")),
-            ("f2_csi", KEY["f2_csi"], ("Event log (F2)", "事件日志 (F2)")),
-            ("f3_ss3", KEY["f3_ss3"], ("Timeline (F3)", "时间线 (F3)")),
-            ("f4_ss3", KEY["f4_ss3"], ("Explain (F4)", "解释 (F4)")),
+            ("f2_ss3", KEY["f2_ss3"], ("Event log (F2)",)),
+            ("f2_csi", KEY["f2_csi"], ("Event log (F2)",)),
+            ("f3_ss3", KEY["f3_ss3"], ("Timeline (F3)",)),
+            ("f4_ss3", KEY["f4_ss3"], ("Explain (F4)",)),
         )
         for label, seq, titles in overlay_cases:
             sess.focus_input()
@@ -172,7 +172,7 @@ def _exercise(sess: PtySession, quick: bool) -> dict:
             time.sleep(0.06)
 
         palette_marker = os.environ.get("HOST_PTY_PALETTE_MARKER", "Command palette")
-        palette_markers = (palette_marker, "命令面板", "Command palette", "palette:title", "palette.title")
+        palette_markers = (palette_marker, "Command palette", "palette:title", "palette.title")
         sess.focus_input()
         time.sleep(0.08)
         sess.write(KEY["ctrl_p"])
@@ -213,7 +213,7 @@ def _exercise(sess: PtySession, quick: bool) -> dict:
         sess.write(b"\x7f" * 32)
         time.sleep(0.1)
 
-    burst = "achievements" if quick else "achievements" + "测" * 20
+    burst = "achievements" if quick else "achievements" + "é" * 20
     t0 = time.perf_counter()
     sess.write(burst.encode("utf-8"))
     assert_draft(sess, burst, "burst")
@@ -222,7 +222,7 @@ def _exercise(sess: PtySession, quick: bool) -> dict:
     if not quick:
         sess.write(b"\x7f" * min(len(burst) + 8, 120))
         time.sleep(0.12)
-        paced = "pacedtyping测试"
+        paced = "pacedtypingdemo"
         t1 = time.perf_counter()
         for b in paced.encode("utf-8"):
             sess.write(bytes([b]))

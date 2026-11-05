@@ -30,9 +30,12 @@ export function evaluateTriggers(input: RouteInput, policy: ResolvedPolicy): str
     const cfg = moodCfg;
     const a = cfg.a ?? 30;
     const b = cfg.b ?? 80;
-    const delta = input.moodDelta ?? 0;
-    const mood = input.mood ?? 0;
-    if (Math.abs(delta) >= a || Math.abs(mood) >= b) reasons.push("mood_spike");
+    const track = cfg.track ?? "mood";
+    const delta =
+      input.spikeTrackDelta ?? (track === "mood" ? (input.moodDelta ?? 0) : 0);
+    const value =
+      input.spikeTrackValue ?? (track === "mood" ? (input.mood ?? 0) : 0);
+    if (Math.abs(delta) >= a || Math.abs(value) >= b) reasons.push("mood_spike");
   }
   if (enabled(tr, "tier_change") && input.tierChanged) reasons.push("tier_change");
   if (enabled(tr, "contradiction") && input.contradiction) reasons.push("contradiction");

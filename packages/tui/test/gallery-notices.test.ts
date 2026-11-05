@@ -18,8 +18,8 @@ function view(id: string, over: Partial<GalleryItemView> = {}): GalleryItemView 
 }
 
 describe("TUI gallery notice toasts (shared host helper)", () => {
-  test("masked mature titles stay generic in en and zh-CN", async () => {
-    for (const locale of ["en", "zh-CN"] as const) {
+  test("masked mature titles stay generic in en and fr", async () => {
+    for (const locale of ["en", "fr"] as const) {
       const hostT = createHostI18n(locale);
       const t = (key: string, params?: Record<string, string | number>) =>
         hostT.t(key, params, { ns: "host" });

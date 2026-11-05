@@ -1,4 +1,31 @@
+import type { GalleryJobView, GalleryService } from "../../src/gallery/types.ts";
 import type { StoragePort } from "../../src/ports.ts";
+
+/** Resolves with the job once it reaches a terminal state, instead of sleeping for a guessed duration. */
+export function waitForJob(
+  gallery: Pick<GalleryService, "jobs" | "subscribe">,
+  jobId: string,
+  timeoutMs = 5000,
+): Promise<GalleryJobView> {
+  const terminal = (j: GalleryJobView) => j.state === "done" || j.state === "failed" || j.state === "cancelled";
+  return new Promise((resolve, reject) => {
+    let off = () => {};
+    const timer = setTimeout(() => {
+      off();
+      reject(new Error(`gallery job ${jobId} was still running after ${timeoutMs} ms`));
+    }, timeoutMs);
+    const finish = (job: GalleryJobView) => {
+      clearTimeout(timer);
+      off();
+      resolve(job);
+    };
+    off = gallery.subscribe((n) => {
+      if (n.type === "job" && n.job.id === jobId && terminal(n.job)) finish(n.job);
+    });
+    const current = gallery.jobs().find((j) => j.id === jobId);
+    if (current && terminal(current)) finish(current);
+  });
+}
 
 export async function seedGalleryAuthored(storage: StoragePort): Promise<void> {
   await storage.writeAtomic(

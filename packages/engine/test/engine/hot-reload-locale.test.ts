@@ -7,7 +7,7 @@ import { createScriptedModel } from "../../src/model/scripted.ts";
 import { FsStorage } from "../../src/store/fs.ts";
 import { e2ePreset, seedE2eAuthored } from "../e2e/fixture.ts";
 
-const I18N = { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN", fallbackLocale: "en" } as const;
+const I18N = { locale: "en", promptLocale: "fr", outputLocale: "en", contentLocale: "fr", fallbackLocale: "en" } as const;
 
 function scriptedModels() {
   const body = (req: { label?: string }) => {
@@ -45,7 +45,7 @@ test("hot reload keeps the locale overlay the session started with", async () =>
   try {
     const storage = FsStorage(root);
     await seedE2eAuthored(storage);
-    await storage.writeAtomic("locales/zh-CN/characters/npc1/card.md", overlayCard("Overlay Aria"));
+    await storage.writeAtomic("locales/fr/characters/npc1/card.md", overlayCard("Overlay Aria"));
 
     const engine = await createEngine({
       root,

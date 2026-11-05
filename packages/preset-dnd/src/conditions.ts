@@ -3,12 +3,12 @@ import type { FieldDef } from "@animae/engine";
 export type ConditionName = "charmed" | "frightened" | "poisoned" | "exhaustion";
 
 export interface ConditionParams {
-  /** Character receiving the condition. */
+  /** Character receiving the condition (the holder of the field). */
   subject?: string;
   /** For exhaustion: 1–6 (default 1). For charmed: charmer character id. */
   level?: number;
   charmer?: string;
-  /** Frightened: source entity id (informational). */
+  /** Frightened: the source of fear. Only part of the field id (so several sources can be active at once). */
   source?: string;
 }
 
@@ -34,10 +34,13 @@ export function conditionField(name: ConditionName, params: ConditionParams = {}
         stacking: "override",
       };
     }
-    case "frightened":
+    case "frightened": {
+      // The field belongs to the frightened character (the subject); the fear source only distinguishes concurrent
+      // sources so several frightened fields can stack.
+      const subject = params.subject ?? "unknown";
       return {
-        id: `dnd-frightened-${params.source ?? "unknown"}`,
-        holder: { kind: "character", ref: params.source ?? "external" },
+        id: params.source ? `dnd-frightened-${subject}-${params.source}` : `dnd-frightened-${subject}`,
+        holder: { kind: "character", ref: subject },
         source: "rule",
         scope: {},
         level: "L1",
@@ -45,6 +48,7 @@ export function conditionField(name: ConditionName, params: ConditionParams = {}
         priority: 0,
         stacking: "add",
       };
+    }
     case "poisoned":
       return {
         id: `dnd-poisoned-${params.subject ?? "unknown"}`,

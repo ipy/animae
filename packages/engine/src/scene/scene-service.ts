@@ -1,6 +1,7 @@
 import type { ActiveScene, Kernel, SceneReport } from "../contracts.ts";
 import type { CharacterId, SceneId, TurnChunk } from "../types.ts";
 import { AnimaeError } from "../types.ts";
+import { mergeEffectsByLevel } from "../fields/levels.ts";
 import { runStageRules } from "../rules/stages.ts";
 import { buildCelContext } from "../rules/cel-context.ts";
 import { formatSceneId, formatTurnId } from "../engine/ids.ts";
@@ -97,18 +98,6 @@ export function createSceneService(
       ]);
 
       await k.m.director.tick("scene_start");
-      const deps = {
-        state: k.timeline.state(),
-        authored: k.authored,
-        policy: k.policy,
-        cel: k.rules.cel,
-        rules: k.rules,
-        catalog: k.catalog,
-        celContext: buildCelContext(
-          { state: k.timeline.state(), authored: k.authored, policy: k.policy, catalog: k.catalog },
-          { sceneId },
-        ),
-      };
       const fieldFx = k.m.fields.resolve({
         owner: player,
         target: player,
@@ -118,8 +107,22 @@ export function createSceneService(
           participants: s.participants,
           turn: 0,
         },
-        ctx: deps.celContext,
+        ctx: k.celContext({ sceneId }),
       });
+      const flatFx = mergeEffectsByLevel(fieldFx.effects);
+      const deps = {
+        state: k.timeline.state(),
+        authored: k.authored,
+        policy: k.policy,
+        cel: k.rules.cel,
+        rules: k.rules,
+        catalog: k.catalog,
+        fieldEffects: flatFx,
+        celContext: buildCelContext(
+          { state: k.timeline.state(), authored: k.authored, policy: k.policy, catalog: k.catalog, fieldEffects: flatFx },
+          { sceneId },
+        ),
+      };
       await k.emit(runStageRules(deps, "scene_start", deps.celContext, fieldFx.effects.L3, fieldFx.l3FieldRules));
 
       return sceneId;
@@ -190,6 +193,8 @@ export function createSceneService(
             speaker: nextSpeaker,
             text: "",
             autonomous: true,
+            // The router may have lowered the tier the policy routes autonomous exchanges to.
+            ...(allow.tier !== undefined ? { s2Tier: allow.tier } : {}),
             // The exchange is part of this player turn, so it is narrated in the same language.
             outputLocale: t.outputLocale,
           });
@@ -239,6 +244,7 @@ export function createSceneService(
         },
         ctx: k.celContext({ sceneId: scene.id }),
       });
+      const flatEndFx = mergeEffectsByLevel(endFields.effects);
       const endDeps = {
         state: k.timeline.state(),
         authored: k.authored,
@@ -246,8 +252,15 @@ export function createSceneService(
         cel: k.rules.cel,
         rules: k.rules,
         catalog: k.catalog,
+        fieldEffects: flatEndFx,
         celContext: buildCelContext(
-          { state: k.timeline.state(), authored: k.authored, policy: k.policy, catalog: k.catalog },
+          {
+            state: k.timeline.state(),
+            authored: k.authored,
+            policy: k.policy,
+            catalog: k.catalog,
+            fieldEffects: flatEndFx,
+          },
           { sceneId: scene.id },
         ),
       };
@@ -263,7 +276,10 @@ export function createSceneService(
         participants,
       });
 
-      await k.m.memory.propagateTick();
+      const prop = k.policy.memory.propagation;
+      if (prop?.enabled && (prop.onTick ?? "day") === "scene_end") {
+        await k.m.memory.propagateTick("scene_end");
+      }
       await k.timeline.maybeSnapshot("scene_end");
       await opts?.afterSceneEnd?.();
 

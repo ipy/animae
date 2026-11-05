@@ -1,5 +1,6 @@
 import type { I18nConfig } from "./schema/authored.ts";
-import type { EmbeddingPort, ImagePort, ModelMode, ModelPort, StoragePort } from "./ports.ts";
+import type { EmbeddingPort, EngineModels, ImagePort, ModelMode, StoragePort } from "./ports.ts";
+import type { EngineRuntime, ModeChangeReason, ModelsInfo, RuntimeMode, RuntimeModePreset, RuntimeModeRequest } from "./runtime/types.ts";
 import type { GalleryService } from "./gallery/types.ts";
 import type { ModelCallLog, ModelCallLogOptions } from "./model/call-log.ts";
 import type { PresetBundle } from "./preset.ts";
@@ -11,8 +12,19 @@ import type { ActiveScene, RuleFn, StageHook, Stage, ViewerDef, LedgerEntry, Sce
 /** Public engine API surface. CONTRACT file. */
 export interface CreateEngineOptions {
   root: string;
-  /** required unless `modelSpecs` in animae.yaml can be built from env (then engine builds AI SDK ports) */
-  models?: { s1: ModelPort; s2: ModelPort };
+  /**
+   * Model ports for the two roles (S1 structured judgment, S2 free-text generation; S2 may be a tier set). Optional:
+   * a role without a port and without a model in `animae.yaml` is served by the deterministic rule backend, so an engine
+   * with no `models` at all runs the whole game at zero tokens.
+   */
+  models?: EngineModels;
+  /**
+   * Runtime mode to start in: a preset (`full`, `judge-only`, `narrate-only`, `rule`) or a partial `{ appraise, render,
+   * s2Tier }`. Overrides `animae.yaml` `mode` / `appraise.backend` / `render.backend`.
+   */
+  mode?: RuntimeModePreset | RuntimeModeRequest;
+  /** Why/who set `mode` (recorded in `runtime.mode_changed`); default `{ reason: "api" }`. */
+  modeSource?: { reason: ModeChangeReason; trigger?: string };
   modelMode?: ModelMode; // default "record"
   ports?: { storage?: StoragePort; embedding?: EmbeddingPort; image?: ImagePort };
   seed?: number;
@@ -115,9 +127,17 @@ export interface Engine {
   rules: { register(name: string, fn: RuleFn): void };
   hooks: { register(stage: Stage, fn: StageHook): void };
   introspect: { registerViewer(v: ViewerDef): void };
-  /** synchronous read of in-memory projection, filtered by viewer + visibility policy */
+  /**
+   * Synchronous read of the in-memory projection, filtered by viewer and visibility policy. Does **not** run lazy
+   * catch-up (spec 12.6); player location/character paths may be stale until `queryAsync` or an explicit
+   * `world.advance` / scene start catch-up.
+   */
   query(viewer: Viewer, path: string): unknown;
-  /** Like `query`, but runs lazy catch-up for stale player location/character paths first. */
+  /**
+   * Like `query`, but when the viewer is `player` and the path targets a stale location or unattended character,
+   * advances offscreen simulation first (writes `offscreen.simulated`). Hosts, JSON-RPC `query`, TUI `useQuery`, and
+   * `animae inspect` use this for player-visible reads.
+   */
   queryAsync(viewer: Viewer, path: string): Promise<unknown>;
   grant(viewer: Viewer, path: string, ttl?: Duration): Promise<void>;
   /** End the temporary grants for exactly `(viewer, path)` now instead of waiting for their TTL. */
@@ -147,9 +167,14 @@ export interface Engine {
     contentLocale: string;
     branch: string;
     sessionId: string;
-    models: { s1: string; s2: string };
+    /** S1 model id (`rule` when no model serves the role), default-tier S2 model id, and the S2 tier ladder */
+    models: ModelsInfo;
+    /** the backend currently serving each role */
+    mode: RuntimeMode;
     modelMode: ModelMode;
   };
+  /** Which backend (`llm` | `rule`) serves the S1 and S2 roles; switch at any time without disturbing play. */
+  runtime: EngineRuntime;
   /** Present when `createEngine({ modelCallLog: … })` enabled the in-memory call log. */
   modelCallLog?: ModelCallLog;
   /** CG gallery (collection, jobs, capture/render when an ImagePort is wired). Hosts use this surface; turn pipeline hooks live on the kernel module slot. */

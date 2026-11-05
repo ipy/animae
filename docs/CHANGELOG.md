@@ -4,6 +4,56 @@
 
 ### `@animae/engine`
 
+- **Spec-alignment pass (behaviour):** `entity.generate` request events are fulfilled live inside the mutation gate (director anchor hard fallbacks included); `introspect.registerViewer` affects visibility with `extends` + `filter`; memory propagation respects `onTick` (`day` default — no propagation on `scene.end` unless `scene_end`); knowledge docs share vector blending with episodic memory when embeddings are on; `memory.distorted` carries `owner`; `utterance` events log retrieval hits for `explain`; router `secret_topic` matches locked secret tags (plus literal `secret`); `mood_spike` honours configurable track; `input.response` classify hooks run once at the classify boundary; CEL `event.text` is the turn's player input; L0 `event_prob` and L1 `track_caps` surface in CEL and adjudication (prompt block for `event_prob`); schedule-fired dedupe prefers `source: schedule:<id>`; player-facing TUI/`inspect`/`query` RPC paths use lazy catch-up via `queryAsync`.
+- **RPC:** Methods for `setUiLocale`, `display.*`, `mods`, `entities.setAlias` / `spawn` / `retire` / `generateFromBrief`, and `outputLocale` on `scene.turn` (registrars and `close` remain in-process only).
+- **Embeddings:** Configuring Anthropic as the embedding provider fails at setup with `MODEL_CONFIG` (no embeddings endpoint).
+- **Secret unlocking:** a character secret's `unlock` expression is evaluated after each adjudicated turn (speaker as `self`, the player's actor as `other`); a secret whose expression holds is unlocked by a `character.secret_unlocked` event (`{ id, secret }`, `source: rules:secrets`, caused by the turn's appraisal). The reducer records it in `unlockedSecrets`, so the router's `secret_topic` trigger and the visibility rules stop treating it as locked from the next turn on. The unlocking turn itself is routed before the unlock, so it still sees the secret as locked.
+- **`route.decided.degraded`:** lists the actions taken by the per-turn caps (`s1PerTurn`, `s2PerTurn`, `syncCallsPerTurn`: `s1_to_rule`, `s2_to_rule`, `s2_tier_down`) ahead of the escalation-budget actions, as the specification says; before, only the escalation-budget actions appeared there (the `budget.degraded` events were complete).
+- **Anchors:** an anchor without the `hard` strategy whose deadline had passed with the target unmet got a new `anchor.progress` (stage `hard`) event on every director tick, so its progress list and the event log grew by one entry per turn; the stage is now reported once.
+- **Entities:** `entities.spawn` / `Engine.spawnEntity` rejected every location and item spec (the strict definition schemas refused the `kind` discriminant the spec has to carry), so only characters could be spawned at runtime; locations and items now spawn, persist and reload like characters.
+- **Location queries:** `world/locations/<id>` returned no `summary` or `connects` for any location in play; the prose and the exits now come from the definition (authored or spawned) and the variables and clock from the world state.
+- **CEL reference:** documents that arithmetic never mixes integer and double operands and that a context number's kind follows its value (`35` is an integer, `35.5` a double), with the conversions that make an expression safe for both; pinned by `test/rules/cel-surface.test.ts`.
+- **Rule windows:** the specification described a window's `mult` as keyed by event type, while the engine and `validate` key it by track; the specification now matches the engine and states when a window opens and for how long it applies (threshold `id` and `repeat` are documented with it).
+- **Fields:** `resolve()` left a field out of `applied` once its `field.applied` entry had been written for the turn, so a second resolution within the same turn reported fewer fields than were in play; `applied` now lists every field and only the ledger entry is deduplicated.
+- **Introspection visibility:** an explicit `deny` path rule on a child path (`characters/<id>/<sub>`, `world/locations/<id>`) now wins over an allowed parent path; the `debug` viewer and active grants are unaffected. `explain` keeps the text of a memory written earlier in the same session available instead of dropping it with the owner's memory cache.
+
+### `@animae/preset-dnd`
+
+- **Frightened condition:** Field holder is the frightened character (subject); optional source suffix in the field id only distinguishes concurrent sources.
+
+### `@animae/i18n`
+
+- **`formatMessage`:** Plural/select `=N` keys (any integer), `#` inside plural bodies, and `}}` collapsing to `}` (symmetric with `{{` → `{`).
+
+### `@animae/cli`
+
+- `validateWithMods` (used by `validate` and `mods validate`) reports a malformed `animae.yaml` as a validation issue instead of throwing.
+- `run` resumes the scene that is still open on the timeline (a previous session ended without closing it) when `--scene` and `--with` agree with it; before, every later `run` on the same data root failed with "A scene is already active". A request for another location or a new participant is still refused with that error.
+
+### `@animae/tui`
+
+- The choice menu appears once the turn's text stream has ended (it used to appear while text was still streaming and could race the pending turn); choice input is ignored while a turn is pending.
+- The terminal size is read through one context (`TerminalSizeProvider` / `useTerminalSize`), so layouts rendered without a real TTY (tests, piped output) get stable dimensions.
+- **Ctrl+Z rewinds the last turn:** after the confirmation the timeline forks at the event just before that turn starts, where the previous turn ended, so the new branch has no turn left open (it used to fork one event before the end of the log, which left the turn in place). With no turn played, it says so.
+- **Fast input is not lost:** keys that arrive in the same tick (a key repeat, a paste) all count in the command palette's filter and selection, in the choice menu and in the input history; they used to be applied to the state of the last render, so characters and steps were dropped. The palette selection also stops at the last entry.
+- **Panels follow the timeline:** after a rewind, a slot load or a branch switch the header and the side panels show the world of the branch you are on (they kept the old time, place and tracks until the next world event).
+- **Timeline keys report failures:** a save, a slot load, a branch switch or a rewind that the engine refuses (for example a policy with `timeline.allowRewind: false`) is reported in the transcript instead of leaving an unhandled rejection; the load list closes once a slot is loaded and the transcript says `Loaded <label>`. The selection in the load list, the branch list and the gallery list stops at the last row (it used to run past the end, highlighting nothing, so Enter did nothing).
+- **Gallery removal asks for the same entry twice:** `d` on a captured entry asks for a second `d`; moving to another entry, any other key or closing the list withdraws the question. The question used to survive all three (the code meant to cancel it on Escape never ran, because Escape closes the list first), so a later single `d` removed an entry without asking.
+
+### `@animae/engine`
+
+- **Rule backend and zero-token play:** deterministic `ModelPort` (`createRuleModelPort`, id `rule`) answers every S1/S2 call through the same zod schemas as LLM ports; games run with no `models` section. Policy keys for rule content: `appraise.*`, `render.layers` / `render.fallback`, `choices.rules`, `memory.writing.*`, `reflection.*`, `offscreen.narrateTemplate`, `scene.autonomous.rules`.
+- **S1 / S2 as roles:** S1 = structured judgment (`object`: appraise, memory-write, reflection, entity, …); S2 = free-text tiers (`stream`: render, offscreen, autonomous). `models.s2.tiers[]` + `routing`; a single `ModelPort` for S2 is tier `only`.
+- **Runtime modes:** `Engine.runtime` (`mode`, `pending`, `setMode`, `models()`); presets `full` \| `judge-only` \| `narrate-only` \| `rule`; `runtime.switchAt`; events `runtime.mode_changed`, `runtime.fallback_used`; `route.decided` records `{ appraise, render, budget, … }` per turn.
+- **TurnChunk:** `narration` (speaker-less paragraphs, `style`), `reset` (void streamed output on render fallback); accumulators `applyNarrationTurnChunk`, `isActorEcho`.
+- **Degradation:** `router.degrade` actions include `s2_to_rule`, `s1_to_rule` (no `s2_to_s1`).
+
+### `@animae/preset-rule`
+
+- New package: extends `@animae/preset-base` for `mode: rule` (choices enabled, extra appraisal commands, offscreen/autonomous templates). See [spec Section 19.6](./spec.md#196-animaepreset-rule).
+
+### `@animae/engine`
+
 - **Model request timeout:** optional `ModelSpec.timeoutMs` (defaults: 120 s remote, 600 s `ollama`). `generateText` uses the AI SDK `timeout`; streams use an engine-owned idle watchdog (`createStreamWatchdog`: connecting + time-to-first-token, then gaps between chunks, no total cap) because the SDK's `firstChunkMs` never fires while the HTTP request is still pending. Timeouts are retried at most once in both paths.
 - **Classified model errors:** `MODEL_TIMEOUT`, `MODEL_UNREACHABLE` (now also Bun's `ConnectionRefused` / `FailedToOpenSocket` / `ConnectionClosed`), `MODEL_HTTP`, `MODEL_EMPTY`; the pipeline preserves codes instead of flattening to `RENDER_FAILED`. On the stream path the real provider error is captured through `onError` (the SDK otherwise rejects with a generic "No output generated" and prints the error to the console), so HTTP 4xx/5xx and refused connections are reported as such and 429/5xx/unreachable are retried. `syncModelPortSpec` for hot config.
 - **Character knowledge paths:** `loadCharacterFromFiles` now matches `characters/<id>/knowledge/*.md` using the same relative paths as storage (fixes mod and base character knowledge never loading).
@@ -31,6 +81,8 @@
 ### `@animae/i18n`
 
 - **`ResolvableText` / `resolveText`:** user-visible copy that is a fixed string or a function resolved at render time; shared by the terminal UI and headless hosts (`@animae/tui` re-exports it unchanged).
+- **English-native packages:** the runtime packages ship English catalogs and prompt bundles only; every other language arrives as a locale pack (`registerLocalePack`) from the embedding project, see [i18n.md](./i18n.md). `animae i18n check --pack <module>` loads a pack and checks it against English; `promptLocaleParityKeys(locale)` and `galleryPromptLocaleParityKeys(locale)` take the locale to compare.
+- **`i18n check` without sources:** the "keys not referenced" warning is skipped when no source file was scanned (a compiled binary has none), so it no longer reports every catalog key.
 
 ### `@animae/host`
 
@@ -41,16 +93,19 @@
 ### `@animae/web`
 
 - Gallery client messages, `gallery_notice` push, image HTTP route; optional host hook **`images_probe`** for generator health checks with unsaved settings draft.
-- **Diagnostics page (`/ref/`):** rebuilt as a styled, responsive console: tabs for smoke tests, model call log (`llm_log` / `llm_log_clear`), snapshot/state, live protocol feed (JSON tree) and a controller-only console; en and zh-CN catalogs for every string (parity-tested), light/dark theme. The read-only smoke runner has an injectable transport and checks socket, hello, snapshot shape, ping RTT, locale, secret masking, model log, state and resume. Overview includes an **Environment** card when the host implements `WebSessionHooks.environment` (`GET /api/environment`, same auth as other `/api/*` routes).
+- **Diagnostics page (`/ref/`):** rebuilt as a styled, responsive console: tabs for smoke tests, model call log (`llm_log` / `llm_log_clear`), snapshot/state, live protocol feed (JSON tree) and a controller-only console; localized UI catalogs (parity-tested), light/dark theme. The read-only smoke runner has an injectable transport and checks socket, hello, snapshot shape, ping RTT, locale, secret masking, model log, state and resume. Overview includes an **Environment** card when the host implements `WebSessionHooks.environment` (`GET /api/environment`, same auth as other `/api/*` routes).
 - **`WebSessionHooks.environment`:** optional hook returning localized path/version rows for the diagnostics page and authenticated HTTP clients.
 - **Replay on connect:** a client that has seen nothing (`hello.resumeSeq` 0 or absent) no longer receives the buffered stream of every earlier turn, only the turn that is still running; a returning client (`resumeSeq > 0`) still gets everything after its last message. The old behaviour replayed up to 500 stale `stream` / `busy` messages to every fresh page.
 
 ### Documentation
 
-- English [spec.md](./spec.md) is canonical; [spec.zh-CN.md](./spec.zh-CN.md) is the Chinese edition.
+- [spec.md](./spec.md) is the canonical product specification (runtime modes, rule backend, narration).
+- **Tests:** the engine, web host, CLI process and TUI each ship an end-to-end suite on scripted models (191 tests); [modules/e2e.md](./modules/e2e.md) indexes them. Unit coverage across the workspace is above 96% of lines.
+- Appendix D of the spec now states how replay derives its chunk stream from committed events.
 - Removed legacy section-reference marks from engine markdown; cross-doc links use relative paths and heading anchors.
-- Initial build conformance audits and the multi-agent team brief removed from `animae/docs/` (historical copies kept elsewhere in the workspace).
+- Initial build conformance audits and the multi-agent team brief removed from `docs/`.
 - [cel-reference.md](./cel-reference.md) documents CEL missing map-key semantics (`world.vars` / character `vars`).
+- **Standalone repository:** every document and script names files relative to the repository root, nothing refers to a parent workspace, and translated editions of the documents are published by the projects that embed the engine. Hygiene tests (`packages/engine/test/hygiene/`) keep it that way: imports and paths stay inside the repository, docs name only files that exist, no source or document carries text in a non-Latin script outside tests, and no file is named after one translation. `bun.lock` covers every workspace package, so `bun install --frozen-lockfile` works from a fresh clone.
 
 ### `@animae/engine`
 
@@ -77,7 +132,7 @@
 
 ### `@animae/host`
 
-- **`consumeTurnStream`:** one transcript entry and one Web stream start/end pair per utterance; `onStreamDelta` emits fragment deltas.
+- **`consumeTurnStream`:** one transcript entry and one Web stream start/end pair per utterance or narration paragraph; `onStreamDelta` emits fragment deltas; **`reset`** clears in-flight rows and maps to Web `stream` phase `reset`.
 - **`localizeSnapshot`:** per-viewer localization of snapshot/events before Web wire transfer; preserves optional `i18n` refs on transcript and actions.
 - **Late-bound keys:** preset and host keys resolve against the merged catalogs (preset `strings`, then host copy) through an optional `has` probe, so a key never logs a missing-key warning for the namespaces it is not in; a key nobody knows is shown humanized, never as a raw `<namespace>:<key>` marker. `bindLocalizeTranslator` is exported for event and toast localization.
 - Built-in **`:llmlog`** command when `modelCallLog` is enabled (`llmlog-command.ts`).
@@ -92,12 +147,14 @@
 
 ### `@animae/cli`
 
+- **`--mode`** on `run`, `serve`, `inspect`, etc.; **`validate --mode`** for rule-backend playability; **`inspect events --kind`** (e.g. `narration`). Built-in preset `@animae/preset-rule`.
 - `animae run` without `--scene` starts in the world's start location (`world/location`); it silently fell back to `home` before because the lookup used a dotted path.
+- `animae serve --stdio` answers each request as it arrives. The reader handed requests to the RPC server without their line terminators, so a session of more than one request got no answer until stdin closed (and a second request in the same write failed as a parse error); `packages/cli/test/serve.integration.test.ts` now drives a whole session through one open pipe. Without a `models` section the sidecar serves the rule backend.
 
 ### `@animae/web`
 
 - Protocol messages **`llm_log`** / **`llm_log_clear`** for the in-memory model call log (when enabled on the engine).
-- **`stream` frames** follow utterance boundaries (fragment deltas, one start/end per utterance).
+- **`stream` frames:** utterance and **narration** segment boundaries; phase **`reset`** when render falls back to rules mid-turn.
 - The frame timing contract for clients (when `busy` is reported, how far the transcript can trail `busy: false`, why turn controls should lock at the click) is written down in [modules/web.md](./modules/web.md).
 
 ### `@animae/web` (earlier)
@@ -113,11 +170,12 @@
 
 ### `@animae/tui`
 
+- **Runtime mode UI:** F6 mode panel, footer `[S1:LLM S2:…]` / `[RULE]`, `:mode` command; narration and `reset` in transcript (`useRuntimeMode`, `ModePanel`).
 - The cached scene is re-read from the engine (`syncLiveScene`) before it is used; ending a scene that is already gone is silent, any other failure is shown localized.
 - The default header shows the chapter's title (its id when there is none) instead of `[object Object]`: `world/chapter` answers `{ id, title? }`, not a string.
 - `RunTuiOptions.displayName`: host-provided display names for character ids. Transcript speaker labels and the participant panel read identities through the viewer's `engine.query`, which is redacted for the `player` viewer, so dialogue was labelled with the raw id (`npc1:`); the host resolver (then the identity query, then the id) now supplies the name.
 - Test harness hook: with `TUI_PTY_DRAFT_FILE` set, the TUI also mirrors the turn-pending flag (third line) so external PTY harnesses can wait for turns to finish instead of sleeping.
-- All user-visible text lives in `locales/{en,zh-CN}/tui.json`; `test/hygiene/no-hardcoded-ui-text.test.ts` rejects literals in components. `scripts/pty_locale_harness.py` drives the TUI in both locales.
+- All user-visible text lives in package locale JSON; `test/hygiene/no-hardcoded-ui-text.test.ts` rejects literals in components. `scripts/pty_locale_harness.py` drives the TUI across locales.
 - Layout: the frame is exactly as tall as the terminal; the chrome keeps its height and only the main region clips. Long output used to overlap itself and run into the input line (Ink paints a `Text` child's full content even when Yoga shrinks its box); `Viewport` / `Stack` give every region non-shrinking children and `overflow="hidden"`, and the transcript is anchored to its tail. See the *Layout contract* in `docs/modules/tui.md`.
 - Modals (`Overlay`) are rendered in place of the transcript and side panel (`OverlaySlotProvider` / `useOverlaySlot`) instead of below the frame, so the header and the input line never move.
 - Side panel: scrolls by laid-out size with a `▲ n · ▼ m` indicator (wheel, PgUp/PgDn), and generic sections (participants, tracks, fields, anchor) disappear while empty.
@@ -129,11 +187,11 @@
 
 ### `animae` CLI
 
-- User-facing CLI text moved to `packages/cli/locales/{en,zh-CN}` and is covered by `animae i18n check`.
+- User-facing CLI text moved to `packages/cli/locales/` and is covered by `animae i18n check`.
 
 ## 1.0.0
 
-First production release of the Animae engine monorepo.
+First production release of the Animae engine.
 
 ### `@animae/engine`
 
@@ -153,4 +211,4 @@ First production release of the Animae engine monorepo.
 
 ### Docs
 
-- Authoring, policy, CEL, pipeline/events, RPC, embedding, and module notes under `animae/docs/`.
+- Authoring, policy, CEL, pipeline/events, RPC, embedding, and module notes under `docs/`.

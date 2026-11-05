@@ -1,0 +1,31 @@
+{
+  "name": "@animae/preset-rule",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Animae rule-first preset: what a game needs to play with no model at all",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./preset.yaml": "./preset.yaml"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./preset.yaml": "./preset.yaml"
+    }
+  },
+  "files": ["dist", "src", "locales", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "gen": "bun scripts/gen-bundle.ts"
+  },
+  "dependencies": {
+    "@animae/engine": "workspace:*",
+    "@animae/preset-base": "workspace:*",
+    "yaml": "^2.9.1"
+  }
+}

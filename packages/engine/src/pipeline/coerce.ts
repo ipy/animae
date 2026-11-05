@@ -95,8 +95,39 @@ function renderText(raw: Record<string, unknown>): string {
   return typeof raw.text === "string" ? raw.text : "";
 }
 
+const SCENE_BREAK_STYLES = new Set(["scene_break", "scene-break", "scene break", "break", "divider"]);
+
+function narrationStyle(v: unknown): "normal" | "scene_break" {
+  return SCENE_BREAK_STYLES.has(normalizeLower(v)) ? "scene_break" : "normal";
+}
+
+/**
+ * Narration paragraphs of a render answer: `narrations[]` (strings or `{ text, style }`), or a lone `narration` string
+ * next to a spoken `text` (a model that names its narration singular). A lone `narration` without `text` is the old
+ * alias for the spoken reply and is handled by `renderText`.
+ */
+function renderNarrations(raw: Record<string, unknown>, hasText: boolean): { style: "normal" | "scene_break"; text: string }[] | undefined {
+  const out: { style: "normal" | "scene_break"; text: string }[] = [];
+  if (Array.isArray(raw.narrations)) {
+    for (const item of raw.narrations as unknown[]) {
+      if (typeof item === "string") {
+        if (item.trim()) out.push({ style: "normal", text: item.trim() });
+        continue;
+      }
+      const row = asRecord(item);
+      if (!row) continue;
+      const text = normalizeString(row.text ?? row.narration ?? row.content);
+      if (text) out.push({ style: narrationStyle(row.style), text });
+    }
+  } else if (hasText && typeof raw.narration === "string" && raw.narration.trim()) {
+    out.push({ style: "normal", text: raw.narration.trim() });
+  }
+  return out.length ? out : undefined;
+}
+
 export function coerceRenderRaw(raw: Record<string, unknown>): Record<string, unknown> {
   const text = renderText(raw);
+  const narrations = renderNarrations(raw, typeof raw.text === "string" && raw.text.trim().length > 0);
   const intent_realized = normalizeString(raw.intent_realized);
   const cues = Array.isArray(raw.cues)
     ? (raw.cues as unknown[]).map((c) => {
@@ -116,9 +147,12 @@ export function coerceRenderRaw(raw: Record<string, unknown>): Record<string, un
           text: normalizeString(row.text),
           expected_event_type: normalizeLower(row.expected_event_type),
           tags: Array.isArray(row.tags) ? row.tags.map((t) => normalizeLower(t)) : [],
+          ...(row.intensity != null && Number.isFinite(Number(row.intensity)) ? { intensity: normalizeUnit(row.intensity) } : {}),
+          ...(row.sincerity != null && Number.isFinite(Number(row.sincerity)) ? { sincerity: normalizeUnit(row.sincerity) } : {}),
+          ...(row.approach != null && String(row.approach).length ? { approach: normalizeLower(row.approach) } : {}),
         };
       }).filter(Boolean)
     : undefined;
 
-  return { text, intent_realized, cues, ...(choices ? { choices } : {}) };
+  return { ...(narrations ? { narrations } : {}), text, intent_realized, cues, ...(choices ? { choices } : {}) };
 }

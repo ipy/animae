@@ -38,6 +38,34 @@ test("scope: location and holder character participant", async () => {
   expect(r.applied.map((a) => a.id).sort()).toEqual(["loc", "npc"]);
 });
 
+test("an authored field with a non-author source is a template: inert until granted", async () => {
+  const authored = minimalAuthored({
+    fields: {
+      live: baseField({ id: "live" }),
+      tpl: baseField({ id: "tpl", source: "runtime", effects: { event_prob: { flirt: 0.5 } } }),
+      rule_tpl: baseField({ id: "rule_tpl", source: "rule" }),
+      anchor_tpl: baseField({ id: "anchor_tpl", source: "anchor" }),
+    },
+  });
+  const k = buildTestKernel(authored, openPolicy({ fields: { grants: [{ holder: "true", source: "true", maxLevel: "L4" }], caps: {} } }));
+  await k.timeline.append([
+    { kind: "scene.started", sceneId: "scn_1", location: "cafe", participants: ["player", "npc"], fields: [] },
+  ]);
+  const query = { scene: { id: "scn_1", location: "cafe", participants: ["player", "npc"], turn: 0 }, ctx: {} };
+  // only the author-sourced field applies on its own
+  expect(k.fields.resolve(query).applied.map((a) => a.id)).toEqual(["live"]);
+
+  // granting the template (the way a director or a game rule does) brings it into play
+  const entry = await k.fields.grant(authored.fields.tpl!, { source: "runtime" });
+  expect(entry.kind).toBe("field.granted");
+  expect(
+    k.fields
+      .resolve({ ...query, scene: { ...query.scene, turn: 1 } })
+      .applied.map((a) => a.id)
+      .sort(),
+  ).toEqual(["live", "tpl"]);
+});
+
 test("stacking add max and resolver", async () => {
   const authored = minimalAuthored({
     fields: {

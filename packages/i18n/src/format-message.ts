@@ -35,6 +35,12 @@ function formatRelativeTime(locale: string, value: number, unit: Intl.RelativeTi
   }
 }
 
+function applyPluralHash(text: string, n: number): string {
+  return text.replace(/#/g, String(n));
+}
+
+const PLURAL_OPTION = /^((?:=\d+|\w+))\s*\{(.*)\}$/s;
+
 /** ICU MessageFormat subset: `{name}`, `{n, number}`, `{d, date}`, plural/select/selectordinal blocks. */
 export function formatMessage(locale: string, pattern: string, params: FormatParams = {}): string {
   let i = 0;
@@ -55,18 +61,20 @@ export function formatMessage(locale: string, pattern: string, params: FormatPar
   function resolvePlural(inner: string, varName: string, n: number, ordinal: boolean): string {
     const type = ordinal ? "ordinal" : "cardinal";
     const cat = pluralCategory(locale, n, type);
-    const options = inner.split(/\s+(?=\w+\s*\{)/).filter(Boolean);
+    const options = inner.split(/\s+(?=(?:=\d+|\w+)\s*\{)/).filter(Boolean);
+    const pick = (body: string) =>
+      applyPluralHash(formatMessage(locale, body, { ...params, [varName]: n }), n);
     for (const opt of options) {
-      const m = /^(\w+)\s*\{(.*)\}$/s.exec(opt.trim());
+      const m = PLURAL_OPTION.exec(opt.trim());
       if (!m) continue;
       const [, key, body] = m;
-      if (key === "=0" && n === 0) return formatMessage(locale, body!, { ...params, [varName]: n });
-      if (key === cat || (key === "other" && cat === "other")) return formatMessage(locale, body!, { ...params, [varName]: n });
+      if (key!.startsWith("=") && Number(key!.slice(1)) === n) return pick(body!);
+      if (key === cat || (key === "other" && cat === "other")) return pick(body!);
     }
     const other = options.find((o) => o.startsWith("other "));
     if (other) {
       const body = other.replace(/^other\s*/, "");
-      return formatMessage(locale, body, { ...params, [varName]: n });
+      return pick(body);
     }
     return String(n);
   }
@@ -87,6 +95,11 @@ export function formatMessage(locale: string, pattern: string, params: FormatPar
   let out = "";
   while (i < len) {
     if (pattern[i] !== "{") {
+      if (pattern[i] === "}" && pattern[i + 1] === "}") {
+        out += "}";
+        i += 2;
+        continue;
+      }
       out += pattern[i];
       i++;
       continue;
@@ -109,7 +122,15 @@ export function formatMessage(locale: string, pattern: string, params: FormatPar
     if (pattern[i] === ",") {
       i++;
       const fmtStart = i;
-      while (i < len && pattern[i] !== "}") i++;
+      let depth = 1;
+      while (i < len) {
+        if (pattern[i] === "{") depth++;
+        else if (pattern[i] === "}") {
+          depth--;
+          if (depth === 0) break;
+        }
+        i++;
+      }
       const fmt = pattern.slice(fmtStart, i).trim();
       i++;
       const val = params[name];

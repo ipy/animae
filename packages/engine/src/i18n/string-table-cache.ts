@@ -36,16 +36,20 @@ export class StringTableCache {
     }
   }
 
+  /**
+   * One locale's tables on their own: the game's `locales/<locale>/*.strings.yaml` over the preset chain's table for
+   * that locale (a game's translation wins over the preset's default text for the same key).
+   */
   private async ensureStrict(locale: string): Promise<void> {
     if (this.strictTables.has(locale)) return;
     let p = this.strictPending.get(locale);
     if (!p) {
       p = loadStringTables(this.storage, [locale]).then((r) => {
-        const own = this.presetStrings[locale];
+        const preset = this.presetStrings[locale];
         this.strictTables.set(locale, {
           warnings: r.warnings,
-          resolve: (key: string) => own?.[key] ?? r.resolve(key),
-          entries: () => ({ ...r.entries(), ...own }),
+          resolve: (key: string) => r.resolve(key) ?? preset?.[key],
+          entries: () => ({ ...preset, ...r.entries() }),
         });
         this.strictPending.delete(locale);
       });
@@ -54,29 +58,32 @@ export class StringTableCache {
     await p;
   }
 
+  /**
+   * The tables a viewer in `locale` reads: that locale's own strings (game over preset) first, then the fallback
+   * locale's. A key only the preset's fallback-locale table ships must not shadow the game's translation of it.
+   */
   private async ensure(locale: string): Promise<StringTableResolver> {
     const hit = this.tables.get(locale);
     if (hit) return hit;
     let p = this.pending.get(locale);
     if (!p) {
-      p = loadStringTables(this.storage, [locale, this.fallbackLocale]).then((r) => {
-        const presetStrings = this.presetStrings;
-        const fallbackLocale = this.fallbackLocale;
-        const merged: StringTableResolver = {
-          warnings: r.warnings,
-          resolve(key: string) {
-            for (const loc of [locale, fallbackLocale]) {
-              const hit = presetStrings[loc]?.[key];
-              if (hit !== undefined) return hit;
-            }
-            return r.resolve(key);
-          },
-          entries: () => ({ ...r.entries(), ...presetStrings[locale], ...presetStrings[fallbackLocale] }),
-        };
+      p = (async () => {
+        await this.ensureStrict(locale);
+        await this.ensureStrict(this.fallbackLocale);
+        const own = this.strictTables.get(locale)!;
+        const fallback = this.strictTables.get(this.fallbackLocale)!;
+        const merged: StringTableResolver =
+          own === fallback
+            ? own
+            : {
+                warnings: [...own.warnings, ...fallback.warnings],
+                resolve: (key: string) => own.resolve(key) ?? fallback.resolve(key),
+                entries: () => ({ ...fallback.entries(), ...own.entries() }),
+              };
         this.tables.set(locale, merged);
         this.pending.delete(locale);
         return merged;
-      });
+      })();
       this.pending.set(locale, p);
     }
     return p;

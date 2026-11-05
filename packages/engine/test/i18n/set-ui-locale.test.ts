@@ -26,12 +26,12 @@ test("setUiLocale updates engine.info().locale without restart", async () => {
       presets: [e2ePreset],
       models: scriptedModels(),
       sessionId: "ui_loc",
-      i18n: { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN", fallbackLocale: "en" },
+      i18n: { locale: "en", promptLocale: "fr", outputLocale: "en", contentLocale: "fr", fallbackLocale: "en" },
     });
     expect(engine.info().locale).toBe("en");
-    engine.setUiLocale("zh-CN");
-    expect(engine.info().locale).toBe("zh-CN");
-    expect(engine.info().contentLocale).toBe("zh-CN");
+    engine.setUiLocale("fr");
+    expect(engine.info().locale).toBe("fr");
+    expect(engine.info().contentLocale).toBe("fr");
     await engine.close();
   } finally {
     await rm(root, { recursive: true, force: true });

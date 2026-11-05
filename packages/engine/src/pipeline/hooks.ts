@@ -11,6 +11,11 @@ export class HookRegistry {
     this.hooks.set(stage, list);
   }
 
+  /** Whether any hook is registered for `stage`. */
+  has(stage: Stage): boolean {
+    return (this.hooks.get(stage)?.length ?? 0) > 0;
+  }
+
   /** Wrap `runDefault` with registered hooks (outermost hook runs first). */
   async run(stage: Stage, k: Kernel, t: TurnCtx, runDefault: StageRunner): Promise<unknown> {
     const stack = this.hooks.get(stage) ?? [];

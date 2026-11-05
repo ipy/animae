@@ -4,11 +4,16 @@ Animae uses [@marcbachmann/cel-js](https://github.com/marc-bachmann/cel-js) **8.
 
 Compile-time validation: every `Cel` schema field is checked via `celCheck()` at load.
 
+## Runtime evaluation
+
+In-turn CEL (`policy.when`, intent scores, choice filters, knowledge `when`, field scopes, etc.) must evaluate without error. Failures throw **`CEL_EVAL`** and **fail the current turn** (`turn.ended` with error; no half-committed pipeline state). Guard optional map keys and seed `world.yaml` `vars:` — [spec Section 7.4](./spec.md#74-loading-and-validation), [Map keys](#map-keys-worldvars-character-vars) below.
+
 ## Numeric semantics
 
 - Context numbers are adapted for cel-js: **safe integers → bigint**, fractional values → double.
 - Results are converted back to JS numbers; integers outside `Number.MAX_SAFE_INTEGER` throw `CEL_EVAL`.
 - Comparisons and arithmetic follow cel-js rules; use `maxInt(a,b)` when you need integer max with bigint operands.
+- **Arithmetic does not mix integers and doubles**, and which kind a context number is depends on its value: `35` is an integer, `35.5` a double. `tracks.affinity + 1` therefore fails with `CEL_EVAL` while the track is fractional, and `tracks.affinity * 1.5` while it is whole. Convert first — `double(tracks.affinity) * 1.5`, `int(tracks.affinity) + 1` — or keep to comparisons (`<`, `>`, `==`), which accept both kinds.
 
 ## Standard context (`buildCelContext`)
 
@@ -26,26 +31,27 @@ Plain JSON-like objects; **never `undefined`** (missing top-level bindings → `
 | `tracks` | `{ <trackName>: effective number }` toward `other` (offsets applied) |
 | `tiers` | `{ <trackName>: tierName \| null }` |
 | `memory` | `{ count }` (+ retrieval helpers in some call sites) |
-| `fields` | `{ active: [ids], <id>: true }` |
+| `fields` | `{ active: [ids], <id>: true, event_prob: Record<eventTypeId, Δ> }` — aggregated L0 `event_prob` shifts (empty object when none) |
 | `check` | Last roll `{ success, total, margin, ... }` or `null` |
-| `model` | Active model context: `{ slot: "s1" \| "s2" \| "", tags: string[] }` — see below |
+| `model` | Active model context: `{ kind: "s1" \| "s2" \| "rule" \| "", tier?, tags: string[] }` — see below |
 
 ### `model` (knowledge `when:` and prompt assembly)
 
-Always present in contexts built for **knowledge inject `when`**, render choice filters, and prompt assembly:
+Always present ([Section 7.2](./spec.md#72-cel-context-variables)) in contexts built for **knowledge inject `when`**, render choice filters, and prompt assembly:
 
 | Field | Meaning |
 |-------|---------|
-| `model.slot` | `"s1"` or `"s2"` during the sync LLM call for that pipeline tier; `""` on non-model stages unless the host passes `extra.model` |
-| `model.tags` | Capability tags from the host-declared `ModelPort.tags` for the active slot (for example `tier:fast`, `content:mature`) |
+| `model.kind` | `s1` or `s2` when an LLM serves that role; `rule` on the rule backend; `""` on pure-rule stages unless the host passes `extra.model` |
+| `model.tier` | S2 tier id during an LLM S2 call (absent for S1 and rule) |
+| `model.tags` | Capability tags from the active `ModelPort` or S2 tier config (`models.s2.tiers[].tags`); **empty** under the rule backend |
 
-Test membership with `'tier:fast' in model.tags` (tags are a list, not a map). Hosts attach tags when constructing model ports from config; policy authors can gate knowledge injection on tags without hard-coding provider ids.
+Test membership with `'premium' in model.tags` or `model.kind == 's2'`. Tag-gated knowledge should guard with `'tag' in model.tags` so rule-mode play still receives untagged content.
 
 Example knowledge frontmatter:
 
 ```yaml
 inject: when
-when: "'tier:fast' in model.tags && tracks.trust >= 30"
+when: "model.kind == 's2' && 'content:mature' in model.tags && tracks.trust >= 30"
 ```
 
 ### Map keys (`world.vars`, character `vars`)

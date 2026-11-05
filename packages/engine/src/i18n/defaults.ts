@@ -2,8 +2,8 @@ import type { EngineLocaleConfig } from "../contracts.ts";
 
 export const defaultEngineLocale: EngineLocaleConfig = {
   locale: "en",
-  promptLocale: "zh-CN",
+  promptLocale: "en",
   outputLocale: "en",
-  contentLocale: "zh-CN",
+  contentLocale: "en",
   fallbackLocale: "en",
 };

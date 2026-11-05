@@ -1,4 +1,5 @@
 import type { BottomLineSchema, CardFrontmatter, CharacterDef } from "../schema/authored.ts";
+import type { CharacterState } from "../state.ts";
 import { isNonPromptBody, stripHtmlComments } from "../prose/for-prompt.ts";
 import type { z } from "zod";
 import {
@@ -40,6 +41,23 @@ export function characterTags(def: CharacterDef): string[] {
   for (const bl of def.card.constraints.bottom_lines) for (const t of bl.tags) tags.add(t);
   for (const t of def.card.constraints.taboos) tags.add(t);
   return [...tags];
+}
+
+/** Tags on secrets the character has not unlocked yet (`unlockedSecrets`). */
+export function lockedSecretTags(def: CharacterDef, charState: CharacterState): string[] {
+  const locked = new Set<string>();
+  for (const s of def.secrets) {
+    if (charState.unlockedSecrets.includes(s.id)) continue;
+    for (const t of s.tags) locked.add(t);
+  }
+  return [...locked];
+}
+
+/** Router `secret_topic`: appraisal tags ∩ locked secret tags, plus literal tag `secret`. */
+export function isSecretTopic(appraisalTags: readonly string[], lockedTags: readonly string[]): boolean {
+  if (appraisalTags.includes("secret")) return true;
+  const locked = new Set(lockedTags);
+  return appraisalTags.some((t) => locked.has(t));
 }
 
 export interface LoadedCharacter {

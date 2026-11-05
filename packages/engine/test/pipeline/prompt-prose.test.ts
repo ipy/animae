@@ -6,7 +6,7 @@ import { prepareAuthoredProse } from "../../src/pipeline/prompt-prose.ts";
 import { charDef, createPipelineKernel } from "./test-kernel.ts";
 
 const TABLES: Record<string, Record<string, string>> = {
-  "zh-CN": { "location.loc.name": "Greenhouse Hall (zh)", "location.loc.summary": "Summary (zh)" },
+  fr: { "location.loc.name": "Greenhouse Hall (fr)", "location.loc.summary": "Summary (fr)" },
   en: { "location.loc.name": "Greenhouse Hall" },
 };
 
@@ -19,13 +19,13 @@ const displayText: NonNullable<Kernel["displayText"]> = {
 describe("authored prose for prompts", () => {
   const { k } = createPipelineKernel({
     chars: [charDef("npc1"), charDef("player")],
-    i18n: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN" },
+    i18n: { promptLocale: "fr", outputLocale: "en", contentLocale: "fr" },
     displayText,
   });
 
   test("a late-bound field (lifted from a string key at load time) resolves in the prompt language, never to the bare key", () => {
-    expect(prepareAuthoredProse(k, { i18n: { key: "location.loc.name" } })).toBe("Greenhouse Hall (zh)");
-    expect(prepareAuthoredProse(k, "$t:location.loc.summary")).toBe("Summary (zh)");
+    expect(prepareAuthoredProse(k, { i18n: { key: "location.loc.name" } })).toBe("Greenhouse Hall (fr)");
+    expect(prepareAuthoredProse(k, "$t:location.loc.summary")).toBe("Summary (fr)");
   });
 
   test("a late-bound field without a table entry is dropped instead of leaking its key", () => {

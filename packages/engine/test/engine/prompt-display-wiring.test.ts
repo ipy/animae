@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,9 +7,16 @@ import { createEngine } from "../../src/engine/create-engine.ts";
 import { createScriptedModel } from "../../src/model/scripted.ts";
 import type { PromptSegments } from "../../src/ports.ts";
 import { FsStorage } from "../../src/store/fs.ts";
+import { FR_TEST_LOCALE, registerFrenchTestPack } from "../helpers/locale-packs.ts";
 import { e2ePreset, seedE2eAuthored } from "../e2e/fixture.ts";
 
-const I18N = { locale: "zh-CN", promptLocale: "zh-CN", outputLocale: "zh-CN", contentLocale: "zh-CN", fallbackLocale: "en" } as const;
+const I18N = {
+  locale: FR_TEST_LOCALE,
+  promptLocale: FR_TEST_LOCALE,
+  outputLocale: FR_TEST_LOCALE,
+  contentLocale: FR_TEST_LOCALE,
+  fallbackLocale: "en",
+} as const;
 
 // The e2e preset, except that the cue description is a late-bound key like authored games write it.
 const basePolicy = e2ePreset.policies![0]!;
@@ -37,18 +45,26 @@ constraints:
   taboos: []
 lod: principal
 ---
-${name}的人设。
+Persona for ${name}.
 `;
 
+let offFrench: (() => void) | undefined;
+afterEach(() => {
+  offFrench?.();
+  offFrench = undefined;
+  clearLocalePacks();
+});
+
 test("an engine resolves late-bound prompt strings and lists names for another output language", async () => {
+  offFrench = registerFrenchTestPack();
   const root = await mkdtemp(join(tmpdir(), "animae-prompt-display-"));
   try {
     const storage = FsStorage(root);
     await seedE2eAuthored(storage);
-    await storage.writeAtomic("locales/zh-CN/characters/npc1/card.md", overlayCard("艾莉亚"));
+    await storage.writeAtomic(`locales/${FR_TEST_LOCALE}/characters/npc1/card.md`, overlayCard("Éléa"));
     await storage.writeAtomic(
-      "locales/zh-CN/strings.yaml",
-      "cue:\n  emotion:\n    description: 情绪提示\ncharacter:\n  npc1:\n    name: 艾莉亚\n",
+      `locales/${FR_TEST_LOCALE}/strings.yaml`,
+      "cue:\n  emotion:\n    description: Indice émotionnel\ncharacter:\n  npc1:\n    name: Éléa\n",
     );
     await storage.writeAtomic(
       "locales/en/strings.yaml",
@@ -88,21 +104,18 @@ test("an engine resolves late-bound prompt strings and lists names for another o
 
     // Each player turn is followed by one autonomous exchange: two replies per turn.
     expect(renders.length).toBe(4);
-    const [english, englishAuto, chinese, chineseAuto] = renders;
+    const [english, englishAuto, french, frenchAuto] = renders;
     for (const r of renders) {
-      // The working prompt is Chinese, so the cue description resolves in Chinese for every reply.
-      expect(r!.static).toContain("emotion: 情绪提示");
+      expect(r!.static).toContain("emotion: Indice émotionnel");
       expect(r!.static).not.toContain("$t:");
     }
-    // English narration is asked for English spellings of the names; Chinese narration needs no glossary.
-    expect(english!.static).toContain("艾莉亚 → Aria");
-    expect(chinese!.static).not.toContain("艾莉亚 → Aria");
-    expect(english!.user).toContain("只以 艾莉亚 的身份与口吻发言");
-    // The autonomous reply belongs to the player turn and is narrated in that turn's language, not the engine default.
+    expect(english!.static).toContain("Éléa → Aria");
+    expect(french!.static).not.toContain("Éléa → Aria");
+    expect(english!.user).toContain("Parlez uniquement en tant que Éléa");
     expect(english!.user).toContain("English (en)");
     expect(englishAuto!.user).toContain("English (en)");
-    expect(chinese!.user).not.toContain("English (en)");
-    expect(chineseAuto!.user).not.toContain("English (en)");
+    expect(french!.user).not.toContain("English (en)");
+    expect(frenchAuto!.user).not.toContain("English (en)");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

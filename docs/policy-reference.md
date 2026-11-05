@@ -69,7 +69,15 @@ Array of `{ intent, when, score }` — `when`: CEL bool; `score`: CEL or number.
 
 ### `input.response`
 
-Keys: `injection_suspect`, `meta_probe` → `{ emit?, intent? }` or `{ hook: string }`.
+Keys: `injection_suspect`, `meta_probe` → `{ emit?, intent? }` or `{ hook: string }` (registered rule id).
+
+**Static mapping:** after appraise, the pipeline applies `emit` (appraisal event type override) and `intent` (forces `intent.decided`) before check/adjudicate.
+
+**Hook (`hook`):** runs once at the same boundary (stage `classify`, RNG key `classify:<turnId>:<class>`). CEL context includes `event` (appraisal + `event.text` = player line). Returned drafts append with source `rules:classify`. To override intent or appraisal without extra timeline noise, include `intent.decided` or `appraisal` drafts in the return value; those are applied locally and not re-appended.
+
+### `memory.weights.vector`
+
+Default in `applyPolicyDefaults({})` is **0.3** (used when embeddings are enabled). `@animae/preset-base` sets `vector: 0` so vector blending is opt-in via preset merge.
 
 ### `safety`
 
@@ -92,16 +100,33 @@ Keys: `injection_suspect`, `meta_probe` → `{ emit?, intent? }` or `{ hook: str
 
 | Path | Default / notes |
 |------|-----------------|
-| `weights.*` | term, recency, importance, salience, vector — partial |
-| `k` | retrieval top-k |
-| `recencyHalfLifeDays` | — |
-| `indexMax` | — |
+| `weights.*` | term 0.5, recency 0.2, importance 0.2, salience 0.1, vector 0.3 — partial merge |
+| `k` | `8` |
+| `recencyHalfLifeDays` | `7` |
+| `indexMax` | `50` |
 | `write.episodic` | `true` |
 | `write.minIntensity` | `0.2` |
 | `write.maxChars` | `240` |
+| `writing.backend` | `rule` — or `s1` for LLM `{text, importance, valence}` when S1 is on a model |
+| `writing.template` | `"{{text}}"` (CEL; `text` = utterance, `speaker` = speaker id) |
+| `writing.importanceByEventType` / `writing.valenceByEventType` | maps per appraised event type (rule path) |
+| `writing.narration` | `none` \| `inject_belief` \| `shareable` — whether speaker-less `narration` events become memory ([Section 9.1](./spec.md#91-memory-entries)) |
 | `forgetting.enabled` | `false`; `tau` 30; `threshold` 0.2 |
-| `distortion.enabled` | `false`; `p` 0.1; `maxImportance` 0.7; `kinds` intensify/swap_subject/add_motive |
-| `propagation.enabled` | `false`; `onTick` `day`; `distortionPerHop` 1 |
+| `distortion.enabled` | `false`; `p` 0.1; `maxImportance` 0.7; `kinds` default `[intensify]` |
+| `propagation.enabled` | `false`; `onTick` `day` (propagate on day boundary in `world.advance`) or `scene_end` (propagate when a scene ends); `distortionPerHop` 1 |
+
+**CEL:** `memory.writing.template`.
+
+### `appraise` (rule backend)
+
+Used when the S1 role is served by the rule backend (or as fallback). Priority: taken choice metadata → `/command` → `patterns[]` → `fallback`.
+
+| Field | Notes |
+|-------|--------|
+| `patterns[]` | `{ match, flags?, event: { type, intensity?, sincerity?, approach?, tags? } }` |
+| `fallback` | same shape as pattern `event` |
+| `commands` | map command word → event type id |
+| `inputClass.injection` / `inputClass.metaProbe` | regex sources (case-insensitive) extending default keyword tables |
 
 ### `reflection`
 
@@ -109,14 +134,19 @@ Keys: `injection_suspect`, `meta_probe` → `{ emit?, intent? }` or `{ hook: str
 |-------|---------|
 | `enabled` | `true` |
 | `accept` | `"!conflict"` (CEL) |
+| `backend` | `s1` — follows S1 role (`llm` when a model serves S1, else rule); `rule` forces template path |
+| `summaryTemplate` | optional CEL template for rule-backend summary only |
 
 ### `characters.lod.promote`
 
 `{ from?, to, when }[]` — CEL on `when`.
 
-### `offscreen.fidelity`
+### `offscreen`
 
-`default`: `none` \| `rule` \| `narrate` \| `full` (default `rule`); per-`locations` / per-`characters` overrides.
+| Field | Default / notes |
+|-------|-----------------|
+| `fidelity.default` | `rule`; per-`locations` / per-`characters` overrides: `none` \| `rule` \| `narrate` \| `full` |
+| `narrateTemplate` | optional CEL template for rule-backend location traces (`location.name`, `time`) when fidelity is `narrate` or `full` |
 
 ### `scene`
 
@@ -125,6 +155,7 @@ Keys: `injection_suspect`, `meta_probe` → `{ emit?, intent? }` or `{ hook: str
 | `turnTaking` | `addressed` \| `round_robin` \| `{ priority: Cel }` |
 | `autonomous.maxExchangesPerPlayerTurn` | `0` |
 | `autonomous.when` | `"true"` |
+| `autonomous.rules` | optional rule-backend template layers (same shape as `render.layers`) for NPC–NPC dialogue |
 
 **CEL:** `turnTaking.priority`, `autonomous.when`.
 
@@ -142,14 +173,16 @@ Each trigger: `{ enabled: true, ...params }`:
 
 | Field | Default |
 |-------|---------|
-| `syncCallsPerTurn` | `2` (appraise + render) |
-| `s2PerTurn` | `1` |
-| `s2Ratio` | `0.15` |
-| `s2ReservedForAnchors` | `0.03` |
+| `syncCallsPerTurn` | `2` (at most one S1 + one S2 LLM call before the player sees the reply) |
+| `s1PerTurn` | `1` — `0` forces appraise on the rule backend for that turn |
+| `s2PerTurn` | `1` — default cap per S2 tier when `s2PerTurnByTier` has no entry |
+| `s2PerTurnByTier` | optional `{ <tierId>: n }` — `0` disables a tier |
+| `s2Ratio` | `0.15` — share of turns that may run above the default S2 tier |
+| `s2ReservedForAnchors` | `0.03` — fraction of the scene escalation pool reserved for `anchor_near` |
 | `maxOutputTokens.s1` | `400` |
-| `maxOutputTokens.s2` | `800` |
-| `sceneS2Pool` | derived from ratio if omitted |
-| `degrade` | e.g. `s2_to_s1`, `defer_reflection`, `skip_offscreen_narrate`, `skip_autonomous` |
+| `maxOutputTokens.s2` | `800` or per-tier map |
+| `sceneS2Pool` | optional; else derived from participants × `s2Ratio` |
+| `degrade` | when omitted or empty at runtime, `[s2_tier_down, s2_to_rule, s1_to_rule, defer_reflection, skip_offscreen_narrate, skip_autonomous]` ([Section 17.4](./spec.md#174-degradation)) |
 
 ### `render`
 
@@ -164,6 +197,10 @@ Each trigger: `{ enabled: true, ...params }`:
 | `recall.maxKnowledge` | `3` — max recalled knowledge docs in the dynamic segment |
 | `recall.knowledgeChars` | `280` — per-doc trim near this length (sentence boundary) |
 | `recall.memoryChars` | `400` — per recalled memory trim |
+| `layers` | rule backend: ordered template layers (`when`, weighted pool lines; `style: narration` \| `narration_break` for speaker-less paragraphs) |
+| `fallback` | rule backend utterance when no layer matches |
+
+Backends for the S1/S2 **roles** (`llm` vs `rule`) are set in `animae.yaml` (`mode`, `appraise.backend`, `render.backend`) or `Engine.runtime.setMode`, not in policy.
 
 #### `render.relation`
 
@@ -188,6 +225,7 @@ Controls the `- <name>: <track> <tier>, ... — <directive>` line that every pro
 | `enabled` | `false` |
 | `count` | `3` |
 | `filter` | `"true"` (CEL per choice) |
+| `rules` | rule backend: `{ when, text, event_type, tags?, intensity?, sincerity?, approach? }[]` — quick replies when enabled |
 
 ### `timeline`
 
@@ -227,7 +265,18 @@ Games often nest prompt tuning under `policy.x.prompt`:
 | `appraise_examples` | Few-shot appraise examples |
 | `template_partials` | Template ids merged into **render** prompts only; appraise assembly skips their narration bodies |
 
-Knowledge docs use frontmatter `inject: always | when | on-demand`; `when` is CEL over `event.type`, `scene.participants`, `world.vars`, and `model.tags` / `model.slot`.
+Knowledge docs use frontmatter `inject: always | when | on-demand`; `when` is CEL over `event.type`, `scene.participants`, `world.vars`, and `model.kind` / `model.tier` / `model.tags` ([Section 7.2](./spec.md#72-cel-context-variables)).
+
+### `animae.yaml` (not policy): models and runtime
+
+| Key | Role |
+|-----|------|
+| `models.s1` | S1 LLM spec, or `{ provider: rule }` / omitted → rule backend |
+| `models.s2` | tier ladder `{ default, tiers[], routing }` or single model → one tier `only` |
+| `mode` | `llm` \| `hybrid` \| `rule` — initial runtime preset ([Section 19.3](./spec.md#193-model-configuration)) |
+| `appraise.backend` / `render.backend` | per-role backend override in `hybrid` |
+| `runtime.switchAt` | `turn_boundary` (default) \| `immediate` |
+| `runtime.fallbackOnError.*` | per phase (`appraise`, `render`, `reflection`, `entity`, `memoryWrite`, `offscreen`, `autonomous`); default all `false` |
 
 ---
 
@@ -243,6 +292,6 @@ Knowledge docs use frontmatter `inject: always | when | on-demand`; `when` is CE
 | Checks | event + actor/self/other + `check` after roll |
 | Choices.filter | per-choice `choice` extra |
 | Reflection.accept | `conflict`, memory helpers |
-| Knowledge inject when | query-time context + **`model`** (`slot`, `tags` from active `ModelPort`) |
+| Knowledge inject when | query-time context + **`model`** (`kind`, `tier?`, `tags` from active backend) |
 
 See [cel-reference.md](./cel-reference.md).

@@ -11,7 +11,7 @@ test("recording key includes recordingLocales", () => {
     segments,
     schema,
     maxOutputTokens: 100,
-    recordingLocales: { promptLocale: "zh-CN", outputLocale: "en", contentLocale: "zh-CN" },
+    recordingLocales: { promptLocale: "fr", outputLocale: "en", contentLocale: "fr" },
   });
   expect(base).not.toBe(withLocales);
 });

@@ -1,4 +1,3 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -7,7 +6,7 @@ import { embedMany } from "ai";
 import { AnimaeError } from "../types.ts";
 import type { EmbeddingPort } from "../ports.ts";
 import type { ModelSpec } from "../schema/authored.ts";
-import { normalizeOllamaBaseURL, resolveApiKey, resolveAnthropicBaseURL } from "./provider.ts";
+import { normalizeOllamaBaseURL, resolveApiKey } from "./provider.ts";
 import type { ModelPortOptions } from "./types.ts";
 import { fileModelWarningSink, installAiSdkWarningHandler, registerModelWarningSink } from "./warnings.ts";
 
@@ -26,12 +25,12 @@ export function createEmbeddingPort(spec: ModelSpec, opts: ModelPortOptions = {}
   const embeddingModel = (() => {
     switch (spec.provider) {
       case "anthropic":
-        return createAnthropic({
-          apiKey,
-          baseURL: resolveAnthropicBaseURL(spec, env),
-          headers: spec.headers,
-          fetch: fetchFn,
-        }).embeddingModel(spec.model);
+        // The Anthropic API has no embedding endpoint (the SDK's `embeddingModel` always throws NoSuchModelError):
+        // fail at configuration time with an actionable message instead of leaking the SDK error.
+        throw new AnimaeError(
+          "MODEL_CONFIG",
+          "anthropic provider does not expose embeddings; use openai, google, ollama or openai-compatible",
+        );
       case "openai":
         return createOpenAI({ apiKey, baseURL: spec.baseURL, headers: spec.headers, fetch: fetchFn }).embeddingModel(
           spec.model,

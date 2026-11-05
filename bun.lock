@@ -26,6 +26,7 @@
         "@animae/i18n": "workspace:*",
         "@animae/preset-base": "workspace:*",
         "@animae/preset-dnd": "workspace:*",
+        "@animae/preset-rule": "workspace:*",
         "@animae/tui": "workspace:*",
         "@animae/web": "workspace:*",
       },
@@ -59,6 +60,7 @@
       },
       "devDependencies": {
         "@animae/tui": "workspace:*",
+        "zod": "^4.6.7",
       },
     },
     "packages/i18n": {
@@ -66,6 +68,8 @@
       "version": "1.0.0",
       "devDependencies": {
         "@types/react-dom": "19",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
       },
       "peerDependencies": {
         "react": ">=18",
@@ -91,11 +95,21 @@
         "yaml": "^2.9.1",
       },
     },
+    "packages/preset-rule": {
+      "name": "@animae/preset-rule",
+      "version": "1.0.0",
+      "dependencies": {
+        "@animae/engine": "workspace:*",
+        "@animae/preset-base": "workspace:*",
+        "yaml": "^2.9.1",
+      },
+    },
     "packages/tui": {
       "name": "@animae/tui",
       "version": "1.0.0",
       "dependencies": {
         "@animae/engine": "workspace:*",
+        "@animae/host": "workspace:*",
         "@animae/i18n": "workspace:*",
         "string-width": "^8.3.0",
         "yaml": "^2.9.1",
@@ -149,6 +163,8 @@
     "@animae/preset-base": ["@animae/preset-base@workspace:packages/preset-base"],
 
     "@animae/preset-dnd": ["@animae/preset-dnd@workspace:packages/preset-dnd"],
+
+    "@animae/preset-rule": ["@animae/preset-rule@workspace:packages/preset-rule"],
 
     "@animae/tui": ["@animae/tui@workspace:packages/tui"],
 

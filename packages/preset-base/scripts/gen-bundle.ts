@@ -44,6 +44,39 @@ async function collectKnowledge(): Promise<Record<string, string> | undefined> {
   return Object.keys(out).length ? out : undefined;
 }
 
+function flattenStringTable(obj: Record<string, unknown>, prefix = ""): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === "string") out[path] = value;
+    else if (value && typeof value === "object" && !Array.isArray(value)) {
+      Object.assign(out, flattenStringTable(value as Record<string, unknown>, path));
+    }
+  }
+  return out;
+}
+
+/** `locales/<locale>/strings.yaml` of every locale directory the package ships, as flat key tables. */
+async function collectDisplayStrings(): Promise<Record<string, Record<string, string>> | undefined> {
+  const out: Record<string, Record<string, string>> = {};
+  const base = join(pkgRoot, "locales");
+  let entries;
+  try {
+    entries = await readdir(base, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  for (const ent of entries.filter((e) => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+    try {
+      const text = await readFile(join(base, ent.name, "strings.yaml"), "utf8");
+      out[ent.name] = flattenStringTable(parseYaml(text) as Record<string, unknown>);
+    } catch {
+      /* a locale directory without a string table is skipped */
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 function serializeValue(value: unknown, indent: number): string {
   if (value === undefined) return "undefined";
   const pad = " ".repeat(indent);
@@ -67,11 +100,13 @@ export async function buildPresetBundleObject(): Promise<Record<string, unknown>
   const policies = [];
   for (const rel of meta.policies) policies.push(await loadPolicy(rel));
   const knowledge = await collectKnowledge();
+  const displayStrings = await collectDisplayStrings();
   return {
     id: meta.id,
     extends: meta.extends,
     policies,
     ...(knowledge ? { knowledge } : {}),
+    ...(displayStrings ? { displayStrings } : {}),
   };
 }
 

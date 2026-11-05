@@ -17,6 +17,7 @@ export const defaultKeymap: Required<Keymap> = {
   timeline: ["f3"],
   explain: ["f4"],
   inspector: ["f5"],
+  mode: ["f6"],
   save: ["s"],
   load: ["l"],
   rewindTurn: ["z"],
@@ -30,6 +31,7 @@ const META_OVERLAY_DIGITS: Partial<Record<keyof Required<Keymap>, string>> = {
   timeline: "3",
   explain: "4",
   inspector: "5",
+  mode: "6",
 };
 
 /** Single-letter bindings that require Ctrl (or Meta overlay digits), never plain typing. */

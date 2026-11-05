@@ -68,7 +68,7 @@ describe("render prompt names the speaker", () => {
     addressee: "player",
     scene,
     fieldEffects: {},
-    tier: "s1" as const,
+    tier: "standard" as const,
     intent: { intent: "respond", scores: { respond: 1 } },
   };
 

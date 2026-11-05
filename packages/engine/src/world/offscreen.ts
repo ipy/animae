@@ -1,5 +1,12 @@
 import { z } from "zod";
 import type { Kernel } from "../contracts.ts";
+import { modelErrorContext, ruleModelOf, s2SpecOf, tiersOf } from "../model/select.ts";
+import { locationVar } from "../rule-backend/location.ts";
+import { resolveModelTimeoutMs } from "../model/timeout.ts";
+import { buildCallContext, EMPTY_SEGMENTS } from "../pipeline/call-context.ts";
+import { rethrowPipelineModelError } from "../pipeline/model-error.ts";
+import { s2MaxOutputTokens } from "../router/policy-access.ts";
+import { withRuleFallback } from "../runtime/fallback.ts";
 import type { EntityRef, EventDraft, WorldTime } from "../types.ts";
 import { compareTime } from "./calendar.ts";
 import { parseAtTime } from "./schedule-parse.ts";
@@ -33,7 +40,7 @@ export async function catchUpEntity(k: Kernel, entity: EntityRef): Promise<Event
     const allow = k.m.router.allow("offscreen_narrate");
     out.push(...allow.events);
     if (allow.ok && entity.kind === "location") {
-      const text = await narrateLocation(k, entity.id);
+      const text = await narrateLocation(k, entity.id, allow.tier, (d) => out.push(d));
       if (text) {
         const path = `artifacts/_offscreen/${entity.id}.jsonl`;
         await k.timeline.artifacts.appendJsonl(path, { t: now, text, location: entity.id });
@@ -63,15 +70,66 @@ function lastSimulated(state: import("../state.ts").EngineState, entity: EntityR
   return undefined;
 }
 
-async function narrateLocation(k: Kernel, locationId: string): Promise<string | undefined> {
-  try {
-    const result = await k.models.s1.object({
+/**
+ * Offscreen narration is free text: the S2 role. `tier` is the S2 tier the router allowed, or undefined when S2 is
+ * served by the rule backend (`offscreen.narrateTemplate`; nothing is written when the policy has no template).
+ */
+async function narrateLocation(
+  k: Kernel,
+  locationId: string,
+  tier: string | undefined,
+  onFallback: (draft: EventDraft) => void,
+): Promise<string | undefined> {
+  const run = async (port: ReturnType<typeof ruleModelOf>, req: Parameters<typeof port.stream>[0]): Promise<string> => {
+    let text = "";
+    for await (const part of port.stream(req)) {
+      if (part.type === "final") text = (part.value as { text?: string }).text ?? "";
+    }
+    return text;
+  };
+
+  const callRule = (): Promise<string> => {
+    const loc = k.catalog.location(locationId);
+    return run(ruleModelOf(k), {
       label: "narrate",
-      segments: buildNarrateLocationPrompt(k, locationId),
+      purpose: "offscreen",
+      segments: EMPTY_SEGMENTS,
       schema: NarrateSchema,
-      maxOutputTokens: k.policy.router.budget?.maxOutputTokens?.s1 ?? 400,
+      maxOutputTokens: s2MaxOutputTokens(k.policy, tiersOf(k).defaultId),
+      context: buildCallContext(k, {
+        purpose: "offscreen",
+        rngKey: `offscreen:${locationId}:${k.timeline.state().time.day}:${k.timeline.state().time.minute}`,
+        extra: { location: locationVar(k, locationId) },
+      }),
     });
-    return result.text;
+  };
+
+  const callModel = async (): Promise<string> => {
+    if (tier === undefined) return callRule();
+    try {
+      return await run(tiersOf(k).get(tier)?.port ?? k.models.s2, {
+        label: "narrate",
+        purpose: "offscreen",
+        segments: buildNarrateLocationPrompt(k, locationId),
+        schema: NarrateSchema,
+        maxOutputTokens: s2MaxOutputTokens(k.policy, tier),
+      });
+    } catch (err) {
+      rethrowPipelineModelError(
+        err,
+        "OFFSCREEN_NARRATE_FAILED",
+        "Offscreen narration model call failed",
+        modelErrorContext(s2SpecOf(k, tier), resolveModelTimeoutMs),
+      );
+    }
+  };
+
+  try {
+    const text =
+      tier === undefined
+        ? await callRule()
+        : (await withRuleFallback(k, "offscreen", "world:offscreen", callModel, callRule, onFallback)).value;
+    return text.trim() || undefined;
   } catch (e) {
     k.warn("OFFSCREEN_NARRATE_FAILED", String(e), { location: locationId });
     return undefined;
@@ -85,7 +143,6 @@ async function fullOffscreenEncounters(
   to: WorldTime,
 ): Promise<EventDraft[]> {
   const out: EventDraft[] = [];
-  const calendar = k.authored.world.calendar;
   const locationId = entity.kind === "location" ? entity.id : undefined;
 
   for (const item of k.authored.schedule) {
@@ -96,29 +153,6 @@ async function fullOffscreenEncounters(
     if (!overlap) continue;
 
     for (const cid of item.characters) {
-      const s1Ok = k.m.router.allow("offscreen_narrate");
-      out.push(...s1Ok.events);
-      const s2Ok = k.m.router.decide({
-        turn: { turnId: "offscreen", sceneId: "offscreen", actor: cid, addressee: cid, speaker: cid, text: "", autonomous: true },
-        appraisal: {
-          type: "other",
-          intensity: 0.3,
-          sincerity: 1,
-          claims: [],
-          search_terms: [],
-          tags: ["offscreen"],
-          input_class: "normal",
-        },
-        anchorNear: false,
-        fieldMaxLevel: 0,
-        tierChanged: false,
-        sidenoteReceived: false,
-        sceneFirstTurn: false,
-        secretTopic: false,
-        contradiction: false,
-        autonomous: true,
-      }).events;
-
       const path = `artifacts/_offscreen/encounter_${item.id}_${cid}.jsonl`;
       const line = { t: to, scheduleId: item.id, characters: item.characters, location: item.location, span: { from, to } };
       await k.timeline.artifacts.appendJsonl(path, line);
@@ -145,7 +179,6 @@ async function fullOffscreenEncounters(
     }
   }
 
-  void calendar;
   return out;
 }
 

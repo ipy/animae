@@ -1,5 +1,6 @@
 import {
   AnimaeConfigSchema,
+  AnimaeError,
   FsStorage,
   createLayeredStorage,
   createLocaleOverlayStorage,
@@ -17,6 +18,10 @@ import {
   warnUnknownNameRefsInPolicy,
   warnUnknownNameRefsInStrings,
   loadStringTables,
+  checkRuleModeReadiness,
+  collectPresetDisplayStrings,
+  resolveInitialMode,
+  type RuntimeModePreset,
 } from "@animae/engine";
 import { fullPresetRegistry } from "../engine-open.ts";
 
@@ -75,15 +80,16 @@ export async function validateWithMods(
   root: string,
   modIds?: string[],
   uiLocale?: string,
+  mode?: RuntimeModePreset,
 ): Promise<{ ok: boolean; issues: { file: string; path: string; message: string }[] }> {
   const storage = FsStorage(root);
   const registry = await fullPresetRegistry();
-  const configText = await storage.readText("animae.yaml");
-  const config = AnimaeConfigSchema.parse(parseYaml(configText ?? "{}"));
-  const selection = modIds ?? config.mods;
-  const i18n = resolveEngineI18n(config.i18n, uiLocale ? { root, i18n: { locale: uiLocale } } : { root });
-  const localizedBase = createLocaleOverlayStorage({ base: storage, localeChain: i18n.contentLocaleChain });
   try {
+    const configText = await storage.readText("animae.yaml");
+    const config = AnimaeConfigSchema.parse(parseYaml(configText ?? "{}"));
+    const selection = modIds ?? config.mods;
+    const i18n = resolveEngineI18n(config.i18n, uiLocale ? { root, i18n: { locale: uiLocale } } : { root });
+    const localizedBase = createLocaleOverlayStorage({ base: storage, localeChain: i18n.contentLocaleChain });
     const { readStorage, ordered, provenance } = await prepareModOverlay(localizedBase, config.mods ?? [], {
       selection,
       engineVersion: "1.0.0",
@@ -127,9 +133,37 @@ export async function validateWithMods(
     for (const w of nameRefWarnings) {
       process.stderr.write(`warn: ${w.file}:${w.path}: ${w.message}\n`);
     }
+    if (mode !== undefined) {
+      const issues: { file: string; path: string; message: string }[] = [];
+      // A role served by a model needs one configured: the same rule the engine applies at startup.
+      let resolved;
+      try {
+        resolved = resolveInitialMode(
+          authored.config,
+          { s1: authored.config.models?.s1 !== undefined, s2: authored.config.models?.s2 !== undefined },
+          mode,
+        );
+      } catch (err) {
+        issues.push({ file: "animae.yaml", path: "models", message: err instanceof Error ? err.message : String(err) });
+      }
+      // A role served by rules needs its templates.
+      if (resolved?.render === "rule") {
+        const presetStrings = collectPresetDisplayStrings(registry, authored.config.preset);
+        const gameStrings = await Promise.all(
+          [i18n.outputLocale, i18n.fallbackLocale].map(async (locale) => (await loadStringTables(readStorage, [locale])).entries()),
+        );
+        const locales = [i18n.outputLocale, i18n.fallbackLocale];
+        const hasString = (key: string) =>
+          locales.some((locale, i) => gameStrings[i]![key] !== undefined || presetStrings[locale]?.[key] !== undefined);
+        for (const issue of checkRuleModeReadiness(policyResult.policy, { file: "policy", hasString })) {
+          if (issue.warn) process.stderr.write(`warn: ${issue.file}:${issue.path}: ${issue.message}\n`);
+          else issues.push({ file: issue.file, path: issue.path, message: issue.message });
+        }
+      }
+      if (issues.length) return { ok: false, issues };
+    }
     return { ok: true, issues: [] };
   } catch (err) {
-    const { AnimaeError } = await import("@animae/engine");
     if (err instanceof AnimaeError && (err.code === "CONFIG_INVALID" || err.code === "MOD_CONFIG")) {
       const detailIssues = (err.details as { issues?: { file: string; path: string; message: string }[] } | undefined)?.issues;
       if (detailIssues?.length) return { ok: false, issues: detailIssues };

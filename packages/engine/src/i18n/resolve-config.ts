@@ -21,7 +21,7 @@ export function resolveEngineI18n(
 ): ResolvedEngineI18n {
   const merged: I18nConfig = {
     locale: opts?.i18n?.locale ?? yaml?.locale ?? negotiateLocale({ env, defaultLocale: "en" }),
-    promptLocale: opts?.i18n?.promptLocale ?? yaml?.promptLocale ?? "zh-CN",
+    promptLocale: opts?.i18n?.promptLocale ?? yaml?.promptLocale ?? "en",
     outputLocale: opts?.i18n?.outputLocale ?? yaml?.outputLocale,
     contentLocale: opts?.i18n?.contentLocale ?? yaml?.contentLocale,
     fallbackLocale: opts?.i18n?.fallbackLocale ?? yaml?.fallbackLocale ?? "en",

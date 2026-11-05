@@ -277,6 +277,154 @@ export const generatedBundle = {
         safety: {
           enabled: false,
         },
+        appraise: {
+          fallback: {
+            type: "other",
+            intensity: 0.3,
+            sincerity: 0.5,
+          },
+          commands: {
+            thanks: "praise",
+            sorry: "apology",
+            help: "request",
+            chat: "smalltalk",
+            confide: "disclosure",
+          },
+          patterns: [
+            {
+              match: "\\b(idiot|stupid|moron|shut up|useless|worthless|i hate you)\\b",
+              event: {
+                type: "insult",
+                intensity: 0.7,
+                sincerity: 0.8,
+                tags: [
+                  "hostile",
+                ],
+              },
+            },
+            {
+              match: "\\b(you lied|you(?:'re| are) lying|that(?:'s| is) a lie|liar)\\b",
+              event: {
+                type: "lie_exposed",
+                intensity: 0.7,
+                sincerity: 0.8,
+                tags: [
+                  "accusation",
+                ],
+              },
+            },
+            {
+              match: "\\b(you must|you have to|do as i say|you owe me|i order you)\\b",
+              event: {
+                type: "boundary_push",
+                intensity: 0.6,
+                sincerity: 0.7,
+                tags: [
+                  "pressure",
+                ],
+              },
+            },
+            {
+              match: "\\b(sorry|apologi[sz]e|forgive me|my fault|my mistake)\\b",
+              event: {
+                type: "apology",
+                intensity: 0.5,
+                sincerity: 0.7,
+                tags: [
+                  "apology",
+                ],
+              },
+            },
+            {
+              match: "\\b(i kept my promise|as i promised|i did what i said)\\b",
+              event: {
+                type: "promise_kept",
+                intensity: 0.6,
+                sincerity: 0.8,
+                tags: [
+                  "promise",
+                ],
+              },
+            },
+            {
+              match: "\\b(this is for you|i brought you|a gift for you|take this)\\b",
+              event: {
+                type: "gift",
+                intensity: 0.6,
+                sincerity: 0.8,
+                tags: [
+                  "gift",
+                ],
+              },
+            },
+            {
+              match: "\\b(thank(?:s| you)|well done|good job|great work|you(?:'re| are) (?:wonderful|amazing|kind|brilliant))\\b",
+              event: {
+                type: "praise",
+                intensity: 0.5,
+                sincerity: 0.7,
+                tags: [
+                  "gratitude",
+                ],
+              },
+            },
+            {
+              match: "\\b(i(?:'m| am) (?:afraid|scared|worried|ashamed)|i have to tell you|i never told anyone|to be honest|my secret)\\b",
+              event: {
+                type: "disclosure",
+                intensity: 0.6,
+                sincerity: 0.8,
+                tags: [
+                  "confession",
+                ],
+              },
+            },
+            {
+              match: "\\b(are you (?:ok|okay|alright)|you(?:'re| are) not alone|take care|i care about you|i(?:'m| am) here for you)\\b",
+              event: {
+                type: "care",
+                intensity: 0.6,
+                sincerity: 0.8,
+                tags: [
+                  "comfort",
+                ],
+              },
+            },
+            {
+              match: "\\b(remember when|we did it|that was fun|we went through)\\b",
+              event: {
+                type: "shared_experience",
+                intensity: 0.5,
+                sincerity: 0.8,
+                tags: [
+                  "memory",
+                ],
+              },
+            },
+            {
+              match: "\\b(please|could you|can you|would you|help me|i need (?:you|your)|i'd like you to)\\b",
+              event: {
+                type: "request",
+                intensity: 0.5,
+                sincerity: 0.7,
+                tags: [
+                  "request",
+                ],
+              },
+            },
+            {
+              match: "\\b(hello|hi there|hey|good (?:morning|afternoon|evening)|how are you|nice weather|how(?:'s| is) it going)\\b",
+              event: {
+                type: "smalltalk",
+                intensity: 0.3,
+                sincerity: 0.7,
+                tags: [
+                  "greeting",
+                ],
+              },
+            },
+          ],
+        },
         fields: {
           grants: [
             {
@@ -299,6 +447,11 @@ export const generatedBundle = {
             importance: 0.2,
             salience: 0.1,
             vector: 0,
+          },
+          writing: {
+            backend: "rule",
+            template: "{{text}}",
+            narration: "none",
           },
           forgetting: {
             enabled: false,
@@ -377,6 +530,7 @@ export const generatedBundle = {
           },
           budget: {
             syncCallsPerTurn: 2,
+            s1PerTurn: 1,
             s2PerTurn: 1,
             s2Ratio: 0.15,
             s2ReservedForAnchors: 0.03,
@@ -386,7 +540,9 @@ export const generatedBundle = {
             },
           },
           degrade: [
-            "s2_to_s1",
+            "s2_tier_down",
+            "s2_to_rule",
+            "s1_to_rule",
             "defer_reflection",
             "skip_offscreen_narrate",
             "skip_autonomous",
@@ -395,6 +551,183 @@ export const generatedBundle = {
         render: {
           retryOnMismatch: 0,
           recentTurns: 12,
+          layers: [
+            {
+              id: "refuse",
+              when: "intent.intent == \"refuse\"",
+              pool: [
+                {
+                  text: "$t:base.render.refuse_1",
+                  intent: "refuse",
+                },
+                {
+                  text: "$t:base.render.refuse_2",
+                  intent: "refuse",
+                },
+                {
+                  text: "$t:base.render.refuse_3",
+                  intent: "refuse",
+                },
+              ],
+            },
+            {
+              id: "deflect",
+              when: "intent.intent == \"deflect\"",
+              pool: [
+                {
+                  text: "$t:base.render.deflect_1",
+                  intent: "deflect",
+                },
+                {
+                  text: "$t:base.render.deflect_2",
+                  intent: "deflect",
+                },
+                {
+                  text: "$t:base.render.deflect_3",
+                  intent: "deflect",
+                },
+              ],
+            },
+            {
+              id: "negotiate",
+              when: "intent.intent == \"negotiate\"",
+              pool: [
+                {
+                  text: "$t:base.render.negotiate_1",
+                  intent: "negotiate",
+                },
+                {
+                  text: "$t:base.render.negotiate_2",
+                  intent: "negotiate",
+                },
+                {
+                  text: "$t:base.render.negotiate_3",
+                  intent: "negotiate",
+                },
+              ],
+            },
+            {
+              id: "comply",
+              when: "intent.intent == \"comply\"",
+              pool: [
+                {
+                  text: "$t:base.render.comply_1",
+                  intent: "comply",
+                },
+                {
+                  text: "$t:base.render.comply_2",
+                  intent: "comply",
+                },
+                {
+                  text: "$t:base.render.comply_3",
+                  intent: "comply",
+                },
+              ],
+            },
+            {
+              id: "respond_warm",
+              when: "event.positive && event.intensity >= 0.5",
+              pool: [
+                {
+                  text: "$t:base.render.warm_1",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.warm_2",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.warm_3",
+                  intent: "respond",
+                },
+              ],
+            },
+            {
+              id: "respond_cold",
+              when: "!event.positive && event.intensity >= 0.5",
+              pool: [
+                {
+                  text: "$t:base.render.cold_1",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.cold_2",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.cold_3",
+                  intent: "respond",
+                },
+              ],
+            },
+            {
+              id: "respond",
+              when: "true",
+              pool: [
+                {
+                  text: "$t:base.render.respond_1",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.respond_2",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.respond_3",
+                  intent: "respond",
+                },
+                {
+                  text: "$t:base.render.respond_4",
+                  intent: "respond",
+                },
+              ],
+            },
+            {
+              id: "narration",
+              when: "scene.first",
+              pool: [
+                {
+                  text: "$t:base.narration.opening_1",
+                  style: "narration",
+                },
+                {
+                  text: "$t:base.narration.opening_2",
+                  style: "narration",
+                },
+              ],
+            },
+            {
+              id: "narration_beat",
+              when: "event.intensity >= 0.8",
+              pool: [
+                {
+                  text: "$t:base.narration.beat_1",
+                  style: "narration",
+                },
+                {
+                  text: "$t:base.narration.beat_2",
+                  style: "narration",
+                },
+              ],
+            },
+            {
+              id: "narration_break",
+              when: "scene.first && time.day > 1",
+              pool: [
+                {
+                  text: "$t:base.narration.break_1",
+                  style: "narration_break",
+                },
+                {
+                  text: "$t:base.narration.break_2",
+                  style: "narration_break",
+                },
+              ],
+            },
+          ],
+          fallback: {
+            text: "$t:base.render.fallback",
+          },
         },
         cues: {
           types: {
@@ -423,6 +756,61 @@ export const generatedBundle = {
         },
         choices: {
           enabled: false,
+          count: 3,
+          rules: [
+            {
+              id: "comfort",
+              text: "$t:base.choice.comfort",
+              event_type: "care",
+              tags: [
+                "comfort",
+              ],
+              intensity: 0.6,
+              sincerity: 0.8,
+            },
+            {
+              id: "ask_help",
+              when: "event.type != \"request\"",
+              text: "$t:base.choice.ask_help",
+              event_type: "request",
+              tags: [
+                "request",
+              ],
+              intensity: 0.5,
+              sincerity: 0.7,
+            },
+            {
+              id: "small_talk",
+              text: "$t:base.choice.small_talk",
+              event_type: "smalltalk",
+              tags: [
+                "greeting",
+              ],
+              intensity: 0.4,
+              sincerity: 0.7,
+            },
+            {
+              id: "praise",
+              text: "$t:base.choice.praise",
+              event_type: "praise",
+              tags: [
+                "gratitude",
+              ],
+              intensity: 0.5,
+              sincerity: 0.7,
+            },
+            {
+              id: "apologize",
+              when: "!event.positive",
+              text: "$t:base.choice.apologize",
+              event_type: "apology",
+              tags: [
+                "apology",
+              ],
+              intensity: 0.6,
+              sincerity: 0.8,
+            },
+          ],
         },
         timeline: {
           allowRewind: true,
@@ -546,6 +934,7 @@ export const generatedBundle = {
               allow: true,
               kinds: [
                 "utterance",
+                "narration",
                 "choice.offered",
                 "choice.taken",
                 "input.received",
@@ -577,4 +966,42 @@ export const generatedBundle = {
       },
     },
   ],
+  displayStrings: {
+    en: {
+      "base.render.refuse_1": "I can't do that. Please don't ask me again.",
+      "base.render.refuse_2": "No. That's something I won't do.",
+      "base.render.refuse_3": "I'm sorry, but that's out of the question.",
+      "base.render.deflect_1": "Let's talk about something else.",
+      "base.render.deflect_2": "I'd rather not get into that.",
+      "base.render.deflect_3": "Hm. Why do you ask?",
+      "base.render.negotiate_1": "Maybe. What would you give me in return?",
+      "base.render.negotiate_2": "I might, if you can convince me.",
+      "base.render.negotiate_3": "That depends. What exactly do you need?",
+      "base.render.comply_1": "All right. I'll do it.",
+      "base.render.comply_2": "Fine, leave it to me.",
+      "base.render.comply_3": "Of course. Consider it done.",
+      "base.render.warm_1": "Thank you. That means a lot to me.",
+      "base.render.warm_2": "I appreciate that, truly.",
+      "base.render.warm_3": "That's kind of you to say.",
+      "base.render.cold_1": "I don't like where this is going.",
+      "base.render.cold_2": "Watch what you say to me.",
+      "base.render.cold_3": "That was uncalled for.",
+      "base.render.respond_1": "I see.",
+      "base.render.respond_2": "Go on.",
+      "base.render.respond_3": "Hm. Tell me more.",
+      "base.render.respond_4": "Is that so?",
+      "base.render.fallback": "…",
+      "base.narration.opening_1": "The air in {{location.name}} settles as the conversation begins.",
+      "base.narration.opening_2": "For a moment, {{location.name}} is silent.",
+      "base.narration.beat_1": "{{self.name}} takes a moment before answering.",
+      "base.narration.beat_2": "{{self.name}} holds your gaze a little longer than usual.",
+      "base.narration.break_1": "Some time later.",
+      "base.narration.break_2": "Hours pass.",
+      "base.choice.comfort": "Are you all right? I'm here if you need anything.",
+      "base.choice.ask_help": "Could you help me with something?",
+      "base.choice.small_talk": "How has your day been so far?",
+      "base.choice.praise": "You did well. Thank you.",
+      "base.choice.apologize": "I'm sorry. I didn't mean it that way.",
+    },
+  },
 } as PresetBundle;

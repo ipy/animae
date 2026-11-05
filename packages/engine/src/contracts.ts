@@ -7,6 +7,8 @@ import type {
   BranchRef, BranchName, CelContext, CharacterId, Duration, EngineEvent, EntityRef, EventDraft, EventId, Lod, Rng, SaveSlot, SceneId, TurnChunk, TurnId, Viewer, WorldTime,
 } from "./types.ts";
 import type { PresetBundle } from "./preset.ts";
+import type { AppraiseBinding, RenderBinding, RuntimeControl, RuntimeMode } from "./runtime/types.ts";
+import type { TierResolver } from "./model/tier-resolver.ts";
 
 /**
  * Module contracts (who implements what). CONTRACT file — see docs/architecture.md for ownership and conventions.
@@ -35,8 +37,8 @@ export type RuleFn = (ctx: Readonly<RuleCtx>) => EventDraft[];
 
 export interface ViewerDef {
   id: string;
-  /** extra paths this viewer may read in addition to visibility rules */
-  extends?: string; // inherit another viewer's rules
+  /** Parent viewer id whose visibility rules apply after this viewer's own grants and rules (cycle-safe). */
+  extends?: string;
   /** optional per-viewer post-filter */
   filter?: (path: string, value: unknown) => unknown;
 }
@@ -284,6 +286,8 @@ export interface RetrievalHit {
   id: string;
   text: string;
   score: number;
+  /** Character whose retrieval produced this hit (memory owner / knowledge query owner). */
+  owner?: CharacterId;
   entry?: MemoryEntry;
   doc?: KnowledgeDoc;
   /** Developer-facing instruction (English); prompts render the localized phrase for `distortionKind`. */
@@ -303,7 +307,7 @@ export interface MemoryService {
   readDoc(id: string): { name: string; body: string } | undefined;
   /** apply policy.memory.distortion to hits (writes memory.distorted events) */
   distort(hits: RetrievalHit[], rngKey: string): Promise<RetrievalHit[]>;
-  propagateTick(): Promise<EngineEvent[]>;
+  propagateTick(when?: "day" | "scene_end"): Promise<EngineEvent[]>;
   /** async at scene end: S2 reflection per principal → proposals → adjudicate → events */
   reflect(
     sceneId: SceneId,
@@ -348,17 +352,50 @@ export interface RouteInput {
   tierChanged: boolean;
   moodDelta?: number;
   mood?: number;
+  /** Track value/delta for `router.triggers.mood_spike.track` (defaults to mood). */
+  spikeTrackValue?: number;
+  spikeTrackDelta?: number;
   sidenoteReceived: boolean;
   sceneFirstTurn: boolean;
   secretTopic: boolean;
   contradiction: boolean;
   autonomous: boolean;
+  /** the mode snapshot the turn runs under (default: the engine's current mode) */
+  mode?: RuntimeMode;
+  /** how the S1 role was actually served (it may have fallen back to the rule backend); default: derived from `mode` */
+  appraise?: AppraiseBinding;
+  /** degradation actions `Router.plan` already applied to this turn; they head the decision's `degraded` list */
+  planned?: readonly string[];
 }
-export interface RouteDecision { tier: "s1" | "s2"; reasons: string[]; degraded: string[] }
+/** What the router decided for one turn: which backend answered the S1 role and which S2 tier (or the rule backend) renders. */
+export interface RouteDecision {
+  appraise: AppraiseBinding;
+  render: RenderBinding;
+  /** escalation triggers that fired (sorted keys), whether or not the budget allowed the escalation */
+  triggers: string[];
+  /** the render runs on the escalation tier */
+  escalated: boolean;
+  degraded: string[];
+}
+/** Budget degrade applied before the S1 call: the mode a turn effectively runs under. */
+export interface RoutePlan {
+  mode: RuntimeMode;
+  events: EventDraft[];
+  degraded: string[];
+}
 export interface Router {
+  /**
+   * Before the turn's first model call: applies the per-turn budgets (`s1PerTurn`, `s2PerTurn`, `syncCallsPerTurn`) to the
+   * mode the turn starts under. Returns the effective mode and the `budget.degraded` events to append.
+   */
+  plan(i: { turn: TurnCtx; mode: RuntimeMode }): RoutePlan;
+  /** After appraise/decide: picks the S2 tier (or the rule backend) for the render. */
   decide(i: RouteInput): { decision: RouteDecision; events: EventDraft[] };
-  /** whether S2-only side jobs may run now (reflection, offscreen full) else degrade actions are logged */
-  allow(job: "reflection" | "offscreen_narrate" | "autonomous"): { ok: boolean; events: EventDraft[] };
+  /**
+   * Whether a side job may run now and which tier serves it (`tier` is omitted when the S2 role is served by the rule
+   * backend); otherwise `budget.degraded` events are returned.
+   */
+  allow(job: "reflection" | "offscreen_narrate" | "autonomous"): { ok: boolean; events: EventDraft[]; tier?: string };
 }
 
 // ───────────────────────── model ─────────────────────────
@@ -398,6 +435,24 @@ export interface DisplayText {
   prepare(locales: readonly string[]): Promise<void>;
 }
 
+/**
+ * The model ports of an engine. S1 and S2 are roles: `s1` serves structured judgment, `s2` free-text generation.
+ * Fields besides `s1` / `s2` are optional so a kernel built from two plain ports (tests, tools) keeps working: it
+ * has one S2 tier named `only` and both roles served by models.
+ */
+export interface KernelModels {
+  /** The port serving the S1 role; the rule port when no model is configured for it (see `llm`). */
+  s1: ModelPort;
+  /** The port of the default S2 tier; the rule port when no model is configured for it (see `llm`). */
+  s2: ModelPort;
+  /** The deterministic rule-backend port; built on first use when omitted. */
+  rule?: ModelPort;
+  /** S2 tiers and their routing; omitted: one tier `only` served by `s2`. */
+  tiers?: TierResolver;
+  /** Which roles a model can serve; omitted: both. A role without a model only runs on the rule backend. */
+  llm?: { s1: boolean; s2: boolean };
+}
+
 export interface Kernel {
   storage: StoragePort;
   /** (live) */ authored: Authored;
@@ -408,7 +463,9 @@ export interface Kernel {
   displayText?: DisplayText;
   rules: RuleEngine;
   timeline: TimelineStore;
-  models: { s1: ModelPort; s2: ModelPort };
+  models: KernelModels;
+  /** Backend mode controller. Optional so lightweight kernels (tests, tools) default to the full LLM mode. */
+  runtime?: RuntimeControl;
   embedding?: EmbeddingPort;
   image?: ImagePort;
   catalog: Catalog;

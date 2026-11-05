@@ -9,8 +9,8 @@ async function seedLanternRoot(storage: ReturnType<typeof testStorage>): Promise
     `seed: 3
 i18n:
   locale: en
-  promptLocale: zh-CN
-  contentLocale: zh-CN
+  promptLocale: fr
+  contentLocale: fr
 policies: []
 `,
   );
@@ -36,31 +36,31 @@ summary: $t:loc.village.summary
 `,
   );
   await storage.writeAtomic(
-    "locales/zh-CN/strings.yaml",
+    "locales/fr/strings.yaml",
     `loc:
   village:
-    name: 灯节村
-    summary: 纸灯笼挂满小巷。
+    name: Village des lanternes
+    summary: Des lanternes en papier bordent les ruelles.
 `,
   );
   await storage.writeAtomic(
-    "locales/zh-CN/world/locations/village.yaml",
+    "locales/fr/world/locations/village.yaml",
     `summary: |
-      LLM-facing place brief (zh-CN content lane).
+      LLM-facing place brief (fr content lane).
 `,
   );
 }
 
-test("neutral YAML + $t display keys + zh-CN content overlay", async () => {
+test("neutral YAML + $t display keys + fr content overlay", async () => {
   const s = testStorage();
   await seedLanternRoot(s);
   const authored = await loadAuthored(s, {
     liftDisplayStrings: true,
-    validateDisplayLocaleChain: ["en", "zh-CN"],
+    validateDisplayLocaleChain: ["en", "fr"],
   });
   expect(authored.localeWarnings).toBeUndefined();
   const name = authored.locations.village?.name as unknown;
   expect(name).toEqual({ i18n: { key: "loc.village.name" } });
-  const contentWarnings = await validateContentLocalePresence(s, "zh-CN");
+  const contentWarnings = await validateContentLocalePresence(s, "fr");
   expect(contentWarnings).toEqual([]);
 });

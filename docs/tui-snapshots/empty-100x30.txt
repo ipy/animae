@@ -22,9 +22,9 @@
                                                                                                     
                                                                                                     
                                                                                                     
+                                                                                                    
 QA: empty state (no scene).                                                                         
 >                                                                                                   
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ F1/Alt+1 help · F2/Alt+2 log · Ctrl+P palette · Ctrl+S/L save/load · Mouse · Shift+drag select—  │
-│  text                                                                                            │
+│ F1/Alt+1 help · F2/Alt+2 log · F6/Alt+6 mode · Ctrl+P palette · Ctrl+S/L save/…  [S1:LLM S2:LLM] │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

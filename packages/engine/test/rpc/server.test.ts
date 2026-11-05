@@ -32,6 +32,18 @@ test("unknown method returns -32601", async () => {
   expect(io.written[0]).toContain('"code":-32601');
 });
 
+test("blocked hook and introspect registrars return -32601", async () => {
+  for (const method of ["hooks.register", "introspect.registerViewer"] as const) {
+    const io = memoryDuplex();
+    const server = createRpcServer(createFakeEngine(), io);
+    const run = server.run();
+    io.push(JSON.stringify({ jsonrpc: "2.0", id: 1, method }));
+    io.close();
+    await run;
+    expect(io.written[0]).toContain('"code":-32601');
+  }
+});
+
 test("parse error", async () => {
   const io = memoryDuplex();
   const server = createRpcServer(createFakeEngine(), io);

@@ -6,7 +6,7 @@ import { createEngine } from "../../src/engine/create-engine.ts";
 import { FsStorage } from "../../src/store/fs.ts";
 import { createScriptedModel } from "../../src/model/scripted.ts";
 import { e2ePreset } from "../e2e/fixture.ts";
-import { seedGalleryEngineRoot } from "./fixture.ts";
+import { seedGalleryEngineRoot, waitForJob } from "./fixture.ts";
 import { createFakeImagePort } from "./fake-image-port.ts";
 import { AnimaeError } from "../../src/types.ts";
 import type { GalleryLifecycleHooks, GalleryService } from "../../src/gallery/types.ts";
@@ -97,10 +97,14 @@ describe("gallery service", () => {
       const { item, job } = await engine.gallery.capture({ focus: "table talk" });
       expect(item.startsWith("cap-")).toBe(true);
       expect(job).toMatch(/^job_/);
-      await new Promise((r) => setTimeout(r, 200));
+      expect((await waitForJob(engine.gallery, job)).state).toBe("done");
       const got = await engine.gallery.get(item);
       expect(got?.image?.id).toBeTruthy();
       expect(image.calls.length).toBe(1);
+      // The render is part of the provenance log: which item, which stored image, which job.
+      const rendered = await engine.timeline.events({ kinds: ["gallery.rendered"] });
+      expect(rendered).toHaveLength(1);
+      expect(rendered[0]).toMatchObject({ item, imageId: got!.image!.id, job });
       await engine.close();
     } finally {
       await rm(root, { recursive: true, force: true });

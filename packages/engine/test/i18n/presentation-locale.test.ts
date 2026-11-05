@@ -15,16 +15,16 @@ test("UI locale localizes display refs without mutating stored timeline shape", 
     catalogs: { strings: { en: { "error.test_title": "First step", "error.test_label": "Hello" } } },
     defaultNamespace: "strings",
   });
-  const zh = createTranslator({
-    locale: "zh-CN",
-    catalogs: { strings: { "zh-CN": { "error.test_title": "第一步", "error.test_label": "你好" } } },
+  const fr = createTranslator({
+    locale: "fr",
+    catalogs: { strings: { fr: { "error.test_title": "Premiere etape", "error.test_label": "Bonjour" } } },
     defaultNamespace: "strings",
   });
 
   const enView = localizeDeep(lifted, en.t.bind(en));
-  const zhView = localizeDeep(lifted, zh.t.bind(zh));
+  const frView = localizeDeep(lifted, fr.t.bind(fr));
 
   expect((enView as { achievement: { title: string } }).achievement.title).toBe("First step");
-  expect((zhView as { achievement: { title: string } }).achievement.title).toBe("第一步");
+  expect((frView as { achievement: { title: string } }).achievement.title).toBe("Premiere etape");
   expect(JSON.stringify(lifted)).toBe(timelineBlob);
 });

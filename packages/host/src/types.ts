@@ -1,4 +1,4 @@
-import type { Engine, JsonValue, TurnChunk, Viewer } from "@animae/engine";
+import type { Engine, JsonValue, NarrationStyle, TurnChunk, TurnResetReason, Viewer } from "@animae/engine";
 import type { LocalizableValue, ResolvableText } from "@animae/i18n";
 import type { SceneId } from "@animae/engine";
 
@@ -113,9 +113,12 @@ export interface HostPanelSection {
 
 export interface TranscriptEntry {
   id: string;
+  /** `narration` is a speaker-less paragraph of the narrator; see `style`. */
   kind: "dialogue" | "narration" | "action" | "system" | "thought";
   speaker?: string;
   text: LocalizableValue;
+  /** Presentation of a `narration` entry: `scene_break` is shown as a divider, `normal` as an indented line. */
+  style?: NarrationStyle;
   /** Resolved copy + key for clients after `localizeSnapshot` (wire protocol). */
   i18n?: { key: string; params?: Record<string, JsonValue> };
   complete: boolean;
@@ -163,9 +166,16 @@ export interface HostFooterState {
 export type StreamSegmentKind = "narration" | "dialogue" | "thought" | "system" | "event";
 
 export interface StreamCallbacks {
-  onStreamStart?(requestId: string, kind: StreamSegmentKind, speaker?: string): void;
-  onStreamDelta?(requestId: string, text: string): void;
-  onStreamEnd?(requestId: string, turnId?: string): void;
+  /** A segment (an utterance or a narration paragraph) starts; `style` is set for narration. */
+  onStreamStart?(requestId: string, kind: StreamSegmentKind, speaker?: string, style?: NarrationStyle): void;
+  /** A fragment of the open segment; `kind` names the segment it belongs to (default `dialogue`). */
+  onStreamDelta?(requestId: string, text: string, kind?: StreamSegmentKind): void;
+  onStreamEnd?(requestId: string, turnId?: string, kind?: StreamSegmentKind): void;
+  /**
+   * The engine replaced the output of the turn in flight (for example the rule backend took over after the model
+   * failed mid-stream): every segment streamed since the player's own line is void, open segments included.
+   */
+  onStreamReset?(requestId: string, reason: TurnResetReason): void;
   onToast?(level: "info" | "warn" | "error", text: string): void;
   onBusy?(active: boolean, requestId?: string): void;
   onStateChange?(): void;

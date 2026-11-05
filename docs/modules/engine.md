@@ -12,9 +12,23 @@ createEngine(opts: CreateEngineOptions): Promise<Engine>
 
 See `src/api.ts` for `Engine` and options. Exported from `@animae/engine` via `src/engine/index.ts`.
 
+### `Engine.runtime`
+
+| Method / field | Role |
+|----------------|------|
+| `mode()` | Current `{ appraise, render, s2Tier? }` backends |
+| `pending()` | Queued mode when `switchAt: turn_boundary` |
+| `switchAt` | `turn_boundary` (default) or `immediate` |
+| `setMode(preset \| partial, { reason?, trigger? })` | Presets: `full`, `judge-only`, `narrate-only`, `rule`; emits `runtime.mode_changed` |
+| `models()` | `ModelsInfo` for UI (`s1`/`s2` ids or `"rule"`, tier list) |
+
+Initial mode: `createEngine({ mode })` / CLI `--mode`, then `animae.yaml` `mode` / `appraise.backend` / `render.backend` ([Section 19.3](../spec.md#193-model-configuration)). Errors: `MODE_INVALID`, `MODE_UNAVAILABLE`, `MODE_UNKNOWN_TIER`.
+
+LLM failures may fall back per `runtime.fallbackOnError` (`runtime.fallback_used`); does not change runtime mode.
+
 ## Responsibilities
 
-- Acquire storage lock, load authored + policy (preset registry from `opts.presets`), register preset rule fns, build CEL/rule engine, timeline (`open()`), models (`opts.models` or config-derived, wrapped with `withRecording` per `modelMode`).
+- Acquire storage lock, load authored + policy (preset registry from `opts.presets`), register preset rule fns, build CEL/rule engine, timeline (`open()`), resolve models (`opts.models` optional — missing S1/S2 ports use `createRuleModelPort`), wrap LLM ports with `withRecording` per `modelMode`, wire `runtime` mode controller ([Appendix B](../spec.md#appendix-b-runtime-modes-and-switching)).
 - Live getters for `authored` / `policy` via `createLiveAuthoredPolicy`; `reload()` and turn-end stat fingerprint check call `checkHotReload`.
 - Wire kernel modules: fields (director `bypassArmed`), director, world, memory, introspect, **router (`createRouter`)**, entities.
 - Delegate timeline mutations to `rebuildModuleCaches` after load/rewind/switch/import.

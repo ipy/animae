@@ -51,7 +51,7 @@ test("meta+1 opens help overlay binding", () => {
 
 test("fast burst typing string preserved by parser", () => {
   const parser = createInputParser();
-  const text = "achievements你好";
+  const text = "achievementsé";
   const events = parser.push(text);
   expect(events).toEqual([text]);
 });

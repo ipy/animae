@@ -1,8 +1,9 @@
 /**
  * Documentation hygiene for the engine repository.
  *
- * - English is the canonical documentation language. Chinese text may only live in `*.zh-CN.md` editions
- *   (or inside fenced code blocks / inline code, where it is sample data).
+ * - English is the only documentation language of this repository. Text in other scripts (CJK, ...) may only appear
+ *   inside fenced code blocks / inline code, where it is sample data. Translations of the documentation are published by
+ *   the projects that embed the engine, not here.
  * - Specification sections are cited with links, never with the section-sign character.
  * - Nothing in this repository points outside of it: relative links must stay inside the repository root and resolve
  *   to an existing file, and `#anchor` fragments must match a heading of the target document.
@@ -130,7 +131,6 @@ describe("engine documentation hygiene", () => {
   test("repository has documentation to check", () => {
     expect(markdownFiles.length).toBeGreaterThan(20);
     expect(existsSync(join(ROOT, "docs/spec.md"))).toBe(true);
-    expect(existsSync(join(ROOT, "docs/spec.zh-CN.md"))).toBe(true);
   });
 
   test("no section-sign citations in docs, code, tests or data", () => {
@@ -144,10 +144,9 @@ describe("engine documentation hygiene", () => {
     expect(hits).toEqual([]);
   });
 
-  test("English is the canonical language: CJK only in *.zh-CN.md or code samples", () => {
+  test("English only: no non-Latin prose, CJK only in code samples", () => {
     const hits: string[] = [];
     for (const f of markdownFiles) {
-      if (f.endsWith(".zh-CN.md")) continue;
       stripCode(readFileSync(f, "utf8"))
         .split("\n")
         .forEach((l, i) => {
@@ -157,19 +156,16 @@ describe("engine documentation hygiene", () => {
     expect(hits).toEqual([]);
   });
 
-  test("specification has an English edition and a Chinese edition with matching structure", () => {
-    const heads = (file: string): string[] =>
-      stripFences(readFileSync(file, "utf8"))
-        .split("\n")
-        .filter((l) => /^##\s+\d+\./.test(l))
-        .map((l) => l.match(/^##\s+(\d+)\./)![1]!);
-    const en = heads(join(ROOT, "docs/spec.md"));
-    const zh = heads(join(ROOT, "docs/spec.zh-CN.md"));
-    expect(en.length).toBeGreaterThan(15);
-    expect(zh).toEqual(en);
-    // Compare booleans rather than whole documents so a failure does not dump a 1000-line specification.
-    expect(readFileSync(join(ROOT, "docs/spec.md"), "utf8").includes("(./spec.zh-CN.md)")).toBe(true);
-    expect(readFileSync(join(ROOT, "docs/spec.zh-CN.md"), "utf8").includes("(./spec.md)")).toBe(true);
+  test("the repository ships no translated editions of its documents", () => {
+    const translated = markdownFiles.filter((f) => /\.[a-z]{2,3}(?:-[A-Za-z0-9]+)*\.md$/.test(f.slice(f.lastIndexOf(sep) + 1)));
+    expect(translated.map(rel)).toEqual([]);
+  });
+
+  test("the specification has numbered top-level sections", () => {
+    const sections = stripFences(readFileSync(join(ROOT, "docs/spec.md"), "utf8"))
+      .split("\n")
+      .filter((l) => /^##\s+\d+\./.test(l));
+    expect(sections.length).toBeGreaterThan(15);
   });
 
   test("relative links stay inside the repository and resolve to files", () => {
@@ -203,6 +199,44 @@ describe("engine documentation hygiene", () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  test("docs name repository files relative to the repository root", () => {
+    // `animae/docs/...` only exists in a parent workspace that mounts this repository as a directory called `animae`.
+    const prefixed = /(^|[\s"'`(=])animae\/(?:docs|packages|dist|scripts)\b/;
+    const hits: string[] = [];
+    for (const f of markdownFiles) {
+      readFileSync(f, "utf8")
+        .split("\n")
+        .forEach((l, i) => {
+          if (prefixed.test(l)) hits.push(`${rel(f)}:${i + 1}`);
+        });
+    }
+    expect(hits).toEqual([]);
+  });
+
+  test("repository paths named in the docs exist", () => {
+    // Illustrative paths of a package a reader would create; they are not part of this repository.
+    const illustrative = [/^packages\/locale-fr\//, /^packages\/my-preset\/?$/];
+    // Build output (`packages/cli/dist/...`) exists only after `bun run build`, which a fresh clone has not run yet.
+    const buildOutput = /(^|\/)dist(\/|$)/;
+    const packageDirs = readdirSync(join(ROOT, "packages")).map((n) => join(ROOT, "packages", n));
+    const token = /(?<![\w/.-])((?:docs|packages|scripts)\/[A-Za-z0-9_@./-]*[A-Za-z0-9_])/g;
+    const missing: string[] = [];
+    for (const f of markdownFiles) {
+      readFileSync(f, "utf8")
+        .split("\n")
+        .forEach((l, i) => {
+          for (const m of l.matchAll(token)) {
+            const path = m[1]!;
+            if (illustrative.some((re) => re.test(path)) || buildOutput.test(path)) continue;
+            // a bare `scripts/...` in a package's own doc is relative to that package
+            const candidates = [join(ROOT, path), join(dirname(f), path), ...packageDirs.map((d) => join(d, path))];
+            if (!candidates.some((c) => existsSync(c))) missing.push(`${rel(f)}:${i + 1} ${path}`);
+          }
+        });
+    }
+    expect(missing).toEqual([]);
   });
 
   test("docs never mention files outside the engine repository", () => {

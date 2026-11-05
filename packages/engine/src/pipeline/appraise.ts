@@ -1,7 +1,10 @@
 import type { Kernel, TurnCtx } from "../contracts.ts";
 import type { Appraisal } from "../events.ts";
-import type { EventDraft } from "../types.ts";
-import { AnimaeError } from "../types.ts";
+import type { Choice, EventDraft } from "../types.ts";
+import { recordingKey } from "../model/recording-key.ts";
+import { appraiseBindingFor, currentMode, llmRoles, modelErrorContext, ruleModelOf, s1SpecOf } from "../model/select.ts";
+import { withRuleFallback } from "../runtime/fallback.ts";
+import { buildCallContext, EMPTY_SEGMENTS } from "./call-context.ts";
 import { buildAppraiseSchema } from "./schemas.ts";
 import { buildPromptSegments } from "./prompt.ts";
 import { appraiseTypeLine, policyText } from "./policy-labels.ts";
@@ -59,14 +62,15 @@ function postProcessAppraisal(raw: Record<string, unknown>, policy: Kernel["poli
   return base;
 }
 
-function choiceHintFromTimeline(k: Kernel, choiceId?: string): { expected_event_type: string; tags: string[] } | undefined {
+function choiceFromTimeline(k: Kernel, choiceId?: string): Choice | undefined {
   if (!choiceId) return undefined;
-  for (let i = k.timeline.events().length - 1; i >= 0; i--) {
-    const e = k.timeline.events()[i];
+  const events = k.timeline.events();
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
     if (!e || e.kind !== "choice.offered") continue;
-    const choices = (e as { choices?: { id: string; expected_event_type: string; tags: string[] }[] }).choices ?? [];
+    const choices = (e as { choices?: Choice[] }).choices ?? [];
     const hit = choices.find((c) => c.id === choiceId);
-    if (hit) return { expected_event_type: hit.expected_event_type, tags: hit.tags ?? [] };
+    if (hit) return { ...hit, tags: hit.tags ?? [] };
   }
   return undefined;
 }
@@ -107,32 +111,69 @@ function appraiseInstructions(k: Kernel): string {
 }
 
 export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Promise<AppraiseStageResult> {
-  const hint = choiceHintFromTimeline(k, i.choiceId ?? t.choiceId);
-  const segments = buildPromptSegments(k, {
-    purpose: "appraise",
-    speaker: i.speaker,
-    addressee: i.addressee,
-    scene: i.scene,
-    history: i.history,
-    fieldEffects: i.fieldEffects,
-    actorText: i.actorText,
-    outputLocale: t.outputLocale,
-    // The task, event types and examples are the same every turn: they belong to the cacheable static segment. Only
-    // the hint attached to a chosen quick reply changes per turn.
-    extraStatic: appraiseInstructions(k),
-    extraDynamic: hint
-      ? getPromptSection(k.i18n.promptLocale, "choice_hint", {
-          type: hint.expected_event_type,
-          tags: hint.tags.join(","),
-        })
-      : "",
-  });
-
+  const choice = choiceFromTimeline(k, i.choiceId ?? t.choiceId);
+  const hint = choice ? { expected_event_type: choice.expected_event_type, tags: choice.tags } : undefined;
   const schema = buildAppraiseSchema(k.policy);
-  let raw: Record<string, unknown>;
-  try {
-    raw = (await k.models.s1.object({
+  const useLlm = (i.backend ?? currentMode(k).appraise) === "llm" && llmRoles(k).s1;
+
+  const callRule = (): Promise<Record<string, unknown>> =>
+    ruleModelOf(k).object({
       label: "appraise",
+      purpose: "appraise",
+      segments: EMPTY_SEGMENTS,
+      schema,
+      maxOutputTokens: routerBudgetK(k).maxOutputTokens.s1,
+      context: buildCallContext(k, {
+        purpose: "appraise",
+        self: i.speaker,
+        other: i.addressee,
+        actor: i.actor,
+        sceneId: i.scene.id,
+        input: {
+          text: i.actorText,
+          ...(choice ? { choiceId: choice.id } : {}),
+          addressee: i.addressee,
+          ...(choice
+            ? {
+                choice: {
+                  expected_event_type: choice.expected_event_type,
+                  tags: choice.tags,
+                  ...(choice.intensity !== undefined ? { intensity: choice.intensity } : {}),
+                  ...(choice.sincerity !== undefined ? { sincerity: choice.sincerity } : {}),
+                  ...(choice.approach ? { approach: choice.approach } : {}),
+                },
+              }
+            : {}),
+        },
+        inputEventId: i.inputEventId,
+        turn: t,
+      }),
+    }) as Promise<Record<string, unknown>>;
+
+  let recording: string | undefined;
+  const callLlm = async (): Promise<Record<string, unknown>> => {
+    const segments = buildPromptSegments(k, {
+      purpose: "appraise",
+      speaker: i.speaker,
+      addressee: i.addressee,
+      scene: i.scene,
+      history: i.history,
+      fieldEffects: i.fieldEffects,
+      actorText: i.actorText,
+      outputLocale: t.outputLocale,
+      // The task, event types and examples are the same every turn: they belong to the cacheable static segment. Only
+      // the hint attached to a chosen quick reply changes per turn.
+      extraStatic: appraiseInstructions(k),
+      extraDynamic: hint
+        ? getPromptSection(k.i18n.promptLocale, "choice_hint", {
+            type: hint.expected_event_type,
+            tags: hint.tags.join(","),
+          })
+        : "",
+    });
+    const req = {
+      label: "appraise",
+      purpose: "appraise" as const,
       segments,
       schema,
       maxOutputTokens: routerBudgetK(k).maxOutputTokens.s1,
@@ -143,13 +184,34 @@ export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Pr
         outputLocale: t.outputLocale ?? k.i18n.outputLocale,
         contentLocale: k.i18n.contentLocale,
       },
-    })) as Record<string, unknown>;
-  } catch (err) {
-    const slotSpec = k.authored.config.models?.s1;
-    rethrowPipelineModelError(err, "APPRAISE_FAILED", "Appraise model call failed", slotSpec
-      ? { timeoutMs: resolveModelTimeoutMs(slotSpec), baseURL: slotSpec.baseURL }
-      : undefined);
+    };
+    if ((k.timeline.recordings?.mode ?? "live") !== "live") recording = recordingKey(k.models.s1.id, req);
+    try {
+      return (await k.models.s1.object(req)) as Record<string, unknown>;
+    } catch (err) {
+      rethrowPipelineModelError(
+        err,
+        "APPRAISE_FAILED",
+        "Appraise model call failed",
+        modelErrorContext(s1SpecOf(k), resolveModelTimeoutMs),
+      );
+    }
+  };
+
+  const fallbackDrafts: EventDraft[] = [];
+  let raw: Record<string, unknown>;
+  let backend: "llm" | "rule";
+  if (useLlm) {
+    const r = await withRuleFallback(k, "appraise", "pipeline:appraise", callLlm, callRule, (d) => {
+      fallbackDrafts.push(d);
+    });
+    raw = r.value;
+    backend = r.backend;
+  } else {
+    raw = await callRule();
+    backend = "rule";
   }
+  if (backend === "rule") recording = undefined;
 
   if (hint) {
     if (!raw.type) raw.type = hint.expected_event_type;
@@ -158,12 +220,14 @@ export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Pr
 
   const appraisal = postProcessAppraisal(raw, k.policy);
   const drafts: EventDraft[] = [
+    ...fallbackDrafts,
     {
       kind: "appraisal",
       source: "pipeline:appraise",
       actor: i.actor,
       addressee: i.addressee,
       appraisal,
+      ...(recording ? { recording } : {}),
     },
     {
       kind: "input.classified",
@@ -188,5 +252,5 @@ export async function appraiseStage(k: Kernel, t: TurnCtx, i: AppraiseInput): Pr
     }
   }
 
-  return { appraisal, drafts, safety };
+  return { appraisal, drafts, safety, binding: backend === "llm" ? appraiseBindingFor(k, "llm") : { backend: "rule" } };
 }

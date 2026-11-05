@@ -1,13 +1,26 @@
-import { createI18n, negotiateLocale, type I18nInstance } from "@animae/i18n";
+import { createI18n, localeCatalogs, negotiateLocale, type I18nInstance } from "@animae/i18n";
 import { engineCatalogs } from "@animae/engine";
 import enHost from "../../locales/en/host.json" with { type: "json" };
-import zhHost from "../../locales/zh-CN/host.json" with { type: "json" };
 
+/** Host catalogs: the English ones plus every registered locale pack that provides `host` (read at access time). */
 const hostCatalogs = {
-  host: { en: enHost, "zh-CN": zhHost },
+  get host() {
+    return localeCatalogs("host", { en: enHost });
+  },
 };
 
-export const hostPackageCatalogs = { ...hostCatalogs, ...engineCatalogs };
+/** The host catalogs together with the engine's, which host messages fall back to for engine errors. */
+export const hostPackageCatalogs = {
+  get host() {
+    return hostCatalogs.host;
+  },
+  get errors() {
+    return engineCatalogs.errors;
+  },
+  get diagnostics() {
+    return engineCatalogs.diagnostics;
+  },
+};
 
 export function createHostI18n(
   locale?: string,
@@ -17,7 +30,7 @@ export function createHostI18n(
   const base = createI18n({
     locale: resolved,
     defaultNamespace: "host",
-    catalogs: hostPackageCatalogs,
+    catalogs: { host: hostPackageCatalogs.host, errors: hostPackageCatalogs.errors, diagnostics: hostPackageCatalogs.diagnostics },
   });
   // Keys like `command.saved` must stay in the `host` catalog; splitKey would treat `command` as a namespace.
   const hostNs = { ns: "host" as const };

@@ -55,12 +55,14 @@ export function validateSpawnSpec(raw: unknown): SpawnEntitySpec {
   if (!raw || typeof raw !== "object") throw new AnimaeError("ENTITY_INVALID", "spawn spec must be an object");
   const kind = (raw as { kind?: string }).kind;
   if (kind === "character") return SpawnCharacterSpecSchema.parse(raw);
+  // The definition schemas are strict and know nothing of the `kind` discriminant, so it is split off first.
+  const { kind: _kind, ...definition } = raw as Record<string, unknown>;
   if (kind === "location") {
-    const loc = LocationDefSchema.parse(raw);
+    const loc = LocationDefSchema.parse(definition);
     return { kind: "location" as const, ...loc };
   }
   if (kind === "item") {
-    const item = ItemDefSchema.parse(raw);
+    const item = ItemDefSchema.parse(definition);
     return { kind: "item" as const, ...item };
   }
   throw new AnimaeError("ENTITY_INVALID", `unknown spawn kind "${kind ?? ""}"`);

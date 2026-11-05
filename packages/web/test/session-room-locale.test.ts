@@ -1,9 +1,13 @@
-import { test, expect, describe } from "bun:test";
+import { afterEach, test, expect, describe } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
 import { SessionHost } from "@animae/host";
 import { getRequestLocale } from "@animae/i18n";
 import { SessionRoom } from "../src/server/session-room.ts";
 import type { Engine } from "@animae/engine";
 import { galleryStub } from "./helpers/stub-engine.ts";
+import { registerFrenchSessionLocalePack } from "./helpers/locale-packs.ts";
+
+afterEach(() => clearLocalePacks());
 
 function stubEngine(): Engine {
   return {
@@ -50,61 +54,71 @@ function snapshotFrom(ws: FakeWs): Record<string, unknown> | undefined {
 
 describe("SessionRoom locale", () => {
   test("hello_ok negotiates locale and snapshots differ by client", async () => {
-    const host = new SessionHost({ engine: stubEngine(), uiLocale: "en" });
-    const room = new SessionRoom("sess", host, {
-      host: "127.0.0.1",
-      maxMessagesPerMinute: 1000,
-      maxMessageBytes: 1_000_000,
-      allowedOrigins: [],
-    });
+    const off = registerFrenchSessionLocalePack();
+    try {
+      const host = new SessionHost({ engine: stubEngine(), uiLocale: "en" });
+      const room = new SessionRoom("sess", host, {
+        host: "127.0.0.1",
+        maxMessagesPerMinute: 1000,
+        maxMessageBytes: 1_000_000,
+        allowedOrigins: [],
+      });
 
-    const en = fakeWs("ws-en", "client-en");
-    const zh = fakeWs("ws-zh", "client-zh");
-    room.registerClient(en as never, en.data.id);
-    room.registerClient(zh as never, zh.data.id);
+      const en = fakeWs("ws-en", "client-en");
+      const fr = fakeWs("ws-fr", "client-fr");
+      room.registerClient(en as never, en.data.id);
+      room.registerClient(fr as never, fr.data.id);
 
-    await room.handleMessage(
-      en as never,
-      JSON.stringify({ v: 1, type: "hello", role: "spectator", clientId: "client-en", locale: "en" }),
-    );
-    await room.handleMessage(
-      zh as never,
-      JSON.stringify({ v: 1, type: "hello", role: "spectator", clientId: "client-zh", locale: "zh-CN" }),
-    );
+      await room.handleMessage(
+        en as never,
+        JSON.stringify({ v: 1, type: "hello", role: "spectator", clientId: "client-en", locale: "en" }),
+      );
+      await room.handleMessage(
+        fr as never,
+        JSON.stringify({ v: 1, type: "hello", role: "spectator", clientId: "client-fr", locale: "fr" }),
+      );
 
-    const helloEn = en.sent.find((m) => (m as { type?: string }).type === "hello_ok") as {
-      locale?: string;
-      locales?: unknown[];
-    };
-    expect(helloEn?.locale).toBe("en");
-    expect(helloEn?.locales?.length).toBeGreaterThan(0);
+      const helloEn = en.sent.find((m) => (m as { type?: string }).type === "hello_ok") as {
+        locale?: string;
+        locales?: unknown[];
+      };
+      expect(helloEn?.locale).toBe("en");
+      expect(helloEn?.locales?.length).toBeGreaterThan(0);
 
-    const headerEn = (snapshotFrom(en)?.header as { time?: { label?: string } })?.time?.label ?? "";
-    const headerZh = (snapshotFrom(zh)?.header as { time?: { label?: string } })?.time?.label ?? "";
-    expect(headerEn).toContain("Day");
-    expect(headerZh).toContain("第");
-    expect(headerEn).not.toBe(headerZh);
+      const headerEn = (snapshotFrom(en)?.header as { time?: { label?: string } })?.time?.label ?? "";
+      const headerFr = (snapshotFrom(fr)?.header as { time?: { label?: string } })?.time?.label ?? "";
+      expect(headerEn).toContain("Day");
+      expect(headerFr).toContain("Jour");
+      expect(headerEn).not.toBe(headerFr);
+    } finally {
+      off();
+    }
   });
 
   test("set_locale refreshes localized snapshot", async () => {
-    const host = new SessionHost({ engine: stubEngine(), uiLocale: "en" });
-    const room = new SessionRoom("sess", host, {
-      host: "127.0.0.1",
-      maxMessagesPerMinute: 1000,
-      maxMessageBytes: 1_000_000,
-      allowedOrigins: [],
-    });
-    const ws = fakeWs("ws-a", "client-a");
-    room.registerClient(ws as never, ws.data.id);
-    await room.handleMessage(
-      ws as never,
-      JSON.stringify({ v: 1, type: "hello", role: "controller", clientId: "client-a", locale: "en" }),
-    );
-    const before = (snapshotFrom(ws)?.header as { time?: { label?: string } })?.time?.label;
-    await room.handleMessage(ws as never, JSON.stringify({ v: 1, type: "set_locale", id: "l1", locale: "zh-CN" }));
-    const after = (snapshotFrom(ws)?.header as { time?: { label?: string } })?.time?.label;
-    expect(before).toContain("Day");
-    expect(after).toContain("第");
+    const off = registerFrenchSessionLocalePack();
+    try {
+      const host = new SessionHost({ engine: stubEngine(), uiLocale: "en" });
+      const room = new SessionRoom("sess", host, {
+        host: "127.0.0.1",
+        maxMessagesPerMinute: 1000,
+        maxMessageBytes: 1_000_000,
+        allowedOrigins: [],
+      });
+      const ws = fakeWs("ws-a", "client-a");
+      room.registerClient(ws as never, ws.data.id);
+      await room.handleMessage(
+        ws as never,
+        JSON.stringify({ v: 1, type: "hello", role: "controller", clientId: "client-a", locale: "en" }),
+      );
+      const before = (snapshotFrom(ws)?.header as { time?: { label?: string } })?.time?.label;
+      await room.handleMessage(ws as never, JSON.stringify({ v: 1, type: "set_locale", id: "l1", locale: "fr" }));
+      const after = (snapshotFrom(ws)?.header as { time?: { label?: string } })?.time?.label;
+      expect(before).toContain("Day");
+      expect(after).toContain("Jour");
+    } finally {
+      off();
+    }
   });
 
   test("unsupported locale falls back to en", async () => {
@@ -126,23 +140,28 @@ describe("SessionRoom locale", () => {
   });
 
   test("errors localize per client locale", async () => {
-    const host = new SessionHost({ engine: stubEngine() });
-    const room = new SessionRoom("sess", host, {
-      host: "127.0.0.1",
-      maxMessagesPerMinute: 1000,
-      maxMessageBytes: 1_000_000,
-      allowedOrigins: [],
-    });
-    const ws = fakeWs("ws-a", "client-a");
-    room.registerClient(ws as never, ws.data.id);
-    await room.handleMessage(
-      ws as never,
-      JSON.stringify({ v: 1, type: "hello", role: "controller", clientId: "client-a", locale: "zh-CN" }),
-    );
-    await room.handleMessage(ws as never, JSON.stringify({ v: 1, type: "input", id: "in1", text: "hi" }));
-    const err = ws.sent.find((m) => (m as { type?: string }).type === "error") as { message?: string; code?: string };
-    expect(err?.code).toBe("NO_SCENE");
-    expect(err?.message).toContain("场景");
+    const off = registerFrenchSessionLocalePack();
+    try {
+      const host = new SessionHost({ engine: stubEngine() });
+      const room = new SessionRoom("sess", host, {
+        host: "127.0.0.1",
+        maxMessagesPerMinute: 1000,
+        maxMessageBytes: 1_000_000,
+        allowedOrigins: [],
+      });
+      const ws = fakeWs("ws-a", "client-a");
+      room.registerClient(ws as never, ws.data.id);
+      await room.handleMessage(
+        ws as never,
+        JSON.stringify({ v: 1, type: "hello", role: "controller", clientId: "client-a", locale: "fr" }),
+      );
+      await room.handleMessage(ws as never, JSON.stringify({ v: 1, type: "input", id: "in1", text: "hi" }));
+      const err = ws.sent.find((m) => (m as { type?: string }).type === "error") as { message?: string; code?: string };
+      expect(err?.code).toBe("NO_SCENE");
+      expect(err?.message).toContain("scène");
+    } finally {
+      off();
+    }
   });
 });
 
@@ -185,6 +204,7 @@ describe("SessionRoom request locale scope", () => {
   }
 
   test("every frame that reaches the game runs in the sending client's locale", async () => {
+    registerFrenchSessionLocalePack();
     const seen: Record<string, string | undefined> = {};
     const host = new SessionHost({ engine: recordingEngine(seen), uiLocale: "en" });
     const mark = (key: string) => {
@@ -195,7 +215,7 @@ describe("SessionRoom request locale scope", () => {
     h.runAction = async () => mark("action");
     h.submitInput = async (text: string) => mark(text ? "input" : "choose");
     const room = new SessionRoom("sess", host, security);
-    const zh = await joinClient(room, "zh", "zh-CN");
+    const fr = await joinClient(room, "fr", "fr");
 
     const frames: Array<[string, Record<string, unknown>]> = [
       ["input", { text: "hello" }],
@@ -208,60 +228,64 @@ describe("SessionRoom request locale scope", () => {
       ["branch", { name: "alt" }],
     ];
     for (const [type, extra] of frames) {
-      await room.handleMessage(zh as never, JSON.stringify({ v: 1, type, id: `req-${type}`, ...extra }));
+      await room.handleMessage(fr as never, JSON.stringify({ v: 1, type, id: `req-${type}`, ...extra }));
     }
 
     expect(seen).toEqual({
-      input: "zh-CN",
-      choose: "zh-CN",
-      command: "zh-CN",
-      action: "zh-CN",
-      save: "zh-CN",
-      load: "zh-CN",
-      rewind: "zh-CN",
-      branch: "zh-CN",
+      input: "fr",
+      choose: "fr",
+      command: "fr",
+      action: "fr",
+      save: "fr",
+      load: "fr",
+      rewind: "fr",
+      branch: "fr",
     });
-    // Nothing leaks into code running outside a frame.
     expect(getRequestLocale()).toBeUndefined();
   });
 
   test("event frames keep their shape and localize only the values inside them", async () => {
-    let emit: ((e: unknown) => void) | undefined;
-    const engine = {
-      ...(stubEngine() as unknown as Record<string, unknown>),
-      on: (_kind: string, handler: (e: unknown) => void) => {
-        emit = handler;
-        return () => {};
-      },
-    } as unknown as Engine;
-    const host = new SessionHost({ engine, uiLocale: "en" });
-    const room = new SessionRoom("sess", host, security);
-    const zh = await joinClient(room, "zh", "zh-CN");
-    zh.sent.length = 0;
+    const off = registerFrenchSessionLocalePack();
+    try {
+      let emit: ((e: unknown) => void) | undefined;
+      const engine = {
+        ...(stubEngine() as unknown as Record<string, unknown>),
+        on: (_kind: string, handler: (e: unknown) => void) => {
+          emit = handler;
+          return () => {};
+        },
+      } as unknown as Engine;
+      const host = new SessionHost({ engine, uiLocale: "en" });
+      const room = new SessionRoom("sess", host, security);
+      const fr = await joinClient(room, "fr", "fr");
+      fr.sent.length = 0;
 
-    // A root-level `i18n` field used to turn the entire event into a bare string.
-    emit!({
-      kind: "info_arrival",
-      id: "evt_1",
-      i18n: { key: "error.read_only" },
-      detail: { $t: "error.read_only" },
-      nested: [{ i18n: { key: "error.read_only" } }],
-    });
+      emit!({
+        kind: "info_arrival",
+        id: "evt_1",
+        i18n: { key: "error.read_only" },
+        detail: { $t: "error.read_only" },
+        nested: [{ i18n: { key: "error.read_only" } }],
+      });
 
-    const frame = zh.sent.find((m) => (m as { type?: string }).type === "event") as {
-      kind: string;
-      payload: Record<string, unknown>;
-    };
-    expect(frame.kind).toBe("info_arrival");
-    expect(typeof frame.payload).toBe("object");
-    expect(frame.payload.kind).toBe("info_arrival");
-    expect(frame.payload.id).toBe("evt_1");
-    expect(frame.payload.i18n).toEqual({ key: "error.read_only" });
-    expect(frame.payload.detail).toBe("旁观者无法控制会话");
-    expect(frame.payload.nested).toEqual(["旁观者无法控制会话"]);
+      const frame = fr.sent.find((m) => (m as { type?: string }).type === "event") as {
+        kind: string;
+        payload: Record<string, unknown>;
+      };
+      expect(frame.kind).toBe("info_arrival");
+      expect(typeof frame.payload).toBe("object");
+      expect(frame.payload.kind).toBe("info_arrival");
+      expect(frame.payload.id).toBe("evt_1");
+      expect(frame.payload.i18n).toEqual({ key: "error.read_only" });
+      expect(frame.payload.detail).toBe("Les spectateurs ne peuvent pas contrôler la session");
+      expect(frame.payload.nested).toEqual(["Les spectateurs ne peuvent pas contrôler la session"]);
+    } finally {
+      off();
+    }
   });
 
   test("snapshots are built in each client's own locale scope, whoever triggered the push", async () => {
+    registerFrenchSessionLocalePack();
     const host = new SessionHost({ engine: stubEngine(), uiLocale: "en" });
     const builds: Array<{ asked: string | undefined; scope: string | undefined }> = [];
     const real = host.buildSnapshot.bind(host);
@@ -271,15 +295,14 @@ describe("SessionRoom request locale scope", () => {
     };
     const room = new SessionRoom("sess", host, security);
     const en = await joinClient(room, "en", "en");
-    const zh = await joinClient(room, "zh", "zh-CN");
+    const fr = await joinClient(room, "fr", "fr");
     builds.length = 0;
 
-    // A request from the English client triggers a push to both clients.
     await room.handleMessage(en as never, JSON.stringify({ v: 1, type: "select_focus", id: "f1" }));
 
     expect(builds.length).toBeGreaterThanOrEqual(2);
     for (const b of builds) expect(b.scope).toBe(b.asked);
-    expect(new Set(builds.map((b) => b.scope))).toEqual(new Set(["en", "zh-CN"]));
-    expect(zh.sent.length).toBeGreaterThan(0);
+    expect(new Set(builds.map((b) => b.scope))).toEqual(new Set(["en", "fr"]));
+    expect(fr.sent.length).toBeGreaterThan(0);
   });
 });

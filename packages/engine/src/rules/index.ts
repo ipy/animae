@@ -14,6 +14,7 @@ export { parseDice, rollDice, check as rollCheck, type DiceRollResult, type Chec
 export { runChecks, type RunChecksInput } from "./checks.ts";
 export { adjudicate, type AdjudicateInput } from "./adjudicate.ts";
 export { decideIntent, type DecideIntentInput } from "./decide.ts";
+export { secretUnlockDrafts } from "./secrets.ts";
 export { runStageRules, type CustomStage } from "./stages.ts";
 export { runCustomStageRules, type RunCustomRulesOpts } from "./l3-custom.ts";
 export { decayTicks } from "./decay.ts";

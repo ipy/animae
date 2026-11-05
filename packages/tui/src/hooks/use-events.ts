@@ -18,7 +18,16 @@ export function useEvents(kinds?: string[]): EngineEvent[] {
     const watchKinds =
       kinds && kinds.length > 0
         ? kinds
-        : ["input.received", "route.decided", "utterance", "scene.started", "scene.ended"];
+        : [
+            "input.received",
+            "route.decided",
+            "utterance",
+            "narration",
+            "runtime.mode_changed",
+            "runtime.fallback_used",
+            "scene.started",
+            "scene.ended",
+          ];
     const offs = watchKinds.map((k) => engine.on(k, handler));
     const off = () => offs.forEach((f) => f());
     return () => {

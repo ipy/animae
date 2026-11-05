@@ -1,12 +1,26 @@
-import { test, expect } from "bun:test";
+import { afterEach, test, expect } from "bun:test";
+import { clearLocalePacks } from "@animae/i18n";
 import { formatTierLabel, formatTrackLabel } from "../src/utils/tier-display.ts";
+import { registerFrenchTuiLocalePack } from "./helpers/locale-packs.ts";
 
-test("formatTierLabel uses zh-CN labels", () => {
-  expect(formatTierLabel("close", "zh-CN")).toBe("亲近");
-  expect(formatTierLabel("accepting", "en")).toBe("accepting");
+afterEach(() => clearLocalePacks());
+
+test("formatTierLabel uses registered locale pack labels", () => {
+  const off = registerFrenchTuiLocalePack();
+  try {
+    expect(formatTierLabel("close", "fr")).toBe("proche");
+    expect(formatTierLabel("accepting", "en")).toBe("accepting");
+  } finally {
+    off();
+  }
 });
 
 test("formatTrackLabel uses catalog when present", () => {
-  expect(formatTrackLabel("bond", "zh-CN")).toBe("羁绊");
-  expect(formatTrackLabel("unknown_track", "en")).toBe("unknown_track");
+  const off = registerFrenchTuiLocalePack();
+  try {
+    expect(formatTrackLabel("bond", "fr")).toBe("lien");
+    expect(formatTrackLabel("unknown_track", "en")).toBe("unknown_track");
+  } finally {
+    off();
+  }
 });

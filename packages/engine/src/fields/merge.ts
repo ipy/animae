@@ -1,5 +1,6 @@
 import type { Kernel } from "../contracts.ts";
 import type { FieldDef, FieldEffects } from "../schema/authored.ts";
+import { mergeTrackCaps } from "./caps.ts";
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -58,7 +59,20 @@ function runResolver(name: string, values: unknown[], k: Kernel, celCtx: Record<
   return values[0];
 }
 
-function combine(stacking: string, prev: unknown, next: unknown, k: Kernel, celCtx: Record<string, unknown>): unknown {
+function combine(
+  key: string,
+  stacking: string,
+  prev: unknown,
+  next: unknown,
+  k: Kernel,
+  celCtx: Record<string, unknown>,
+): unknown {
+  if (key === "track_caps") {
+    return mergeTrackCaps(
+      prev as Record<string, { min?: number; max?: number }> | undefined,
+      next as Record<string, { min?: number; max?: number }> | undefined,
+    );
+  }
   if (prev === undefined) return next;
   if (stacking === "override") return prev;
   if (stacking.startsWith("resolver:")) {
@@ -87,7 +101,7 @@ export function mergeFieldEffects(
     for (const [key, val] of Object.entries(f.effects)) {
       if (val === undefined) continue;
       const prev = (out as Record<string, unknown>)[key];
-      (out as Record<string, unknown>)[key] = combine(f.stacking, prev, val, k, celCtx);
+      (out as Record<string, unknown>)[key] = combine(key, f.stacking, prev, val, k, celCtx);
     }
   }
   return out;

@@ -6,7 +6,7 @@ import { ClientMessageSchema, type ServerMessage } from "../protocol/schemas.ts"
 import { diffSnapshot } from "./snapshot-diff.ts";
 import { WEB_PROTOCOL_VERSION } from "../protocol/version.ts";
 import type { WebSecurityConfig } from "./security.ts";
-import { WEB_SUPPORTED_LOCALES, createWebI18n, localeDisplayNames } from "../i18n/web-i18n.ts";
+import { webSupportedLocales, createWebI18n, localeDisplayNames } from "../i18n/web-i18n.ts";
 
 export type ClientRole = "controller" | "spectator";
 
@@ -107,7 +107,7 @@ export class SessionRoom {
           notice,
         });
       },
-      onStreamStart: (requestId, segment, speaker) => {
+      onStreamStart: (requestId, segment, speaker, style) => {
         this.broadcast({
           v: WEB_PROTOCOL_VERSION,
           type: "stream",
@@ -116,28 +116,41 @@ export class SessionRoom {
           phase: "start",
           segment,
           speaker,
+          ...(style ? { style } : {}),
         });
       },
-      onStreamDelta: (requestId, text) => {
+      onStreamDelta: (requestId, text, segment = "dialogue") => {
         this.broadcast({
           v: WEB_PROTOCOL_VERSION,
           type: "stream",
           seq: this.nextSeq(),
           requestId,
           phase: "delta",
-          segment: "dialogue",
+          segment,
           text,
         });
       },
-      onStreamEnd: (requestId, turnId) => {
+      onStreamEnd: (requestId, turnId, segment = "dialogue") => {
         this.broadcast({
           v: WEB_PROTOCOL_VERSION,
           type: "stream",
           seq: this.nextSeq(),
           requestId,
           phase: "end",
-          segment: "dialogue",
+          segment,
           turnId,
+        });
+        this.schedulePush();
+      },
+      onStreamReset: (requestId, reason) => {
+        this.broadcast({
+          v: WEB_PROTOCOL_VERSION,
+          type: "stream",
+          seq: this.nextSeq(),
+          requestId,
+          phase: "reset",
+          segment: "dialogue",
+          reason,
         });
         this.schedulePush();
       },
@@ -235,7 +248,7 @@ export class SessionRoom {
 
   private negotiateLocale(requested?: string): string {
     const tag = requested ?? this.host.uiLocale?.() ?? "en";
-    return matchAvailableLocale(tag, WEB_SUPPORTED_LOCALES) ?? "en";
+    return matchAvailableLocale(tag, webSupportedLocales()) ?? "en";
   }
 
   private i18nFor(ws: ServerWebSocket<WsData>): WebI18n {
@@ -535,7 +548,7 @@ export class SessionRoom {
         protocolVersion: WEB_PROTOCOL_VERSION,
         clientId,
         locale: data.locale,
-        locales: localeDisplayNames(data.locale, WEB_SUPPORTED_LOCALES),
+        locales: localeDisplayNames(data.locale, webSupportedLocales()),
       });
       this.send(ws, {
         v: WEB_PROTOCOL_VERSION,
@@ -553,7 +566,7 @@ export class SessionRoom {
         this.err(ws, "HELLO_REQUIRED", "error.hello_required", undefined, m.id);
         return;
       }
-      const next = matchAvailableLocale(m.locale, WEB_SUPPORTED_LOCALES);
+      const next = matchAvailableLocale(m.locale, webSupportedLocales());
       if (!next) {
         this.err(ws, "INVALID", "locale.unsupported", { locale: m.locale }, m.id);
         return;

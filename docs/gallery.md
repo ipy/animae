@@ -85,7 +85,7 @@ Top-level key `gallery` (optional). Mods may patch it like any other config bloc
 | `size.width` / `size.height` | `768` / `512` | Requested output size (generators may round). |
 | `maxCharacters` | `3` | Cap on `identity.visual` tags injected per render. |
 | `maxCaptured` | `200` | Max stored captures (`0` = unlimited). Oldest **unpinned** captures are pruned. |
-| `brief.tier` | `s1` | Model slot for brief (`s1` or `s2`). |
+| `brief.tier` | `s1` | Which configured model serves the brief (S1 role; `gallery-brief` purpose). With S1 on the rule backend, brief fails with `GALLERY_NO_MODEL` (preset unlock still works). |
 | `brief.guidance` | `""` | Extra brief instructions (content locale prose). |
 | `generator.options` | `{}` | Opaque map passed to `ImagePort.generate` as `options`. |
 | `ratings.<id>.label` | — | Display string or `$t:` catalog value. |
@@ -166,7 +166,7 @@ gallery:
 
 **Captured flow** — no entry required; players call `engine.gallery.capture()` when a port is wired.
 
-Validation (`animae validate`): duplicate entry ids, unknown character/location/rating refs, CEL syntax on `unlock.when` / `rating.when`, missing shipped art files, path traversal in `image.src`, `$t:` key resolution, and **`hint` required when `unlock.when` is set**.
+Validation (`animae validate`): unknown character/location/rating refs, CEL syntax on `unlock.when` / `rating.when`, missing shipped art files, path traversal in `image.src`, `$t:` key resolution, and **`hint` required when `unlock.when` is set**. Duplicate keys under `gallery.entries` in a single YAML file are rejected when the file is parsed (standard YAML mapping semantics), before gallery-specific checks run.
 
 ## Ratings and privacy
 
@@ -230,7 +230,7 @@ Dedupe is case-insensitive on comma-separated pieces.
 
 ## Brief call (`cg_brief`)
 
-For captures (and presets without `render.prompt`), the engine calls the model router with label **`cg_brief`**, tier `gallery.brief.tier` or per-capture `tier` override.
+For captures (and presets without `render.prompt`), the engine calls the S1 role with label **`cg_brief`** and purpose **`gallery-brief`** (when an LLM serves S1). Config: `gallery.brief.tier` or per-capture tier override where applicable.
 
 Prompt sections load from `prompts/<promptLocale>/gallery.json` (role, scene facts, characters + visuals, composition, rating guidance, game guidance, JSON contract). Scene facts use **display names** (alias-aware), not raw ids. Title and caption target the engine **output locale**; image `prompt` targets `gallery.promptLanguage`.
 

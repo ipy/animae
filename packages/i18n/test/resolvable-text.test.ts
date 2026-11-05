@@ -6,7 +6,7 @@ import { resolveText, type ResolvableText } from "../src/resolvable-text.ts";
 const catalogs = {
   common: {
     en: { end: "End day" },
-    "zh-CN": { end: "结束今日" },
+    fr: { end: "Finir la journée" },
   },
 };
 
@@ -19,6 +19,6 @@ test("resolveText evaluates a thunk at read time, so each reader sees its own lo
   const base = createI18n({ locale: "en", catalogs, dev: false });
   const label: ResolvableText = () => scopedI18n(base).t("end");
   expect(resolveText(label)).toBe("End day");
-  expect(runWithLocale(base.withLocale("zh-CN"), () => resolveText(label))).toBe("结束今日");
+  expect(runWithLocale(base.withLocale("fr"), () => resolveText(label))).toBe("Finir la journée");
   expect(runWithLocale(base.withLocale("en"), () => resolveText(label))).toBe("End day");
 });

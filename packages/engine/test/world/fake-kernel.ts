@@ -98,6 +98,7 @@ export function createFakeKernel(opts?: Parameters<typeof minimalAuthored>[0] & 
   memory?: Partial<MemoryService>;
   director?: Partial<Director>;
   s1Handler?: (label: string) => unknown;
+  s2Handler?: (label: string) => unknown;
 }) {
   const { authored, policy } = minimalAuthored(opts);
   let state = initialState(authored, policy);
@@ -149,16 +150,29 @@ export function createFakeKernel(opts?: Parameters<typeof minimalAuthored>[0] & 
     s2: {
       id: "scripted/s2",
       object: async () => ({}),
-      stream: async function* () {},
+      stream: async function* (req: { label: string }) {
+        const value = opts?.s2Handler ? opts.s2Handler(req.label) : { text: "A faint scent lingers." };
+        yield { type: "final" as const, value, usage: { inputTokens: 0, outputTokens: 0 } };
+      },
       usage: () => ({ inputTokens: 0, outputTokens: 0 }),
     } as ModelPort,
   };
 
   const router: Router = {
-    decide: () => ({ decision: { tier: "s1", reasons: [], degraded: [] }, events: [] }),
+    plan: ({ mode }) => ({ mode, events: [], degraded: [] }),
+    decide: () => ({
+      decision: {
+        appraise: { backend: "rule" },
+        render: { backend: "rule" },
+        triggers: [],
+        escalated: false,
+        degraded: [],
+      },
+      events: [],
+    }),
     allow: (job) => {
       if (opts?.router?.allow) return opts.router.allow(job);
-      return { ok: true, events: [] };
+      return { ok: true, events: [], tier: "only" };
     },
     ...opts?.router,
   };
@@ -264,7 +278,7 @@ export function createFakeKernel(opts?: Parameters<typeof minimalAuthored>[0] & 
     storage: {} as Kernel["storage"],
     authored,
     policy,
-    i18n: { locale: "en", promptLocale: "zh-CN", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
+    i18n: { locale: "en", promptLocale: "fr", outputLocale: "en", contentLocale: "en", fallbackLocale: "en" },
     rules,
     timeline: timeline as unknown as Kernel["timeline"],
     models,

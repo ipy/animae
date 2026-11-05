@@ -53,6 +53,11 @@ L4 merged effects are returned only for the query `owner` (self-view); they must
 
 While in scope, L3 merged effects feed `runCustomStageRules` alongside policy `rules.custom` ([spec 10.2](../spec.md#102-levels-and-effect-fields)). `resolve()` also returns `l3FieldRules` (deduped `rule_add` entries in deterministic order). Grant/declare validates entries against `CustomRuleSchema`, registered `fn`, and override ids. Stage `tick` is rejected for field rules.
 
+## Effect consumption (L0 / L1)
+
+- **`event_prob`** — merged additively per event id (then magnitude-capped). Exposed to rules as CEL `fields.event_prob` (map id → Δ, empty when none) and rendered in the model prompt field block. The engine does not roll probabilities from this map; authors use it in CEL or narrative bias.
+- **`track_caps`** — per-track `{ min?, max? }` merged by **intersection** across active fields (each bound only narrows the policy track range). Applied when adjudicate computes the post-delta track value (after `track_offset`, before tier lookup). Conflicting mins take the **maximum** min; conflicting maxes take the **minimum** max; if the interval inverts, it collapses to `{ min: max(min, …), max: that min }`.
+
 ## Caps & grants
 
 - `policy.fields.caps` — clamp magnitudes (`salience.boost`, `event_prob`, `track_offset`, `track_mult`, `intent_bias`); report keys on `field.applied.clamped`
@@ -67,4 +72,5 @@ Optional `cost` on a field: `due` CEL (default: scope no longer matches at scene
 
 - Identical `field.applied` payloads for the same field/turn/owner are deduped within a turn.
 - Author `source: "author"` fields do not require a runtime grant when in scope.
+- A field authored with any other `source` (`rule`, `anchor`, `runtime`) is a **template**: it applies only once it has been granted (`fields.grant`, a beat or anchor grant, a rule), never by merely being listed in `world/fields/`. The director and game rules read such definitions from `authored.fields` by id and grant them.
 - Beat-granted fields use `source: "runtime"` with grant `why.source: "beat"`.

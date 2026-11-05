@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Kernel } from "../contracts.ts";
 import { getPromptSection } from "../prompts/index.ts";
 import { AnimaeError } from "../types.ts";
+import { entityUsesModel } from "./object-call.ts";
 import type { SpawnCharacterSpec } from "./spawn.ts";
 
 export const GenerationBriefSchema = z.strictObject({
@@ -75,6 +76,9 @@ export async function buildCharacterSpecFromBrief(
   const maxRetries = opts?.maxRetries ?? 2;
   const rngKey = `generate-brief:${brief.archetype}:${brief.tags.join(",")}`;
 
+  // Without a model the procedural generator is the whole answer: it is deterministic in the brief and the seed.
+  if (!entityUsesModel(k)) return proceduralCharacterFromBrief(k, brief, pools, `${rngKey}:procedural`);
+
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -88,8 +92,9 @@ export async function buildCharacterSpecFromBrief(
         }),
         user: getPromptSection(loc, "generate_brief_user"),
       };
-      const raw = await k.models.s2.object({
+      const raw = await k.models.s1.object({
         label: "generate",
+        purpose: "entity",
         segments,
         schema: LlmCharacterProposalSchema,
         maxOutputTokens: 2048,

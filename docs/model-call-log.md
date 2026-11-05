@@ -1,6 +1,6 @@
 # Model call log
 
-In-memory ring buffer of every `ModelPort` `object` / `stream` invocation (after record/replay wrapping), for debugging prompts and raw model output without touching disk unless explicitly exported.
+In-memory ring buffer of every `ModelPort` `object` / `stream` invocation (LLM ports and the rule `ModelPort` when wrapped), after record/replay wrapping, for debugging prompts and raw model output without touching disk unless explicitly exported. Rule-backend calls have no network traffic but still appear when logging is enabled.
 
 ## Enabling
 
@@ -29,15 +29,15 @@ Wrapping order: `withRecording` (inner) then `withModelCallLog` (outer), so repl
 | Export | Role |
 |--------|------|
 | `createModelCallLog(opts?)` | Ring buffer with `list`, `get`, `clear`, `toJsonl` |
-| `withModelCallLog(port, { slot, log })` | Wraps S1/S2 ports |
+| `withModelCallLog(port, { slot, log })` | Wraps a port (`slot`: `s1`, `s2`, or tier id for S2) |
 | `writeModelCallLogJsonl(log, dataRoot)` | Writes `llm-log/<timestamp>.jsonl` under the data root |
 | `redactSecrets(text)` | Strips API-key-like substrings |
 
-Each entry includes: monotonic `seq`, opaque `id`, wall `startedAt`, slot (`s1` / `s2`), `label`, `modelId`, prompt `segments` (roles `static` / `semiStatic` / `dynamic` / `history` / `user`), optional JSON-schema fingerprint, tool names, request `params` (`maxOutputTokens`, `maxSteps`, `temperature`, `seed`, `recordingLocales`), concatenated raw `response.raw` (or structured `final`), `toolCalls`, `usage`, `timing` (`firstChunkMs`, `totalMs`), optional `turnId` / `requestId`, and `status` (`ok` / `error` / `aborted`).
+Each entry includes: monotonic `seq`, opaque `id`, wall `startedAt`, slot (`s1` / `s2`), optional S2 `tier`, `label`, `modelId`, prompt `segments` (roles `static` / `semiStatic` / `dynamic` / `history` / `user`), optional JSON-schema fingerprint, tool names, request `params` (`maxOutputTokens`, `maxSteps`, `temperature`, `seed`, `recordingLocales`), concatenated raw `response.raw` (or structured `final`), `toolCalls`, `usage`, `timing` (`firstChunkMs`, `totalMs`), optional `turnId` / `requestId`, and `status` (`ok` / `error` / `aborted`).
 
 Oversized strings are truncated per segment with `truncated: true` (default ~48k chars total budget per entry). Headers, env vars, and API keys are never stored raw — see redaction below.
 
-Hosts declare **`ModelPort.tags`** (capability labels); those tags are also visible to CEL as `model.tags` during the same call (see [cel-reference.md](./cel-reference.md)).
+Hosts declare **`ModelPort.tags`** (capability labels); those tags are also visible to CEL as `model.tags` with `model.kind` during the same call (see [cel-reference.md](./cel-reference.md)). `ModelRequest.context` is never stored in the log or recording keys.
 
 ## Web protocol
 

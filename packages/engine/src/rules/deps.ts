@@ -12,6 +12,8 @@ export interface RulesDeps {
   rules: RuleEngine;
   catalog: Catalog;
   celContext: CelContext;
+  /** Merged L0–L4 field effects for CEL `fields.*` (e.g. `fields.event_prob`). */
+  fieldEffects?: FieldEffects;
 }
 
 export type { FieldEffects };

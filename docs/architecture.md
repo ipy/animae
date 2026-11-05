@@ -7,11 +7,12 @@
 ## 1. Repository layout
 
 ```
-animae/                        ← publishable engine monorepo (package.json, workspaces: packages/*)
+.                              ← repository root (package.json, workspaces: packages/*)
   docs/{spec.md, architecture.md, ...}
   packages/
     engine/        @animae/engine       src/<module>/…, test/…
     preset-base/   @animae/preset-base
+    preset-rule/   @animae/preset-rule
     preset-dnd/    @animae/preset-dnd
     i18n/          @animae/i18n         catalogs, ICU subset, locale negotiation, hygiene helpers
     tui/           @animae/tui          Ink 8 components + default layout
@@ -39,8 +40,8 @@ Host applications live outside this tree; they depend on `@animae/*` through npm
 * **Errors**: throw `AnimaeError(code, message, details)`. Config problems: `CONFIG_INVALID` with `file` + `path` in the message.
 * **Determinism (I6/I7)**: no `Math.random`, no `Date.now()` inside rules/pipeline decisions. Randomness only via `timeline.rng(key)` (seed + branch root + key). Side jobs that emit events (scene-end reflection, offscreen narrate, memory propagation) run **awaited** inside the mutation gate before the caller resolves (`scene.end`, `world.advance` segments); deferred reflection is flushed synchronously at the next `scene.start`. Timeline `append` is queued so concurrent async work cannot reorder persisted events.
   Wall-clock is allowed only for metadata (`SaveSlot.createdAt`, lock files). All LLM calls go through a `ModelPort` wrapped by record/replay.
-* **Docs**: each module owner documents public behaviour in `animae/docs/modules/<module>.md` (short: purpose, API, decisions, edge cases) and keeps it updated.
-* **Language of docs/content**: engine code and `animae/docs` are English; game authored content is localized via locale layers (see [`i18n.md`](./i18n.md)).
+* **Docs**: each module owner documents public behaviour in `docs/modules/<module>.md` (short: purpose, API, decisions, edge cases) and keeps it updated.
+* **Language of docs and content**: engine code and `docs/` are English; game authored content is localized via locale layers (see [`i18n.md`](./i18n.md)).
 
 ## 3. Module ownership (engine/src/…)
 
@@ -51,7 +52,9 @@ Host applications live outside this tree; they depend on `@animae/*` through npm
 | `authored/` | zod-validated loaders for every authored file, knowledge docs, `Catalog`, `loadAuthored`, content hash |
 | `rules/` | CEL engine (cel-js), `RuleEngine` registry, primitives (tiers/hysteresis, delta formula, marginal, turn_cap, decay, windows, thresholds, intent scoring), dice + checks, **`buildCelContext`** |
 | `timeline/` | event log, reducer, initial state, snapshots, branches, save/load/rewind/diff/prune/purge, carry, export/import, replay, artifacts (COW), recordings |
-| `model/` | AI SDK adapter (`ai@7`), providers, cache breakpoints, record/replay wrapper, `ScriptedModel`, `createModelsFromConfig` |
+| `model/` | AI SDK adapter (`ai@7`), tier resolver, `RuleModelPort`, providers, cache breakpoints, record/replay wrapper, `ScriptedModel`, `createModelsFromConfig` |
+| `runtime/` | Runtime mode per role (`llm` \| `rule`), turn-boundary switching, fallback to rule backend |
+| `rule-backend/` | Deterministic counterparts for every S1/S2 model call (appraisal, render layers, choices, memory, reflection, entities, offscreen, autonomous) |
 | `fields/` | field resolution/stacking/caps/grants/costs/ledger |
 | `director/` | anchors, beats, sidenotes, exceptions |
 | `world/` | calendar, advance, scheduler, long events, offscreen, lazy catch-up, decay ticks |
@@ -69,10 +72,10 @@ Host applications live outside this tree; they depend on `@animae/*` through npm
 
 ### 4.0 Locales (UI, prompts, output, content)
 * **UI locale** (`i18n.locale`): all engine-produced system/UI strings (errors, CLI/TUI, `validate`, introspection labels). Resolved: explicit config / `createEngine` / CLI `--lang` → `ANIMAE_LOCALE` → `LC_*` / `LANG` → default `en`.
-* **Prompt locale** (`i18n.promptLocale`): static LLM scaffolding in `engine/src/prompts/<locale>/`; default `zh-CN` in config resolver (product tuning — not referenced in code strings). English set must stay in parity (`animae i18n check`).
+* **Prompt locale** (`i18n.promptLocale`): static LLM scaffolding in `engine/src/prompts/<locale>/`; set in `animae.yaml` ([`i18n.md`](./i18n.md)). Hosts register additional prompt locales via locale packs; `animae i18n check` keeps scaffold parity across registered locales.
 * **Output locale** (`i18n.outputLocale`, default UI locale): player-facing model text; render prompts append output-language directive from catalogs + `Intl.DisplayNames`.
-* **Content locale** (`i18n.contentLocale`, default **prompt locale**): LLM-facing `locales/<locale>/` overlays (persona, knowledge, templates). Display `$t:` string tables resolve at **UI locale** via late binding (`liftStringRefs` → `{ i18n: { key } }` → `localize*` at presentation).
-* **No natural-language literals in TS** under `animae/` (CJK scan in CI); catalogs use neutral English keys (`error.config.invalid`). Full design: [`i18n.md`](./i18n.md).
+* **Content locale** (`i18n.contentLocale`, default **prompt locale**): LLM-facing locale-pack overlays (persona, knowledge, templates). Display `$t:` string tables resolve at **UI locale** via late binding (`liftStringRefs` → `{ i18n: { key } }` → `localize*` at presentation).
+* **No natural-language literals in TS** under `packages/` outside English catalogs (a hygiene test scans for string literals in non-Latin scripts); catalogs use neutral English keys (`error.config.invalid`); other languages arrive as locale packs. Full design: [`i18n.md`](./i18n.md).
 
 ### 4.1 Ids, time, RNG
 * Event id `evt_` + zero-padded counter (min width 4) — unique within an ancestor chain; child branches continue numbering after `forkAt`.
@@ -97,17 +100,20 @@ Host applications live outside this tree; they depend on `@animae/*` through npm
 * Decay: world-hour ticks apply `value += (toward - value) * (1 - (1-rate)^hours)` as `track.delta` with `reason: "decay"` (only when |Δ| ≥ 0.01), computed lazily when time advances.
 
 ### 4.3 Turn pipeline (per `scene.turn`)
+
+**S1** and **S2** are *roles* (structured judgment vs free-text generation), not model tiers. Each role is served by backend `llm` (`ModelPort`) or `rule` (`RuleModelPort`). See [spec Section 2.1](./spec.md#21-s1-and-s2-are-roles) and [Appendix A](./spec.md#appendix-a-s1-and-s2-mapping). A synchronous turn makes at most one S1 call (`appraise`) and one S2 call (`render`); with both roles on `rule` it makes none. **`Engine.runtime`** holds the active backends and optional S2 tier; switching is in [Appendix B](./spec.md#appendix-b-runtime-modes-and-switching).
+
 1. `turn.started`; actor input → `input.received`.
-2. **appraise** (S1, sync call #1, structured output `Appraisal`) → `appraisal`, `input.classified`; unknown `type` → `other`. Input-class response (`policy.input.response`) overrides the appraisal's event type + forces an intent. Safety (if enabled) → `safety.flagged`.
+2. **appraise** (S1 role, sync call #1 when backend is `llm`; rule backend when `rule`): structured `Appraisal` (+ input class / optional safety in the same call) → `appraisal`, `input.classified`; unknown `type` → `other`. **`applyInputResponse`** (policy `input.response`: `emit` / `intent` / classify-stage `hook`) runs once right after classification, before field resolve. Safety (if enabled) → `safety.flagged`.
 3. **applyFields** (L0–L1): `fields.resolve` for the speaking NPC; emits `field.applied`. L1 effects are visible to check/adjudicate (`event.type` is known after step 2).
 4. **check** (policy `checks[]` whose `when` is true) → `check.rolled`; `onSuccess/onFailure` may retype the appraisal / add tags / emit events.
 5. **adjudicate** (rules): delta table + primitives (+ window/threshold/custom rule fns) → `track.delta`, `tier.changed`, rule-emitted events.
 6. **applyFields** (L2–L4): second resolve pass; L2 force/forbid/bias feed step 7. Emits `field.applied` / `field.rejected`.
 7. **decide**: `intent_rules` scoring (+ L2 force/forbid/bias). → `intent.decided`.
-8. **route** (router) → `route.decided`.
-9. **render** (S1 or S2, sync call #2; S2 may use `search`/`read` tools ≤ 3 steps): structured output `{text, cues[], intent_realized, choices?}`; stream `text` diffs as `TurnChunk.text`; cues as `cue` chunks with `at` offsets; `utterance`, `intent.mismatch`, `choice.offered/filtered`.
-10. **commit**: `memory.written` (episodic), `world.var_set`/others from rules, director `afterRender`, promotions check, scheduled advance of time, `turn.ended`, then `done` chunk. Async after the turn: nothing blocks the next turn except the lock on the timeline (writes are serialised through `timeline.append`).
-   * Scene end additionally: `scene.ended`, field cost settlement, reflection (S2, per principal; router may defer), propagation tick, snapshot.
+8. **route** (rules only): picks the **S2 tier** for an LLM render (escalation triggers, budget); writes `route.decided` with `{ appraise, render, triggers, budget: { s1Calls, s2CallsByTier }, … }` — not an S1-vs-S2 render choice ([Section 17](./spec.md#17-routing-budget-s2-tiers-and-caching)).
+9. **render** (S2 role, sync call #2 when backend is `llm`; rule backend when `rule`): output `{ narrations?[], text, cues[], intent_realized, choices? }`; stream `TurnChunk` `narration` (speaker-less, before character text), then `text` / `cue` / `choices`; on LLM failure mid-stream with fallback enabled, `{ type: "reset", reason: "fallback" }` then rule replacement ([Section 8](./spec.md#8-cognitive-pipeline)). LLM render may use `search`/`read` tools ≤ 3 steps. Events: `narration` (per paragraph), `utterance`, `intent.mismatch`, `choice.offered/filtered`.
+10. **commit**: append narration/`utterance` (optional `utterance.retrieval` log), **await** episodic memory via `memory.writing` (rule template or S1 `memory-write` when configured), narration memory, director `afterRender`, promotions check, field turn-end hooks, scheduled advance of time, then `turn.ended`, then `done` chunk. Timeline writes are serialised through `timeline.append`.
+   * Scene end additionally: `scene.ended`, field cost settlement, reflection (S1 role, per principal; router may defer), offscreen narrate / autonomous dialogue (S2 role when allowed), propagation tick, snapshot.
 
 ### 4.4 CEL context (`buildCelContext`)
 Plain JSON-like values. All numbers are passed as doubles (adapter converts for cel-js). Missing **top-level** bindings → `null`/`{}`/`[]` (never undefined). Indexing a **missing map key** (e.g. `world.vars['k']`) is a runtime `CEL_EVAL` error — see [cel-reference.md — Map keys](./cel-reference.md#map-keys-worldvars-character-vars).
@@ -122,8 +128,9 @@ Plain JSON-like values. All numbers are passed as doubles (adapter converts for 
 | `tracks` | `{<track>: effective number}` for `self` toward `other` (self-scope + relation-scope merged, L1 offsets applied) |
 | `tiers` | `{<track>: tierName}` (L1 `tier_shift` applied) |
 | `memory` | `{count}` plus helper counts |
-| `fields` | `{active:[ids], <id>:true}` |
+| `fields` | `{active:[ids], <id>:true, event_prob:{eventTypeId: Δ}}` — aggregated L0 shifts (empty when none) |
 | `check` | `{success,total,margin,roll…}` (null when no check ran) |
+| `model` | `{ kind: "s1" \| "s2" \| "rule" \| "", tier?, tags[] }` — active model role/backend during LLM-facing stages ([Section 7.2](./spec.md#72-cel-context-variables), [cel-reference.md](./cel-reference.md)) |
 Extra keys may be supplied by callers (`extra`), e.g. `goal`, `conflict`, `proposal`, `choice`, `thresholdId`.
 
 ### 4.5 Stores
@@ -134,10 +141,10 @@ Extra keys may be supplied by callers (`extra`), e.g. `goal`, `conflict`, `propo
 
 ### 4.6 Presets in a single executable
 Built-in presets are exported as `PresetBundle` objects (YAML sources are converted to TS by each preset's `scripts/gen-bundle.ts` → `src/generated.ts`, committed).
-The CLI and hosts register them via `createEngine({presets:[…]})`. Hosts may embed authored data the same way (`scripts/gen-data.ts` → `src/data.generated.ts`) and extract it to the user data dir at runtime.
+The CLI and hosts register them via `createEngine({presets:[…]})`. Hosts may embed authored data the same way (a host build step that writes a generated TypeScript module of the data files) and extract it to the user data dir at runtime.
 
 ### 4.7 Viewers and paths
-See `contracts.ts` "Query path catalogue". Base visibility ([preset-base / Section 19.4](./spec.md#194-animaepreset-base)) covers those paths; the TUI only ever calls `engine.query(viewer, path)`.
+See `contracts.ts` "Query path catalogue". Base visibility ([preset-base / Section 19.4](./spec.md#194-animaepreset-base)) covers those paths; the TUI and `animae inspect` call `engine.queryAsync(viewer, path)` when available (sync `query` for other tooling).
 
 ## 5. Phase plan
 
@@ -187,3 +194,4 @@ Per-module behaviour lives in [`docs/modules/`](./modules/) (linked from [docs/R
 * **Reflection prompts:** `buildReflectionPromptSegments` — prose scene recap (utterances, tier changes, appraisals); filters `track.delta` / `time.advanced` / router noise via `x.reflection_skip_kinds`; no raw JSON event dumps.
 * **Entity generate / offscreen narrate:** `buildEntityGeneratePrompt`, `buildNarrateLocationPrompt` use the same section catalogs (no English TS literals).
 * **Track/tier labels:** optional `label` on policy track tiers; relation lines use localized track/tier words (not raw ids).
+* **Memory propagation tick:** `MemoryService.propagateTick(when?: "day" | "scene_end")` — propagation only when `policy.memory.propagation.onTick` matches. `ViewerDef`: custom viewers use `extends` chain + `filter(path, value)`. Event `entity.generate` (live consumer in mutation gate). `utterance.retrieval?: RetrievalLogHit[]` on render commit; `explain` lists `retrieval` chain items. `memory.distorted.owner`. RPC: `setUiLocale`, `display.*`, `mods`, `entities.setAlias|spawn|retire|generateFromBrief`, `scene.turn.outputLocale`. CEL `fields.event_prob`; L1 `track_caps` intersection at adjudicate. `input.response` hook at classify boundary (not `decideIntent`). CEL `event.text` = player line. `router.triggers.mood_spike.track`; `secret_topic` = locked secret tags ∪ `{secret}`. `policy.input.response` hook contract documented in policy-reference.

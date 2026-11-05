@@ -6,18 +6,19 @@ import { scopeActive, scopeFilterAllows } from "./retrieval.ts";
 
 /** CEL `model` is always defined; callers may pass partial ctx (e.g. tests). */
 function celContextWithModel(ctx: CelContext): CelContext {
-  const raw = ctx as { model?: { slot?: unknown; tags?: unknown } };
+  const raw = ctx as { model?: { kind?: unknown; tier?: unknown; tags?: unknown } };
   const m = raw.model;
   if (m && typeof m === "object" && !Array.isArray(m)) {
     return {
       ...ctx,
       model: {
-        slot: typeof m.slot === "string" ? m.slot : "",
+        kind: typeof m.kind === "string" ? m.kind : "",
+        ...(typeof m.tier === "string" ? { tier: m.tier } : {}),
         tags: Array.isArray(m.tags) ? [...m.tags] : [],
       },
     };
   }
-  return { ...ctx, model: { slot: "", tags: [] } };
+  return { ...ctx, model: { kind: "", tags: [] } };
 }
 
 const warnedWhenFailures = new WeakMap<Kernel, Set<string>>();
